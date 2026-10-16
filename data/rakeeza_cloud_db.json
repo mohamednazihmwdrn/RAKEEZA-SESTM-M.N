@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "companies": [],
+  "plans": [
+    {
+      "id": "trial",
+      "name": "التجربة المجانية (30 يوم)",
+      "durationDays": 30,
+      "price": 0,
+      "limits": {
+        "maxUsers": 5,
+        "maxBranches": 2,
+        "maxWarehouses": 3,
+        "maxTransactionsPerMonth": 100000,
+        "storageMb": 1024,
+        "maxSalesReps": 5
+      }
+    },
+    {
+      "id": "monthly",
+      "name": "الاشتراك الشهري",
+      "durationDays": 30,
+      "price": 299,
+      "limits": {
+        "maxUsers": 10,
+        "maxBranches": 3,
+        "maxWarehouses": 5,
+        "maxTransactionsPerMonth": 1000000,
+        "storageMb": 10240,
+        "maxSalesReps": 10
+      }
+    },
+    {
+      "id": "semi_annual",
+      "name": "نصف سنوي (6 أشهر)",
+      "durationDays": 180,
+      "price": 1499,
+      "limits": {
+        "maxUsers": 25,
+        "maxBranches": 10,
+        "maxWarehouses": 15,
+        "maxTransactionsPerMonth": 5000000,
+        "storageMb": 25600,
+        "maxSalesReps": 25
+      }
+    },
+    {
+      "id": "annual",
+      "name": "الاشتراك السنوي (الأكثر طلباً)",
+      "durationDays": 365,
+      "price": 2499,
+      "limits": {
+        "maxUsers": 100,
+        "maxBranches": 50,
+        "maxWarehouses": 100,
+        "maxTransactionsPerMonth": 15000000,
+        "storageMb": 102400,
+        "maxSalesReps": 100
+      }
+    },
+    {
+      "id": "lifetime",
+      "name": "الترخيص الدائم (مدى الحياة)",
+      "durationDays": 36500,
+      "price": 9999,
+      "limits": {
+        "maxUsers": 99999,
+        "maxBranches": 9999,
+        "maxWarehouses": 9999,
+        "maxTransactionsPerMonth": 50000000,
+        "storageMb": 512000,
+        "maxSalesReps": 9999
+      }
+    }
+  ],
+  "trialRegistry": [],
+  "licenses": [],
+  "sessions": {
+    "tok_owner_5e45cfa1c659914021432f0f2ee39e62c621cb845135e2ee22a3d261a7e0d0e5": {
+      "token": "tok_owner_5e45cfa1c659914021432f0f2ee39e62c621cb845135e2ee22a3d261a7e0d0e5",
+      "userId": "owner-mohamed-nazih",
+      "companyId": "OWNER",
+      "userName": "Mohamed Nazih (مالك المنظومة)",
+      "role": "owner",
+      "createdAt": "2026-10-09T07:07:32.905Z",
+      "expiresAt": "2026-10-16T07:07:32.905Z"
+    }
+  },
+  "tenantsData": {},
+  "usedRegistrationLinks": [],
+  "pendingVerifications": {},
+  "verifiedEmails": {},
+  "globalUsers": [
+    {
+      "id": "owner-mohamed-nazih",
+      "name": "Mohamed Nazih (مالك المنظومة)",
+      "username": "MohamedNazih",
+      "password": "29190615",
+      "role": "owner",
+      "status": "active",
+      "permissions": {
+        "all": true
+      }
+    },
+    {
+      "id": "owner-super-1",
+      "name": "مالك المنظومة السحابية (RAKEEZA Owner)",
+      "username": "owner",
+      "password": "29190615",
+      "role": "owner",
+      "status": "active",
+      "permissions": {
+        "all": true
+      }
+    },
+    {
+      "id": "owner-super-2",
+      "name": "إدارة منظومة ركيزة (Super Admin)",
+      "username": "rakeeza_admin",
+      "password": "29190615",
+      "role": "owner",
+      "status": "active",
+      "permissions": {
+        "all": true
+      }
+    }
+  ]
+}

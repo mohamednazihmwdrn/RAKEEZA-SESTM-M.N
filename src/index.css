@@ -1,0 +1,844 @@
+@import "tailwindcss";
+
+/* Global Page Print Configuration */
+@page {
+  size: auto;
+  margin: 0mm;
+}
+
+/* Zero Horizontal Scroll & Mobile Touch Polish (Strictly no horizontal scroll on mobile) */
+*, ::before, ::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100vw;
+  width: 100%;
+  overflow-x: hidden !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+  font-family: 'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  position: relative;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* Enforce non-selectability on all static elements & containers */
+*, *::before, *::after {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  -khtml-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
+/* Permit normal text selection and native context menu only inside inputs, textareas, and explicit selectable text */
+input,
+textarea,
+[contenteditable="true"],
+.selectable,
+.selectable-text,
+.allow-copy {
+  -webkit-touch-callout: default !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* Light, clean selection highlight - never dark or black */
+::selection {
+  background-color: #bae6fd !important;
+  color: #0f172a !important;
+}
+input::selection, textarea::selection {
+  background-color: #bae6fd !important;
+  color: #0f172a !important;
+}
+
+#root {
+  max-width: 100vw;
+  width: 100%;
+  overflow-x: hidden !important;
+  position: relative;
+}
+
+/* Enforce 16px minimum font size on mobile inputs to permanently prevent iOS Safari auto-zoom on focus */
+@media (max-width: 768px) {
+  html, body, #root, main, .main-content-wrapper {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  /* Prevent containers and elements from blowing out viewport horizontally */
+  div, section, article, header, nav, footer, main {
+    max-width: 100%;
+  }
+
+  /* Prevent code/pre from pushing mobile viewport */
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-all !important;
+    max-width: 100% !important;
+  }
+
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  .overflow-x-auto {
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Custom Smooth Mobile-Friendly Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Accessible Touch Targets */
+@layer components {
+  .mobile-touch-target {
+    min-height: 44px;
+  }
+}
+
+/* General Report & Printable Layout System */
+.report-container {
+  background: #ffffff;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 5mm 7mm;
+  border: 3px solid #000000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+/* 1. الترويسة */
+.report-container .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 4px;
+  margin-bottom: 5px;
+  width: 100%;
+}
+
+.report-container .header-right h2 {
+  margin: 0 0 2px 0;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.report-container .header-right p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #333333;
+}
+
+.report-container .phones-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.75rem;
+  direction: ltr;
+  text-align: left;
+}
+
+.report-container .phones-list li {
+  margin-bottom: 1px;
+  font-weight: 600;
+}
+
+/* 2. صندوق البيانات والفلترة */
+.report-container .info-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1.5px solid #000000;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  width: 100%;
+  background-color: #fafafa;
+}
+
+.report-container .info-item p {
+  margin: 1px 0;
+}
+
+/* 3. كروت الإحصائيات (Dynamic KPIs Grid) */
+.report-container .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.report-container .kpi-card {
+  border: 1.5px solid #000000;
+  padding: 4px 6px;
+  text-align: center;
+  background-color: #f8f9fa;
+}
+
+.report-container .kpi-card .kpi-title {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #333333;
+}
+
+.report-container .kpi-card .kpi-value {
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-top: 2px;
+  color: #2563eb;
+  direction: ltr;
+}
+
+/* 4. الجدول */
+.report-container .table-wrapper {
+  width: 100%;
+  flex-grow: 1;
+}
+
+.report-container table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 4px;
+}
+
+.report-container th,
+.report-container td {
+  border: 1px solid #000000;
+  padding: 4px;
+  text-align: center;
+  font-size: 0.72rem;
+}
+
+.report-container th {
+  background-color: #ededed;
+  font-weight: bold;
+  font-size: 0.75rem;
+}
+
+.report-container tfoot tr {
+  background-color: #e2e8f0;
+  font-weight: bold;
+}
+
+.report-container .amount-cell {
+  direction: ltr;
+  text-align: center;
+}
+
+.report-container .total-col {
+  font-weight: bold;
+  background-color: #f8f9fa;
+  direction: ltr;
+  text-align: center;
+}
+
+.report-container .income-val, .income-val {
+  color: #16a34a !important;
+  font-weight: bold;
+}
+
+.report-container .expense-val, .expense-val {
+  color: #dc2626 !important;
+  font-weight: bold;
+}
+
+/* 5. التوقيعات */
+.report-container .bottom-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  width: 100%;
+  font-size: 0.78rem;
+  font-weight: bold;
+}
+
+.report-container .report-footer-note {
+  border-top: 1.5px solid #000000;
+  padding-top: 3px;
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.copyright-outside {
+  width: 100%;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: bold;
+  color: #444444;
+  padding: 2px 0;
+  direction: ltr;
+}
+
+@layer utilities {
+  /* Hide scrollbar for clean horizontal tab lists */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  @media print {
+    /* Hide all non-printable UI components */
+    .no-print,
+    .no-print-bar,
+    button,
+    input,
+    select,
+    textarea,
+    header,
+    nav,
+    aside,
+    .toast-container,
+    .modal-close-btn,
+    .mobile-bottom-nav {
+      display: none !important;
+    }
+
+    /* Configure printable page layout */
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-size: 11pt !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      overflow: hidden !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    main {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Full Page Border Fix Container */
+    .report-container,
+    .voucher-container,
+    .invoice-container,
+    .cash-container,
+    .report-page,
+    .print-sheet {
+      border: 3px solid #000000 !important;
+      width: 100vw !important;
+      height: calc(100vh - 20px) !important;
+      min-height: calc(100vh - 20px) !important;
+      max-height: calc(100vh - 20px) !important;
+      padding: 4mm 6mm !important;
+      box-sizing: border-box !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      page-break-after: avoid !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    /* Dynamic flex-grow body to expand and push footers to bottom */
+    .table-wrapper,
+    .voucher-body,
+    .report-content-body {
+      flex-grow: 1 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      width: 100% !important;
+    }
+
+    /* Outer Copyright Anchor */
+    .copyright-outside {
+      display: block !important;
+      position: relative !important;
+      margin-top: auto !important;
+      padding-top: 2px !important;
+      font-size: 0.72rem !important;
+      font-weight: bold !important;
+      color: #000000 !important;
+      text-align: center !important;
+      width: 100% !important;
+      direction: ltr !important;
+    }
+
+    /* Modal printable style */
+    .fixed.inset-0 {
+      position: static !important;
+      background: none !important;
+      padding: 0 !important;
+    }
+
+    .shadow-2xl, .shadow-md, .shadow-sm {
+      box-shadow: none !important;
+    }
+
+    .border, .border-2 {
+      border-color: #cbd5e1 !important;
+    }
+
+    table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 9.5pt !important;
+    }
+
+    th, td {
+      border: 1px solid #000000 !important;
+      padding: 4px 6px !important;
+    }
+
+    th {
+      background-color: #ededed !important;
+      color: #0f172a !important;
+      font-weight: bold !important;
+    }
+
+    /* Avoid page breaking inside printable blocks */
+    tr, table, div {
+      page-break-inside: avoid;
+    }
+  }
+}
+
+/* ==========================================================================
+   UNIFIED RAKEEZA ERP DESIGN SYSTEM
+   Cards, Buttons, Forms, Typography & Mobile Polish
+   ========================================================================== */
+
+/* --- 1. UNIFIED CARD SYSTEM --- */
+.erp-card {
+  background-color: #ffffff;
+  border-radius: 0.75rem; /* 12px rounded-xl */
+  padding: 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  position: relative;
+}
+
+@media (min-width: 640px) {
+  .erp-card {
+    padding: 1.25rem;
+  }
+}
+
+.erp-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+}
+
+.erp-card-interactive {
+  cursor: pointer;
+  user-select: none;
+}
+.erp-card-interactive:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.08);
+}
+.erp-card-interactive:active {
+  background-color: #f8fafc;
+}
+
+.erp-card-icon-badge {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* --- 2. UNIFIED BUTTON SYSTEM --- */
+.erp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.375rem; /* 38px */
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+  border-radius: 0.5rem; /* rounded-lg */
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: all 150ms ease;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.erp-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.erp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.erp-btn-primary {
+  background-color: #1e3a8a;
+  color: #ffffff;
+  border: 1px solid #1e3a8a;
+}
+.erp-btn-primary:hover:not(:disabled) {
+  background-color: #172554;
+  border-color: #172554;
+}
+
+.erp-btn-secondary {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+}
+.erp-btn-secondary:hover:not(:disabled) {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.erp-btn-outline {
+  background-color: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+.erp-btn-outline:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.erp-btn-ghost {
+  background-color: transparent;
+  color: #475569;
+  border: 1px solid transparent;
+}
+.erp-btn-ghost:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.erp-btn-danger {
+  background-color: #e11d48;
+  color: #ffffff;
+  border: 1px solid #e11d48;
+}
+.erp-btn-danger:hover:not(:disabled) {
+  background-color: #be123c;
+  border-color: #be123c;
+}
+
+.erp-btn-success {
+  background-color: #059669;
+  color: #ffffff;
+  border: 1px solid #059669;
+}
+.erp-btn-success:hover:not(:disabled) {
+  background-color: #047857;
+  border-color: #047857;
+}
+
+/* --- 3. UNIFIED FORM INPUTS --- */
+.erp-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 0.375rem;
+  text-align: right;
+  direction: rtl;
+}
+
+.erp-input,
+.erp-select {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  text-align: right;
+  direction: rtl;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.erp-input:focus,
+.erp-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.erp-input:disabled,
+.erp-select:disabled {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.erp-input.error,
+.erp-select.error {
+  border-color: #e11d48;
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.15);
+}
+
+/* --- 4. FINANCIAL & NUMERIC SCANNING --- */
+.financial-num {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* --- 5. SMOOTH ANIMATIONS --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================================================
+   🎯 ULTRA HIGH CONTRAST & RAZOR-SHARP TEXT RENDERING ENFORCEMENT
+   Fixes blurriness, washed-out text, faint borders, and transparent rows.
+   Guarantees Cairo / Tajawal font, pure white rows, pitch-black text & numbers.
+   ========================================================================= */
+
+/* 1. Universal Font & Hardware-Acceleration Anti-Blur Settings */
+html, body, #root, button, input, select, textarea, table, th, td, p, span, div, label {
+  font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+}
+
+/* Eliminate backdrop-filter blur entirely which causes GPU raster blurriness and faint text */
+.backdrop-blur-xs,
+.backdrop-blur-sm,
+.backdrop-blur-md,
+.backdrop-blur,
+.backdrop-blur-lg,
+.backdrop-blur-xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 2. Modals & Overlays: Solid Dark Backdrop & Crisp Pure-White Card Container */
+.fixed.inset-0 {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+.fixed.inset-0 > div,
+div[role="dialog"] {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  border-color: #64748b !important;
+}
+
+/* Modal Headers */
+.fixed.inset-0 h2,
+.fixed.inset-0 h3,
+.fixed.inset-0 h4,
+div[role="dialog"] h2,
+div[role="dialog"] h3,
+div[role="dialog"] h4 {
+  color: #000000 !important;
+  font-weight: 900 !important;
+}
+
+/* 3. Razor-Sharp Labels and Headings */
+label {
+  color: #000000 !important;
+  font-weight: 700 !important;
+  letter-spacing: normal !important;
+}
+
+/* 4. High Contrast Form Inputs & Selects */
+input, select, textarea {
+  color: #000000 !important;
+  font-weight: 600 !important;
+  background-color: #ffffff !important;
+  border-color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #1d4ed8 !important;
+  outline: 2px solid #2563eb !important;
+  background-color: #ffffff !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  font-weight: 600 !important;
+}
+
+/* 5. Complete Table Overhaul - Pure White Rows, Crisp Borders, Dark Header */
+table {
+  border-collapse: collapse !important;
+  background-color: #ffffff !important;
+  width: 100% !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Table Headers: Deep Solid Color with Bright White Bold Text */
+table thead tr,
+thead tr {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+table thead th,
+thead th {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  border: 1px solid #334155 !important;
+  padding: 8px 10px !important;
+  text-align: center;
+  font-size: 0.8rem !important;
+}
+
+/* Table Rows: 100% Pure White Background - Zero Transparency / No Blurriness */
+table tbody tr,
+tbody tr {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+table tbody tr:hover,
+tbody tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Explicit Crisp Grid Borders Between Columns & Rows */
+table th, table td {
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Ensure all text & numbers inside tables are Pitch Black and Bold (font-weight: 600+) */
+table tbody td,
+tbody td {
+  color: #000000 !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+}
+
+/* Numbers, Codes, Amounts and Monospace Values */
+table tbody td span.font-mono,
+table tbody td strong,
+.font-mono {
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
+/* Ensure code badges in tables are clear and crisp */
+table tbody td span.bg-slate-100,
+table tbody td span.bg-slate-200 {
+  background-color: #f1f5f9 !important;
+  color: #000000 !important;
+  border: 1px solid #94a3b8 !important;
+  font-weight: 800 !important;
+}
+
+/* 6. Mobile Card Views in Invoices, Catalog & Lists */
+@media (max-width: 768px) {
+  .bg-white.rounded-xl,
+  .bg-white.rounded-2xl {
+    background-color: #ffffff !important;
+    opacity: 1 !important;
+    border: 1.5px solid #cbd5e1 !important;
+  }
+
+  .bg-white.rounded-xl *,
+  .bg-white.rounded-2xl * {
+    -webkit-font-smoothing: antialiased !important;
+  }
+}
+
+/* High contrast overrides for subtle Tailwind gray text classes inside invoices & tables */
+tbody td .text-slate-400,
+tbody td .text-slate-500,
+tbody td .text-gray-400,
+tbody td .text-gray-500,
+tbody td .text-gray-600 {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+
+
+
