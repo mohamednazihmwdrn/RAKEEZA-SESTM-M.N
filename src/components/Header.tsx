@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   GitBranch,
   Plus,
+  MoreVertical,
+  Share2,
 } from 'lucide-react';
 import { loginOwnerApi } from '../services/cloudApi';
 
@@ -154,6 +156,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateBackup,
   onNavigateOwner,
   onOwnerLoginSuccess,
+  onShareCatalog,
+  onOpenCatalog,
   pendingWebOrdersCount = 0,
   onNavigateWebOrders,
   showToast,
@@ -171,16 +175,39 @@ export const Header: React.FC<HeaderProps> = ({
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const branchDropdownRef = React.useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  // 📱 Mobile 3-Dots Action Menu state (جمع الأزرار التفاعلية للهاتف)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mobileMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click or Escape key
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
         setIsBranchDropdownOpen(false);
       }
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBranchDropdownOpen(false);
+        setIsMobileMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
+
+  // Close dropdowns on route navigation
+  useEffect(() => {
+    setIsBranchDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+  }, [currentPage]);
 
   const branches = appData?.branches || [];
   const activeBranchId = appData?.activeBranchId || branches[0]?.id || 'br-main';
@@ -288,16 +315,16 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <header
-        className="fixed top-0 right-0 left-0 h-[56px] bg-white text-slate-900 px-2.5 sm:px-4 flex items-center justify-between z-50 shadow-xs border-b border-slate-200 no-print select-none"
+        className="fixed top-0 right-0 left-0 h-[56px] bg-white text-slate-900 px-2 sm:px-4 flex items-center justify-between z-50 shadow-xs border-b border-slate-200 no-print select-none"
         dir="rtl"
       >
-        {/* الجانب الأيمن: القائمة، الشعار، اسم المنشأة، الصفحة الحالية */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        {/* الجانب الأيمن: القائمة، زر الرجوع، الشعار، اسم المنشأة، واختيار الفرع */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 sm:flex-initial">
           {onToggleSidebar && (
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-200 transition cursor-pointer flex items-center justify-center"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-200 transition cursor-pointer flex items-center justify-center shrink-0 shadow-2xs"
               title="القائمة الجانبية"
               aria-label="القائمة الجانبية"
             >
@@ -305,13 +332,13 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* زر الرجوع الذكي للهواتف والشاشات (يرجع للصفحة السابقة مباشرة) */}
+          {/* زر الرجوع الذكي للهواتف والشاشات */}
           {canGoBack && onGoBack && (
             <button
               type="button"
               onClick={onGoBack}
-              className="p-1.5 sm:p-2 rounded-lg bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 border border-blue-200 transition cursor-pointer flex items-center gap-1 select-none shadow-xs"
-              title="الرجوع للصفحة السابقة (أو من أزرار الهاتف)"
+              className="p-1.5 sm:p-2 rounded-xl bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 border border-blue-200 transition cursor-pointer flex items-center gap-1 select-none shadow-2xs shrink-0"
+              title="الرجوع للصفحة السابقة"
               aria-label="الرجوع للصفحة السابقة"
             >
               <ArrowRight className="w-5 h-5 text-blue-700 shrink-0" />
@@ -321,19 +348,18 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* شعار واسم المنشأة */}
           <div
-            className="flex items-center gap-2 cursor-pointer transition hover:opacity-90"
+            className="flex items-center gap-1.5 sm:gap-2 cursor-pointer transition hover:opacity-90 min-w-0"
             onClick={() => onNavigate?.('home')}
             title="الصفحة الرئيسية"
           >
-            <div className="w-8 h-8 rounded-lg bg-blue-600 border border-blue-500 flex items-center justify-center text-white shadow-xs">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 border border-blue-500 flex items-center justify-center text-white shadow-2xs shrink-0">
               <Building2 className="w-4 h-4 text-white" />
             </div>
-            <div className="flex flex-col text-right">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-xs sm:text-sm text-slate-900 tracking-wide truncate max-w-[120px] sm:max-w-[200px]">
+            <div className="flex flex-col text-right min-w-0">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-extrabold text-xs sm:text-sm text-slate-900 tracking-wide truncate max-w-[85px] sm:max-w-[150px] md:max-w-[200px]">
                   {companyName || 'المنظومة المحاسبية'}
                 </span>
-
                 {companyCode && (
                   <span className="hidden md:inline-flex items-center text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                     {companyCode}
@@ -348,22 +374,17 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* 🏢 مبدل واختيار فروع الشركة التفاعلي */}
           {branches.length > 0 && (
-            <div className="relative mr-1" ref={branchDropdownRef}>
+            <div className="relative mr-0.5 sm:mr-1 shrink-0" ref={branchDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-900 border border-slate-300 text-xs font-black transition cursor-pointer shadow-xs select-none"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-900 border border-slate-300 text-xs font-black transition cursor-pointer shadow-2xs select-none max-w-[95px] sm:max-w-[160px]"
                 title="الفرع النشط حالياً - انقر لاختيار فرع آخر أو إضافة فرع جديد"
               >
                 <GitBranch className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                <span className="truncate max-w-[100px] sm:max-w-[150px]">
+                <span className="truncate">
                   {currentActiveBranch?.name || 'الفرع الرئيسي'}
                 </span>
-                {currentActiveBranch?.isMain && (
-                  <span className="text-[10px] text-amber-500 hidden sm:inline" title="فرع رئيسي">
-                    ⭐
-                  </span>
-                )}
                 <ChevronDown className="w-3 h-3 text-slate-700 shrink-0" />
               </button>
 
@@ -431,106 +452,353 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* مسار الصفحة الحالية */}
-          <div className="hidden sm:flex items-center gap-1.5 border-r border-slate-200 pr-2.5 mr-1">
+          {/* مسار الصفحة الحالية - للشاشات الكبيرة */}
+          <div className="hidden lg:flex items-center gap-1.5 border-r border-slate-200 pr-2.5 mr-1">
             <span className="text-xs sm:text-sm font-bold text-slate-800">
               {pageTitle}
             </span>
           </div>
         </div>
 
-        {/* الجانب الأيسر: النسخ الاحتياطي، طلبات المتجر، معلومات المستخدم، وزر تسجيل الخروج */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* مؤشر النسخ السحابي */}
-          {onNavigateBackup && (
+        {/* الجانب الأيسر: زر ثلاث نقاط للهواتف يجمع كل الأزرار التفاعلية / وشريط كامل للشاشات الكبيرة */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* ========================================================= */}
+          {/* 📱 وضع الهاتف: زر ثلاث نقاط رأسي يجمع كل الأزرار التفاعلية */}
+          {/* ========================================================= */}
+          <div className="relative md:hidden" ref={mobileMenuRef}>
             <button
               type="button"
-              onClick={onNavigateBackup}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-medium text-slate-700 transition cursor-pointer"
-              title={autoBackupActive ? 'النسخ الاحتياطي السحابي نشط - انقر للإدارة' : 'النسخ الاحتياطي'}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className={`p-2 rounded-xl transition cursor-pointer flex items-center justify-center relative shadow-2xs ${
+                isMobileMenuOpen
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-300'
+                  : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-200'
+              }`}
+              title="خيارات وإجراءات المنظومة"
+              aria-label="خيارات وإجراءات المنظومة"
             >
-              <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="hidden xl:inline text-[11px] text-emerald-700">النسخ السحابي</span>
-            </button>
-          )}
+              <MoreVertical className="w-5 h-5 shrink-0" />
 
-          {/* زر فحص النزاهة وصحة البيانات الضخمة (10M+) */}
-          {onOpenDiagnostics && (
-            <button
-              type="button"
-              onClick={onOpenDiagnostics}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-bold text-indigo-900 transition cursor-pointer"
-              title="مركز فحص النزاهة المحاسبية وإدارة البيانات الضخمة (10M+ Enterprise Hub)"
-            >
-              <Activity className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden xl:inline text-[11px] text-indigo-800">صحة النظام (10M+)</span>
-            </button>
-          )}
-
-          {/* طلبات المتجر */}
-          {onNavigateWebOrders && (
-            <button
-              type="button"
-              onClick={onNavigateWebOrders}
-              className="relative flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-medium transition cursor-pointer"
-              title="طلبات المتجر الإلكتروني الواردة"
-            >
-              <ShoppingBag className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden lg:inline text-[11px]">الطلبات</span>
+              {/* نقطة تنبيه حمراء نابضة إذا وُجدت طلبات متجر أو تنبيهات نشطة */}
               {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow-md">
-                  {pendingWebOrdersCount}
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow-xs">
+                  {pendingWebOrdersCount > 9 ? '!' : pendingWebOrdersCount}
                 </span>
               )}
             </button>
-          )}
 
-          {/* معلومات المستخدم الحالي */}
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200">
-            <div className="w-6 h-6 rounded-full bg-blue-100 border border-blue-300 text-blue-700 flex items-center justify-center text-[10px] font-bold">
-              {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-3 h-3" />}
-            </div>
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-[11px] font-bold text-slate-800 leading-tight">
-                {currentUser?.name || 'مدير النظام'}
-              </span>
-              <span className="text-[9px] text-slate-500 leading-none">
-                {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
-                  ? 'مدير عام'
-                  : currentUser?.role === 'cashier'
-                  ? 'كاشير'
-                  : currentUser?.role === 'accountant'
-                  ? 'محاسب'
-                  : currentUser?.role === 'warehouse_keeper'
-                  ? 'أمين مخزن'
-                  : currentUser?.role === 'sales_rep'
-                  ? 'مندوب مبيعات'
-                  : currentUser?.role || 'مستخدم'}
-                {currentUser?.branchId && (
-                  <span className="text-blue-700 font-bold mr-1">
-                    • {branches.find((b) => b.id === currentUser?.branchId)?.name || 'فرع مخصص'}
-                  </span>
-                )}
-              </span>
-            </div>
+            {/* القائمة المنسدلة للثلاث نقاط على الهاتف */}
+            {isMobileMenuOpen && (
+              <>
+                {/* طبقة خلفية خفيفة للنقر في أي مكان والإغلاق */}
+                <div
+                  className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+
+                <div
+                  className="absolute left-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-16px)] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden text-right text-slate-900 animate-in fade-in zoom-in-95 duration-150"
+                  dir="rtl"
+                >
+                  {/* رأس القائمة: بطاقة المستخدم الحالية */}
+                  <div className="p-3 bg-gradient-to-br from-slate-50 to-blue-50/50 border-b border-slate-200 flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0">
+                      {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-5 h-5" />}
+                    </div>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-black text-slate-900 truncate">
+                          {currentUser?.name || 'مدير النظام'}
+                        </span>
+                        <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                          {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
+                            ? 'مدير عام'
+                            : currentUser?.role === 'cashier'
+                            ? 'كاشير'
+                            : currentUser?.role === 'accountant'
+                            ? 'محاسب'
+                            : currentUser?.role === 'warehouse_keeper'
+                            ? 'أمين مخزن'
+                            : currentUser?.role === 'sales_rep'
+                            ? 'مندوب مبيعات'
+                            : currentUser?.role || 'مستخدم'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
+                        🏢 {currentActiveBranch?.name || 'الفرع الرئيسي'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* قائمة الإجراءات التفاعلية المجمعة */}
+                  <div className="p-1.5 max-h-[calc(75vh-120px)] overflow-y-auto space-y-1">
+                    {/* النسخ السحابي وقاعدة البيانات */}
+                    {onNavigateBackup && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onNavigateBackup();
+                        }}
+                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+                            <Cloud className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              <span>النسخ السحابي وقاعدة البيانات</span>
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              {autoBackupActive ? 'النسخ السحابي نشط وتلقائي' : 'إدارة النسخ الاحتياطي'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                          متصل
+                        </span>
+                      </button>
+                    )}
+
+                    {/* فحص النزاهة وصحة البيانات الضخمة (10M+) */}
+                    {onOpenDiagnostics && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onOpenDiagnostics();
+                        }}
+                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+                            <Activity className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">
+                              صحة النظام والبيانات (10M+)
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              فحص الفهارس والنزاهة المحاسبية
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                          فحص
+                        </span>
+                      </button>
+                    )}
+
+                    {/* طلبات المتجر الإلكتروني */}
+                    {onNavigateWebOrders && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onNavigateWebOrders();
+                        }}
+                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
+                            <ShoppingBag className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">
+                              طلبات المتجر الإلكتروني
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              متابعة الطلبات الواردة أونلاين
+                            </span>
+                          </div>
+                        </div>
+                        {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) ? (
+                          <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded-full animate-bounce">
+                            {pendingWebOrdersCount} جديدة
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                            0
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    {/* مشاركة الكتالوج والمتجر الإلكتروني */}
+                    {onShareCatalog && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onShareCatalog();
+                        }}
+                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 border border-teal-200 flex items-center justify-center shrink-0">
+                            <Share2 className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">
+                              مشاركة رابط المتجر والكتالوج
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              إرسال الرابط للعملاء عبر واتساب
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* لوحة مالك المنظومة */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        setIsSecretModalOpen(true);
+                        setSecretPassword('');
+                        setSecretError('');
+                      }}
+                      className="w-full text-right p-2.5 rounded-xl hover:bg-amber-50 active:bg-amber-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-amber-200"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center shrink-0">
+                          <Crown className="w-4 h-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                            <span>لوحة مالك المنظومة</span>
+                            <span className="text-[10px] text-amber-600">👑</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500">
+                            تسجيل دخول المالك والاشتراكات
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* تذييل القائمة: زر تسجيل الخروج الآمن */}
+                  {onLogout && (
+                    <div className="p-2 border-t border-slate-200 bg-slate-50">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onLogout();
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>تسجيل الخروج الآمن</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* زر تسجيل الخروج */}
-          {onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-700 transition flex items-center gap-1 text-xs cursor-pointer"
-              title="تسجيل الخروج الآمن"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-600" />
-              <span className="hidden md:inline text-[11px] font-bold">خروج</span>
-            </button>
-          )}
+          {/* ========================================================= */}
+          {/* 💻 نمط الشاشات الكبيرة (Desktop / Tablet: md:flex) */}
+          {/* ========================================================= */}
+          <div className="hidden md:flex items-center gap-1.5 sm:gap-2">
+            {/* مؤشر النسخ السحابي */}
+            {onNavigateBackup && (
+              <button
+                type="button"
+                onClick={onNavigateBackup}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-medium text-slate-700 transition cursor-pointer"
+                title={autoBackupActive ? 'النسخ الاحتياطي السحابي نشط - انقر للإدارة' : 'النسخ الاحتياطي'}
+              >
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="hidden xl:inline text-[11px] text-emerald-700">النسخ السحابي</span>
+              </button>
+            )}
+
+            {/* زر فحص النزاهة وصحة البيانات الضخمة (10M+) */}
+            {onOpenDiagnostics && (
+              <button
+                type="button"
+                onClick={onOpenDiagnostics}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-bold text-indigo-900 transition cursor-pointer"
+                title="مركز فحص النزاهة المحاسبية وإدارة البيانات الضخمة (10M+ Enterprise Hub)"
+              >
+                <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden xl:inline text-[11px] text-indigo-800">صحة النظام (10M+)</span>
+              </button>
+            )}
+
+            {/* طلبات المتجر */}
+            {onNavigateWebOrders && (
+              <button
+                type="button"
+                onClick={onNavigateWebOrders}
+                className="relative flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-medium transition cursor-pointer"
+                title="طلبات المتجر الإلكتروني الواردة"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden lg:inline text-[11px]">الطلبات</span>
+                {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-bounce shadow-md">
+                    {pendingWebOrdersCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* معلومات المستخدم الحالي */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200">
+              <div className="w-6 h-6 rounded-full bg-blue-100 border border-blue-300 text-blue-700 flex items-center justify-center text-[10px] font-bold">
+                {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-3 h-3" />}
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-[11px] font-bold text-slate-800 leading-tight">
+                  {currentUser?.name || 'مدير النظام'}
+                </span>
+                <span className="text-[9px] text-slate-500 leading-none">
+                  {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
+                    ? 'مدير عام'
+                    : currentUser?.role === 'cashier'
+                    ? 'كاشير'
+                    : currentUser?.role === 'accountant'
+                    ? 'محاسب'
+                    : currentUser?.role === 'warehouse_keeper'
+                    ? 'أمين مخزن'
+                    : currentUser?.role === 'sales_rep'
+                    ? 'مندوب مبيعات'
+                    : currentUser?.role || 'مستخدم'}
+                  {currentUser?.branchId && (
+                    <span className="text-blue-700 font-bold mr-1">
+                      • {branches.find((b) => b.id === currentUser?.branchId)?.name || 'فرع مخصص'}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {/* زر تسجيل الخروج */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-700 transition flex items-center gap-1 text-xs cursor-pointer"
+                title="تسجيل الخروج الآمن"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span className="hidden md:inline text-[11px] font-bold">خروج</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 

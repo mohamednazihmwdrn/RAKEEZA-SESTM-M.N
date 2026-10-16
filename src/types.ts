@@ -1044,6 +1044,7 @@ export interface AppData {
   costCenters: CostCenter[];
   branches: Branch[];
   activeBranchId: string;
+  branchCashBoxes?: Record<string, CashBox>;
   stockTransfers: StockTransfer[];
   quotations: Quotation[];
   nextQuoteId: number;

@@ -5,6 +5,12 @@ import { addAuditLog } from '../utils/storage';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { exportToExcel } from '../utils/excelExport';
 import { TableActionButtons } from './TableActionButtons';
+import {
+  getUniqueMasterItems,
+  createCleanItemsForBranch,
+  ensureItemsHaveBranchIds,
+  getMainBranchId,
+} from '../utils/branchIsolation';
 
 interface BranchesViewProps {
   appData: AppData;
@@ -95,21 +101,39 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
     }
     updatedBranches.push(newBranch);
 
+    // 🏢 عزل واستقلالية الفروع: استنساخ أصناف الشركة للفرع الجديد على نظافة تامة (بدون أعداد وبدون أسعار)
+    const mainId = getMainBranchId(appData.branches);
+    const normalizedExistingItems = ensureItemsHaveBranchIds(appData.items || [], mainId);
+    const uniqueMasters = getUniqueMasterItems(normalizedExistingItems);
+    const newBranchCleanItems = createCleanItemsForBranch(uniqueMasters, newBranch.id, appData.companyId);
+    const updatedItems = [...normalizedExistingItems, ...newBranchCleanItems];
+
+    // تهيئة خزينة ونقدية مستقلة خاصة بالفرع الجديد تبدأ برصيد صفر
+    const updatedBranchCashBoxes = {
+      ...(appData.branchCashBoxes || {}),
+      [newBranch.id]: { drawer: 0, vodafone: 0, instapay: 0, bank: 0 },
+    };
+
     let updatedData: AppData = {
       ...appData,
       branches: updatedBranches,
-      activeBranchId: branchIsMain ? newBranch.id : (appData.activeBranchId || newBranch.id),
+      items: updatedItems,
+      branchCashBoxes: updatedBranchCashBoxes,
+      activeBranchId: newBranch.id, // تحويل الجلسة مباشرة للفرع الجديد ليبدأ العمل عليه
     };
 
     updatedData = addAuditLog(
       updatedData,
       'create',
       'إدارة الفروع',
-      `تمت إضافة فرع جديد للشركة: ${newBranch.code} - ${newBranch.name}`
+      `تمت إضافة فرع جديد للشركة: ${newBranch.code} - ${newBranch.name} وبدأ على نظافة بـ (${newBranchCleanItems.length}) صنف برصيد صفر وأسعار صفرية مع استقلالية تامة`
     );
 
     onUpdateData(updatedData);
-    showToast(`تمت إضافة فرع "${newBranch.name}" بنجاح للشركة`, 'success');
+    showToast(
+      `تمت إضافة فرع "${newBranch.name}" بنجاح! بدأ الفرع على نظافة بكافة الأصناف (${newBranchCleanItems.length} صنف) بأرصدة وأسعار صفرية مع استقلالية تامة للحركات والتقارير والأموال.`,
+      'success'
+    );
     setIsAddBranchModalOpen(false);
   };
 

@@ -5,7 +5,12 @@ import { printCashClosingWindow } from '../utils/printCashClosing';
 import { printShiftReportWindow } from '../utils/printShiftReport';
 import { addAuditLog } from '../utils/storage';
 import { getProductActivePrice } from '../utils/priceService';
-import { LayoutGrid, List, Sparkles, X, Image as ImageIcon } from 'lucide-react';
+import { LayoutGrid, List, Sparkles, X, Image as ImageIcon, GitBranch } from 'lucide-react';
+import {
+  getBranchItems,
+  getMainBranchId,
+  updateBranchCashBoxDelta,
+} from '../utils/branchIsolation';
 
 interface PosViewProps {
   appData: AppData;
@@ -37,20 +42,30 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
   const [posMobileTab, setPosMobileTab] = useState<'products' | 'cart'>('products');
   const [posViewMode, setPosViewMode] = useState<'visual' | 'compact'>('visual');
 
-  // Categories list
-  const categories = useMemo(() => {
-    return ['all', ...Array.from(new Set(appData.items.map((i) => i.category || 'عام')))];
-  }, [appData.items]);
+  // 🏢 Active Branch Isolation for POS
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const currentBranch = (appData.branches || []).find((b) => b.id === activeBranchId) || appData.branches?.[0];
 
-  // Category item counts
+  // Scoped items belonging specifically to the active branch
+  const branchItems = useMemo(() => {
+    return getBranchItems(appData.items, activeBranchId, mainBranchId);
+  }, [appData.items, activeBranchId, mainBranchId]);
+
+  // Categories list for active branch
+  const categories = useMemo(() => {
+    return ['all', ...Array.from(new Set(branchItems.map((i) => i.category || 'عام')))];
+  }, [branchItems]);
+
+  // Category item counts for active branch
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: appData.items.length };
-    appData.items.forEach((item) => {
+    const counts: Record<string, number> = { all: branchItems.length };
+    branchItems.forEach((item) => {
       const cat = item.category || 'عام';
       counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
-  }, [appData.items]);
+  }, [branchItems]);
 
   // Category Icon mapper
   const getCategoryIcon = (cat: string) => {
@@ -92,8 +107,8 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     (c) => c.name.trim().toLowerCase() === selectedCustomer.trim().toLowerCase()
   );
 
-  // Filter items
-  const filteredItems = appData.items.filter((item) => {
+  // Filter items specifically for the active branch
+  const filteredItems = branchItems.filter((item) => {
     const matchCat = selectedCategory === 'all' || (item.category || 'عام') === selectedCategory;
     const matchSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -333,9 +348,17 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       createdByUserCode: currentUserObj?.code || 1,
     };
 
-    // Update Items Quantities
+    // Update Items Quantities strictly for this branch's items
     const updatedItems = appData.items.map((item) => {
-      const sold = cart.find((c) => c.name === item.name);
+      const isTargetBranchItem =
+        item.branchId === activeBranchId ||
+        (!item.branchId && activeBranchId === mainBranchId);
+
+      if (!isTargetBranchItem) return item;
+
+      const sold = cart.find(
+        (c) => (c.itemId && c.itemId === item.id) || c.name === item.name
+      );
       if (sold) {
         return {
           ...item,
@@ -348,7 +371,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
               qty: sold.qty,
               price: sold.price,
               total: sold.total,
-              note: `نقطة بيع POS فاتورة ${saleType === 'ajel' ? 'آجلة' : 'نقدية'} #${nextId}`,
+              note: `نقطة بيع POS فرع [${currentBranch?.name || activeBranchId}] فاتورة ${saleType === 'ajel' ? 'آجلة' : 'نقدية'} #${nextId}`,
             },
           ],
         };
@@ -503,11 +526,26 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       }
     }
 
+    let updatedBranchCashBoxes = { ...(appData.branchCashBoxes || {}) };
+    if (saleType === 'nagdi') {
+      updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, paymentMethod, finalTotal);
+    } else if (saleType === 'ajel' && effectivePaidCash > 0) {
+      updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, paymentMethod, effectivePaidCash);
+    } else if (saleType === 'split') {
+      if (effectivePaidCash > 0) {
+        updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, 'drawer', effectivePaidCash);
+      }
+      if (effectivePaidDigital > 0) {
+        updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, splitDigitalMethod, effectivePaidDigital);
+      }
+    }
+
     let updatedData: AppData = {
       ...appData,
       salesInvoices: [newInvoice, ...(appData.salesInvoices || [])],
       items: updatedItems,
       cashBox: updatedCashBox,
+      branchCashBoxes: updatedBranchCashBoxes,
       cashTransactions: updatedCashTransactions,
       customers:
         saleType === 'ajel' || (saleType === 'split' && effectiveRemainingCredit > 0)

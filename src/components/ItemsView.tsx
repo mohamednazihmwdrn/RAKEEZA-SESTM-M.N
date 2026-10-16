@@ -5,7 +5,12 @@ import { exportToExcel } from '../utils/excelExport';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { TableActionButtons } from './TableActionButtons';
 import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
-import { Trash2, DownloadCloud, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Layers } from 'lucide-react';
+import { Trash2, DownloadCloud, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Layers, GitBranch, RefreshCw } from 'lucide-react';
+import {
+  getBranchItems,
+  getMainBranchId,
+  syncMissingBranchItems,
+} from '../utils/branchIsolation';
 
 interface ItemsViewProps {
   appData: AppData;
@@ -138,41 +143,51 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     showToast(`تمت إضافة المجموعة [${grp}] والتصنيف [${comp}] والنوع [${typ}] والصنف [${itemName}] بنجاح`, 'success');
   };
 
+  // 🏢 Active Branch Scoping (عزل واستقلالية أصناف ومخزون الفرع النشط كلياً)
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const currentBranch = (appData.branches || []).find((b) => b.id === activeBranchId) || appData.branches?.[0];
+
+  // Scoped items belonging specifically to the active branch
+  const branchItems = useMemo(() => {
+    return getBranchItems(appData.items, activeBranchId, mainBranchId);
+  }, [appData.items, activeBranchId, mainBranchId]);
+
   // Pagination & Display Controls for 1000+ items
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter]);
+  }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter, activeBranchId]);
 
-  // Unique categories in database
+  // Unique categories for the active branch items
   const uniqueCategories = useMemo(() => {
     const set = new Set<string>();
-    (appData.items || []).forEach((item) => {
+    branchItems.forEach((item) => {
       if (item.category && item.category.trim()) {
         set.add(item.category.trim());
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
-  }, [appData.items]);
+  }, [branchItems]);
 
-  // Overall catalog stats
+  // Active branch catalog stats
   const itemsStats = useMemo(() => {
-    const total = appData.items?.length || 0;
-    const purchased = (appData.items || []).filter(
+    const total = branchItems.length;
+    const purchased = branchItems.filter(
       (i) => (i.quantity || 0) > 0 || (i.purchasePrice || 0) > 0 || Boolean(i.lastPurchaseDate)
     ).length;
     const pending = total - purchased;
-    const unassignedCategory = (appData.items || []).filter(
+    const unassignedCategory = branchItems.filter(
       (i) => !i.category || !i.category.trim()
     ).length;
     return { total, purchased, pending, unassignedCategory };
-  }, [appData.items]);
+  }, [branchItems]);
 
   const filteredItems = useMemo(() => {
     const s = searchTerm.toLowerCase().trim();
-    return (appData.items || []).filter((item) => {
+    return branchItems.filter((item) => {
       // 1. Text Search
       if (s) {
         const matches =
@@ -197,7 +212,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
 
       return true;
     });
-  }, [appData.items, searchTerm, categoryFilter, purchaseStatusFilter]);
+  }, [branchItems, searchTerm, categoryFilter, purchaseStatusFilter]);
 
   const totalPages = pageSize === -1 ? 1 : Math.max(1, Math.ceil(filteredItems.length / pageSize));
 
@@ -514,6 +529,49 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
         <div className="hidden lg:flex items-center text-[11px] text-slate-500 font-mono px-3">
           نظام ركيزة • إدارة المستودعات والمخزون
         </div>
+      </div>
+
+      {/* 🏢 شريط تحديد الفرع واستقلالية المخزون والأسعار */}
+      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-3 rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-blue-200">
+            <GitBranch className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs sm:text-sm font-black flex items-center gap-2">
+              <span>مخزون وأصناف: {currentBranch?.name || 'الفرع الرئيسي'}</span>
+              <span className="text-[10px] bg-blue-500/40 text-blue-100 px-2 py-0.5 rounded-full font-mono">
+                {currentBranch?.code || 'BR'}
+              </span>
+            </div>
+            <p className="text-[11px] text-blue-200">
+              كل فرع مختص بذاته كلياً في أرصدة المخزون، أسعار البيع والشراء، وكافة الحركات والتقارير.
+            </p>
+          </div>
+        </div>
+
+        {branchItems.length === 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              const res = syncMissingBranchItems(appData);
+              if (res.createdCount > 0) {
+                onUpdateData({ ...appData, items: res.items }, {
+                  action: 'sync_clean_items',
+                  module: 'إدارة الفروع',
+                  details: `استنساخ ${res.createdCount} صنف على نظافة (أرصدة وأسعار صفرية) لفرع ${currentBranch?.name}`,
+                });
+                showToast(`تم استنساخ (${res.createdCount}) صنف على نظافة بأرصدة وأسعار صفرية للفرع بنجاح!`, 'success');
+              } else {
+                showToast('جميع أصناف الشركة مدمجة بالفعل في هذا الفرع', 'info');
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>استنساخ أصناف الشركة على نظافة (أرصدة وأسعار صفرية)</span>
+          </button>
+        )}
       </div>
 
       {/* 📊 ملخص وإحصائيات سجل الأصناف */}
