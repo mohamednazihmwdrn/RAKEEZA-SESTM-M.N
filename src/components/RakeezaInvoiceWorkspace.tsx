@@ -4,6 +4,7 @@ import { calculateCustomerBalance, calculateSupplierBalance } from '../utils/acc
 import { postSaleInvoice, postPurchaseInvoice, mapPaymentMethodToKey } from '../utils/posting';
 import { printInvoiceWindow } from '../utils/printInvoice';
 import { registerModalBackHandler } from '../utils/navigationHistory';
+import { getBranchItems, getMainBranchId } from '../utils/branchIsolation';
 
 export interface RakeezaInvoiceWorkspaceProps {
   isOpen: boolean;
@@ -265,11 +266,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
   }, [matchedParty, isSale, appData]);
 
-  // Integrated Items Database (يعتمد حصرياً على أصناف المستخدم المسجلة دون أي أصناف وهمية مسبقة)
-  const [localItemsDatabase, setLocalItemsDatabase] = useState<any[]>(() => {
-    if (!appData.items || appData.items.length === 0) return [];
+  // 🏢 Integrated Items Database (مستقل ومحصور حصرياً بأصناف وأسعار ومخزون الفرع النشط)
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const scopedBranchItems = getBranchItems(appData.items, activeBranchId, mainBranchId);
 
-    return appData.items.map((i, idx) => {
+  const [localItemsDatabase, setLocalItemsDatabase] = useState<any[]>(() => {
+    if (!scopedBranchItems || scopedBranchItems.length === 0) return [];
+
+    return scopedBranchItems.map((i, idx) => {
       const bPrice = Number(i.purchasePrice || i.costPrice || 0);
       const cPrice = Number(i.salePrice || i.price || 0);
       const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || (cPrice > 0 ? cPrice * 0.95 : bPrice * 1.1));
@@ -1034,7 +1039,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
         status: 'approved',
-        branchId: appData.activeBranchId || appData.branches?.[0]?.id || 'main',
+        branchId: activeBranchId,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
         createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
       };
@@ -1082,7 +1087,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
         status: 'approved',
-        branchId: appData.activeBranchId || appData.branches?.[0]?.id || 'main',
+        branchId: activeBranchId,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
         createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
       };

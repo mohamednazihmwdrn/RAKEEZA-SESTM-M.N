@@ -26,6 +26,13 @@ import { AppData, CashTransaction, SaleInvoice } from '../types';
 import { printCashVoucherWindow } from '../utils/printCash';
 import { exportToExcel } from '../utils/excelExport';
 import { calculateCustomerBalance } from '../utils/accounting';
+import {
+  calculateBranchCashBox,
+  updateBranchCashBoxDelta,
+  getMainBranchId,
+  filterCashTransactionsByBranch,
+  filterSalesInvoicesByBranch,
+} from '../utils/branchIsolation';
 
 interface ReceiptVouchersClassicProps {
   appData: AppData;
@@ -85,6 +92,7 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [methodFilter, setMethodFilter] = useState<'all' | 'drawer' | 'vodafone' | 'instapay' | 'bank'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'month'>('all');
+  const [branchFilter, setBranchFilter] = useState<string>(appData.activeBranchId || 'all');
 
   // Next Voucher Sequential ID (REC-...)
   const nextVoucherCode = useMemo(() => {
@@ -103,20 +111,24 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
     return calculateCustomerBalance(matchedCustomer, appData);
   }, [matchedCustomer, appData]);
 
-  // Unpaid Invoices for this customer
+  // Unpaid Invoices for this customer (scoped to the selected branch)
   const unpaidInvoices = useMemo(() => {
     if (!customerName.trim()) return [];
-    return (appData.salesInvoices || []).filter((inv: SaleInvoice) => {
+    const mainId = getMainBranchId(appData.branches);
+    const branchSales = filterSalesInvoicesByBranch(appData.salesInvoices, selectedBranchId, mainId, false);
+    return branchSales.filter((inv: SaleInvoice) => {
       const match = inv.customerName?.trim().toLowerCase() === customerName.trim().toLowerCase();
       const rem = inv.remainingAmount ?? (inv.total - (inv.paidAmount || 0));
       return match && inv.type === 'ajel' && rem > 0 && inv.status !== 'cancelled';
     });
-  }, [customerName, appData.salesInvoices]);
+  }, [customerName, appData.salesInvoices, selectedBranchId, appData.branches]);
 
-  // Receipts List (Filter cash transactions for receive / deposit)
+  // Receipts List (Filter cash transactions for receive / deposit, strictly by branch)
   const receiptTransactions = useMemo(() => {
-    return (appData.cashTransactions || []).filter((t) => t.type === 'receive' || t.type === 'deposit');
-  }, [appData.cashTransactions]);
+    const allReceipts = (appData.cashTransactions || []).filter((t) => t.type === 'receive' || t.type === 'deposit');
+    const mainId = getMainBranchId(appData.branches);
+    return filterCashTransactionsByBranch(allReceipts, branchFilter, mainId, true);
+  }, [appData.cashTransactions, branchFilter, appData.branches]);
 
   // KPIs
   const stats = useMemo(() => {
@@ -134,12 +146,16 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
       }
     });
 
-    const cashDrawerBalance = appData.cashBox?.drawer || 0;
+    const targetBranch = branchFilter !== 'all' ? branchFilter : (selectedBranchId || appData.activeBranchId || 'br-main');
+    const mainId = getMainBranchId(appData.branches);
+    const branchCash = calculateBranchCashBox(appData, targetBranch, mainId);
+
+    const cashDrawerBalance = branchCash?.drawer || 0;
     const totalLiquidAssets =
-      (appData.cashBox?.drawer || 0) +
-      (appData.cashBox?.vodafone || 0) +
-      (appData.cashBox?.instapay || 0) +
-      (appData.cashBox?.bank || 0);
+      (branchCash?.drawer || 0) +
+      (branchCash?.vodafone || 0) +
+      (branchCash?.instapay || 0) +
+      (branchCash?.bank || 0);
 
     return {
       totalCount: receiptTransactions.length,
@@ -149,7 +165,7 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
       cashDrawerBalance,
       totalLiquidAssets,
     };
-  }, [receiptTransactions, appData.cashBox]);
+  }, [receiptTransactions, appData, branchFilter, selectedBranchId]);
 
   // Filtered List
   const filteredReceipts = useMemo(() => {
@@ -255,6 +271,9 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
       updatedData.cashBox[oldTrans.method] = (updatedData.cashBox[oldTrans.method] || 0) - oldTrans.amount;
       // Apply new cashbox
       updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) + val;
+      const transBranch = oldTrans.branchId || selectedBranchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, oldTrans.method, -oldTrans.amount);
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, val);
 
       savedTransaction = {
         ...oldTrans,
@@ -314,15 +333,17 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
         });
       }
 
-      // Update Cashbox
+      // Update Cashbox and Branch Cashbox
       updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) + val;
+      const transBranch = selectedBranchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, val);
 
       savedTransaction = {
         id: nextId,
         voucherNo,
         syncId: `rec_${nextId}_${Date.now()}`,
         companyId: appData.companyId || 'COMP-000001',
-        branchId: selectedBranchId || 'main',
+        branchId: transBranch,
         date: voucherDate,
         time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
         type: 'receive',
@@ -364,8 +385,10 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
 
     const updatedData = { ...appData };
 
-    // Revert cashbox
+    // Revert cashbox & branchCashBoxes
     updatedData.cashBox[t.method] = Math.max(0, (updatedData.cashBox[t.method] || 0) - t.amount);
+    const transBranch = t.branchId || appData.activeBranchId || 'br-main';
+    updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, t.method, -t.amount);
 
     // Revert customer balance if applicable
     if (t.customerName) {

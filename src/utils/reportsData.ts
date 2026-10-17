@@ -1,4 +1,5 @@
 import { AppData } from '../types';
+import { getScopedAppDataForBranch } from './branchIsolation';
 
 export const vendorReports = [
   'بيانات ودليل الموردين',
@@ -236,6 +237,7 @@ export interface ReportFilters {
   invoiceType?: string;
   dataSource?: string;
   groupBy?: string;
+  branchId?: string;
 }
 
 export interface ReportRowData {
@@ -264,8 +266,13 @@ export function generateReportData(
   group: string,
   reportName: string,
   filters: ReportFilters,
-  appData: AppData
+  rawAppData: AppData
 ): ReportResult {
+  const targetBranch = filters.branchId !== undefined ? filters.branchId : (rawAppData.activeBranchId || 'all');
+  const appData = (targetBranch && targetBranch !== 'all')
+    ? getScopedAppDataForBranch(rawAppData, targetBranch)
+    : rawAppData;
+
   const {
     fromDate: fromDateStr,
     toDate: toDateStr,

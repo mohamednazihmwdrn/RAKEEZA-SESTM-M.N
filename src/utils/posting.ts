@@ -1,4 +1,5 @@
 import { AppData, SaleInvoice, PurchaseInvoice, JournalEntry, JournalLine, ItemMovement } from '../types';
+import { getMainBranchId, updateBranchCashBoxDelta } from './branchIsolation';
 
 /**
  * 🏛️ محرك الترحيل المحاسبي الشامل لمنظومة ركيزة (RAKEEZA Universal Posting Engine)
@@ -53,16 +54,24 @@ export function postSaleInvoice(
   const now = new Date();
   const dateStr = invoice.date || now.toISOString().split('T')[0];
   const timeStr = invoice.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const mainBranchId = getMainBranchId(data.branches);
+  const invBranchId = invoice.branchId || data.activeBranchId || mainBranchId;
 
   // 1. If editing, rollback previous invoice impacts first
   if (isEditing && oldInvoiceId) {
     const oldInv = data.salesInvoices.find((i) => i.id === oldInvoiceId);
     if (oldInv) {
       const wasReturn = oldInv.type.startsWith('return_');
+      const oldBr = oldInv.branchId || mainBranchId;
       
       // Rollback old stock movements
       oldInv.items?.forEach((itm) => {
-        const stockItm = data.items.find((i) => (itm.itemId && i.id === itm.itemId) || i.name.trim() === itm.name.trim());
+        const stockItm = data.items.find(
+          (i) =>
+            (itm.itemId && i.id === itm.itemId) ||
+            (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
+              (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
+        );
         if (stockItm) {
           const qtyDiff = wasReturn ? -itm.qty : itm.qty;
           stockItm.quantity = (stockItm.quantity || 0) + qtyDiff;
@@ -71,7 +80,7 @@ export function postSaleInvoice(
             type: 'adjustment',
             qty: qtyDiff,
             price: itm.price,
-            total: qtyDiff * itm.price,
+            total: Math.abs(qtyDiff) * itm.price,
             note: `تسوية وإعادة رصيد المخزن قبل تعديل فاتورة المبيعات #${oldInv.id}`,
           });
         }
@@ -93,11 +102,15 @@ export function postSaleInvoice(
         if (oldInv.paymentSplits && oldInv.paymentSplits.length > 0) {
           oldInv.paymentSplits.forEach((sp) => {
             const key = mapPaymentMethodToKey(sp.method);
-            data.cashBox[key] = (data.cashBox[key] || 0) - (wasReturn ? -sp.amount : sp.amount);
+            const delta = wasReturn ? sp.amount : -sp.amount;
+            data.cashBox[key] = (data.cashBox[key] || 0) + delta;
+            data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, key, delta);
           });
         } else {
           const key = oldInv.paymentMethod === 'split' ? 'drawer' : (oldInv.paymentMethod || 'drawer');
-          data.cashBox[key] = (data.cashBox[key] || 0) - (wasReturn ? -oldInv.paidAmount : oldInv.paidAmount);
+          const delta = wasReturn ? oldInv.paidAmount : -oldInv.paidAmount;
+          data.cashBox[key] = (data.cashBox[key] || 0) + delta;
+          data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, key, delta);
         }
       }
 
@@ -108,19 +121,31 @@ export function postSaleInvoice(
     }
   }
 
-  // 2. Put invoice in salesInvoices
-  data.salesInvoices = [invoice, ...data.salesInvoices];
+  // 2. Put invoice in salesInvoices with confirmed branchId
+  const normalizedInvoice: SaleInvoice = {
+    ...invoice,
+    branchId: invBranchId,
+  };
+  data.salesInvoices = [normalizedInvoice, ...data.salesInvoices];
   if (!isEditing && invoice.id >= data.nextInvoiceNumber) {
     data.nextInvoiceNumber = invoice.id + 1;
   }
 
-  // 3. 📦 Inventory Posting: Instant stock deduction (supports negative selling with audit trail)
+  // 3. 📦 Inventory Posting: Instant stock deduction strictly for this branch's items
   invoice.items.forEach((item) => {
-    let stockItem = data.items.find((i) => (item.itemId && i.id === item.itemId) || i.name.trim() === item.name.trim());
+    let stockItem = data.items.find(
+      (i) =>
+        (item.itemId && i.id === item.itemId) ||
+        (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+          (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
+    );
     if (!stockItem) {
-      // Create new catalog item if dynamically introduced
+      // Create new catalog item for this branch if dynamically introduced
       stockItem = {
-        id: item.itemId || `i_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        companyId: invoice.companyId || data.companyId || 'COMP-000001',
+        branchId: invBranchId,
+        code: item.code,
         name: item.name,
         quantity: 0,
         purchasePrice: item.costPrice || item.price * 0.75,
@@ -135,8 +160,8 @@ export function postSaleInvoice(
 
     const moveType: ItemMovement['type'] = isReturn ? 'return_sale' : 'sale';
     const noteText = isReturn
-      ? `مرتجع بيع (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) من العميل ${invoice.customerName} - فاتورة #${invoice.id}`
-      : `بيع (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) للعميل ${invoice.customerName} - فاتورة #${invoice.id}${stockItem.quantity < 0 ? ' [بيع بالسالب]' : ''}`;
+      ? `مرتجع بيع (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من العميل ${invoice.customerName} - فاتورة #${invoice.id}`
+      : `بيع (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للعميل ${invoice.customerName} - فاتورة #${invoice.id}${stockItem.quantity < 0 ? ' [بيع بالسالب]' : ''}`;
 
     stockItem.movements.push({
       date: dateStr,
@@ -153,6 +178,8 @@ export function postSaleInvoice(
   if (!cust) {
     cust = {
       id: 'c' + Date.now(),
+      companyId: invoice.companyId || data.companyId || 'COMP-000001',
+      branchId: invBranchId,
       name: invoice.customerName,
       phone: invoice.phone || '',
       balance: 0,
@@ -198,7 +225,7 @@ export function postSaleInvoice(
     });
   }
 
-  // 5. 🏦 Treasury & Cash Posting (سندات القبض والصرف وتحديث الخزينة)
+  // 5. 🏦 Treasury & Cash Posting (سندات القبض والصرف وتحديث الخزينة والفرع)
   if (effectivePaid > 0) {
     const splits = (invoice.paymentSplits && invoice.paymentSplits.length > 0)
       ? invoice.paymentSplits
@@ -209,22 +236,28 @@ export function postSaleInvoice(
       const mKey = mapPaymentMethodToKey(split.method);
       const isPayOut = isReturn; // In cash return, money is paid out to customer
 
+      const delta = isPayOut ? -split.amount : split.amount;
+      data.cashBox[mKey] = (data.cashBox[mKey] || 0) + delta;
+      data.branchCashBoxes = updateBranchCashBoxDelta(data, invBranchId, mKey, delta);
+
       if (isPayOut) {
-        data.cashBox[mKey] = (data.cashBox[mKey] || 0) - split.amount;
         data.cashTransactions.push({
           id: data.nextCashId++,
+          companyId: invoice.companyId || data.companyId || 'COMP-000001',
+          branchId: invBranchId,
           date: dateStr,
           type: 'pay',
           method: mKey,
           amount: split.amount,
-          note: `سند صرف: رد نقدي لمرتجع مبيعات #${invoice.id} (${split.method}) - العميل: ${invoice.customerName}`,
+          note: `سند صرف: رد نقدي لمرتجع مبيعات فرع #${invoice.id} (${split.method}) - العميل: ${invoice.customerName}`,
           customerName: invoice.customerName,
           invoiceId: invoice.id,
         });
       } else {
-        data.cashBox[mKey] = (data.cashBox[mKey] || 0) + split.amount;
         data.cashTransactions.push({
           id: data.nextCashId++,
+          companyId: invoice.companyId || data.companyId || 'COMP-000001',
+          branchId: invBranchId,
           date: dateStr,
           type: 'receive',
           method: mKey,
@@ -385,16 +418,24 @@ export function postPurchaseInvoice(
   const now = new Date();
   const dateStr = invoice.date || now.toISOString().split('T')[0];
   const timeStr = invoice.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const mainBranchId = getMainBranchId(data.branches);
+  const invBranchId = invoice.branchId || data.activeBranchId || mainBranchId;
 
   // 1. If editing, rollback previous invoice impacts first
   if (isEditing && oldInvoiceId) {
     const oldInv = data.purchaseInvoices.find((i) => i.id === oldInvoiceId);
     if (oldInv) {
       const wasReturn = oldInv.type.startsWith('return_');
+      const oldBr = oldInv.branchId || mainBranchId;
       
       // Rollback stock
       oldInv.items?.forEach((itm) => {
-        const stockItm = data.items.find((i) => (itm.itemId && i.id === itm.itemId) || i.name.trim() === itm.name.trim());
+        const stockItm = data.items.find(
+          (i) =>
+            (itm.itemId && i.id === itm.itemId) ||
+            (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
+              (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
+        );
         if (stockItm) {
           const qtyDiff = wasReturn ? itm.qty : -itm.qty;
           stockItm.quantity = Math.max(0, (stockItm.quantity || 0) + qtyDiff);
@@ -403,7 +444,7 @@ export function postPurchaseInvoice(
             type: 'adjustment',
             qty: qtyDiff,
             price: itm.price,
-            total: qtyDiff * itm.price,
+            total: Math.abs(qtyDiff) * itm.price,
             note: `تسوية وإعادة رصيد المخزن قبل تعديل فاتورة المشتريات #${oldInv.id}`,
           });
         }
@@ -420,16 +461,20 @@ export function postPurchaseInvoice(
         }
       }
 
-      // Rollback cashbox
+      // Rollback cashbox & branchCashBoxes
       if (oldInv.paidAmount && oldInv.paidAmount > 0) {
         if (oldInv.paymentSplits && oldInv.paymentSplits.length > 0) {
           oldInv.paymentSplits.forEach((sp) => {
             const key = mapPaymentMethodToKey(sp.method);
-            data.cashBox[key] = (data.cashBox[key] || 0) + (wasReturn ? -sp.amount : sp.amount);
+            const delta = wasReturn ? -sp.amount : sp.amount;
+            data.cashBox[key] = (data.cashBox[key] || 0) + delta;
+            data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, key, delta);
           });
         } else {
           const mKey = mapPaymentMethodToKey(oldInv.paymentMethod);
-          data.cashBox[mKey] = (data.cashBox[mKey] || 0) + (wasReturn ? -oldInv.paidAmount : oldInv.paidAmount);
+          const delta = wasReturn ? -oldInv.paidAmount : oldInv.paidAmount;
+          data.cashBox[mKey] = (data.cashBox[mKey] || 0) + delta;
+          data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, key, delta);
         }
       }
 
@@ -439,18 +484,30 @@ export function postPurchaseInvoice(
     }
   }
 
-  // 2. Put invoice in purchaseInvoices
-  data.purchaseInvoices = [invoice, ...data.purchaseInvoices];
+  // 2. Put invoice in purchaseInvoices with confirmed branchId
+  const normalizedInvoice: PurchaseInvoice = {
+    ...invoice,
+    branchId: invBranchId,
+  };
+  data.purchaseInvoices = [normalizedInvoice, ...data.purchaseInvoices];
   if (!isEditing && invoice.id >= data.nextPurchaseNumber) {
     data.nextPurchaseNumber = invoice.id + 1;
   }
 
-  // 3. 📦 Inventory Posting: Instant stock increase & cost price update
+  // 3. 📦 Inventory Posting: Instant stock increase strictly for this branch's item
   invoice.items.forEach((item) => {
-    let stockItem = data.items.find((i) => (item.itemId && i.id === item.itemId) || i.name.trim() === item.name.trim());
+    let stockItem = data.items.find(
+      (i) =>
+        (item.itemId && i.id === item.itemId) ||
+        (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+          (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
+    );
     if (!stockItem) {
       stockItem = {
-        id: item.itemId || `i_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        companyId: invoice.companyId || data.companyId || 'COMP-000001',
+        branchId: invBranchId,
+        code: item.code,
         name: item.name,
         quantity: 0,
         purchasePrice: item.price,
@@ -485,8 +542,8 @@ export function postPurchaseInvoice(
 
     const moveType: ItemMovement['type'] = isReturn ? 'return_purchase' : 'purchase';
     const noteText = isReturn
-      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) للمورد ${invoice.supplierName} - فاتورة #${invoice.id}`
-      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) من المورد ${invoice.supplierName} - فاتورة #${invoice.id}`;
+      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للمورد ${invoice.supplierName} - فاتورة #${invoice.id}`
+      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من المورد ${invoice.supplierName} - فاتورة #${invoice.id}`;
 
     stockItem.movements.push({
       date: dateStr,
@@ -503,6 +560,8 @@ export function postPurchaseInvoice(
   if (!supp) {
     supp = {
       id: 's' + Date.now(),
+      companyId: invoice.companyId || data.companyId || 'COMP-000001',
+      branchId: invBranchId,
       name: invoice.supplierName,
       phone: invoice.phone || '',
       balance: 0,
@@ -548,7 +607,7 @@ export function postPurchaseInvoice(
     });
   }
 
-  // 5. 🏦 Treasury & Cash Posting (سندات الصرف والقبض وتحديث الخزائن)
+  // 5. 🏦 Treasury & Cash Posting (سندات الصرف والقبض وتحديث الخزائن والفرع)
   if (effectivePaid > 0) {
     const splits = (invoice.paymentSplits && invoice.paymentSplits.length > 0)
       ? invoice.paymentSplits
@@ -559,22 +618,28 @@ export function postPurchaseInvoice(
       const mKey = mapPaymentMethodToKey(split.method);
       const isReceive = isReturn; // In purchase return, money is received back into treasury
 
+      const delta = isReceive ? split.amount : -split.amount;
+      data.cashBox[mKey] = (data.cashBox[mKey] || 0) + delta;
+      data.branchCashBoxes = updateBranchCashBoxDelta(data, invBranchId, mKey, delta);
+
       if (isReceive) {
-        data.cashBox[mKey] = (data.cashBox[mKey] || 0) + split.amount;
         data.cashTransactions.push({
           id: data.nextCashId++,
+          companyId: invoice.companyId || data.companyId || 'COMP-000001',
+          branchId: invBranchId,
           date: dateStr,
           type: 'receive',
           method: mKey,
           amount: split.amount,
-          note: `سند قبض: استرداد نقدي من مرتجع مشتريات #${invoice.id} (${split.method}) - المورد: ${invoice.supplierName}`,
+          note: `سند قبض: استرداد نقدي من مرتجع مشتريات فرع #${invoice.id} (${split.method}) - المورد: ${invoice.supplierName}`,
           supplierName: invoice.supplierName,
           invoiceId: invoice.id,
         });
       } else {
-        data.cashBox[mKey] = (data.cashBox[mKey] || 0) - split.amount;
         data.cashTransactions.push({
           id: data.nextCashId++,
+          companyId: invoice.companyId || data.companyId || 'COMP-000001',
+          branchId: invBranchId,
           date: dateStr,
           type: 'pay',
           method: mKey,
@@ -710,9 +775,17 @@ export function deleteSaleInvoice(appData: AppData, invoiceId: number | string):
 
   const isReturn = inv.type.startsWith('return_');
 
-  // Rollback inventory
+  const mainBranchId = getMainBranchId(data.branches);
+  const invBr = inv.branchId || mainBranchId;
+
+  // Rollback inventory for this branch
   inv.items?.forEach((itm) => {
-    const stockItm = data.items.find((i) => (itm.itemId && i.id === itm.itemId) || i.name.trim() === itm.name.trim());
+    const stockItm = data.items.find(
+      (i) =>
+        (itm.itemId && i.id === itm.itemId) ||
+        (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
+          (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
+    );
     if (stockItm) {
       const qtyDiff = isReturn ? -itm.qty : itm.qty;
       stockItm.quantity = Math.max(0, (stockItm.quantity || 0) + qtyDiff);
@@ -720,15 +793,17 @@ export function deleteSaleInvoice(appData: AppData, invoiceId: number | string):
     }
   });
 
-  // Rollback cash box
+  // Rollback cash box & branchCashBoxes
   if (inv.paidAmount && inv.paidAmount > 0) {
     const methodKey = mapPaymentMethodToKey(inv.paymentMethod);
     const amount = Number(inv.paidAmount);
+    const delta = isReturn ? amount : -amount;
     if (isReturn) {
       data.cashBox[methodKey] = (data.cashBox[methodKey] || 0) + amount;
     } else {
       data.cashBox[methodKey] = Math.max(0, (data.cashBox[methodKey] || 0) - amount);
     }
+    data.branchCashBoxes = updateBranchCashBoxDelta(data, invBr, methodKey, delta);
     data.cashTransactions = data.cashTransactions.filter((tx) => tx.invoiceId !== inv.id && !tx.note?.includes(String(inv.id)));
   }
 
@@ -759,6 +834,7 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
     suppliers: (appData.suppliers || []).map((s) => ({ ...s, transactions: [...(s.transactions || [])] })),
     cashTransactions: [...(appData.cashTransactions || [])],
     cashBox: { ...appData.cashBox },
+    branchCashBoxes: { ...(appData.branchCashBoxes || {}) },
     journalEntries: [...(appData.journalEntries || [])],
     purchaseInvoices: [...(appData.purchaseInvoices || [])],
   };
@@ -767,10 +843,17 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
   if (!inv) return data;
 
   const isReturn = inv.type.startsWith('return_');
+  const mainBranchId = getMainBranchId(data.branches);
+  const invBr = inv.branchId || mainBranchId;
 
-  // Rollback inventory
+  // Rollback inventory for this branch
   inv.items?.forEach((itm) => {
-    const stockItm = data.items.find((i) => (itm.itemId && i.id === itm.itemId) || i.name.trim() === itm.name.trim());
+    const stockItm = data.items.find(
+      (i) =>
+        (itm.itemId && i.id === itm.itemId) ||
+        (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
+          (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
+    );
     if (stockItm) {
       const qtyDiff = isReturn ? itm.qty : -itm.qty;
       stockItm.quantity = Math.max(0, (stockItm.quantity || 0) + qtyDiff);
@@ -778,15 +861,17 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
     }
   });
 
-  // Rollback cash box
+  // Rollback cash box & branchCashBoxes
   if (inv.paidAmount && inv.paidAmount > 0) {
     const methodKey = mapPaymentMethodToKey(inv.paymentMethod);
     const amount = Number(inv.paidAmount);
+    const delta = isReturn ? -amount : amount;
     if (isReturn) {
       data.cashBox[methodKey] = Math.max(0, (data.cashBox[methodKey] || 0) - amount);
     } else {
       data.cashBox[methodKey] = (data.cashBox[methodKey] || 0) + amount;
     }
+    data.branchCashBoxes = updateBranchCashBoxDelta(data, invBr, methodKey, delta);
     data.cashTransactions = data.cashTransactions.filter((tx) => tx.invoiceId !== inv.id && !tx.note?.includes(String(inv.id)));
   }
 

@@ -21,6 +21,7 @@ import { printDailyTransactionsReportWindow } from '../utils/printDailyTransacti
 import { printCashVoucherWindow } from '../utils/printCash';
 import { exportToExcel } from '../utils/excelExport';
 import { Modal } from './Modal';
+import { calculateBranchCashBox, filterCashTransactionsByBranch, getMainBranchId } from '../utils/branchIsolation';
 
 interface CashViewProps {
   appData: AppData;
@@ -92,19 +93,26 @@ export const CashView: React.FC<CashViewProps> = ({
     else if (initialTab === 'closing' || initialTab === 'all') setActiveTab('closing');
   }, [initialTab]);
 
+  // Branch Scoping for Cash and Transactions
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const currentBranch = (appData.branches || []).find((b) => b.id === activeBranchId) || appData.branches?.[0];
+  const branchCash = calculateBranchCashBox(appData, activeBranchId, mainBranchId);
+  const branchTransactions = filterCashTransactionsByBranch(appData.cashTransactions, activeBranchId, mainBranchId, false);
+
   // Cash Closing Modal State
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
   const [closingDate, setClosingDate] = useState(new Date().toISOString().split('T')[0]);
   const [closingOpenBalance, setClosingOpenBalance] = useState<string>('0');
   const [closingActualCash, setClosingActualCash] = useState<string>(
-    (appData.cashBox?.drawer || 0).toString()
+    (branchCash?.drawer || 0).toString()
   );
 
   // Consolidated Cashbook Filters
   const [cashbookSearch, setCashbookSearch] = useState('');
   const [cashbookTypeFilter, setCashbookTypeFilter] = useState<'all' | 'receive' | 'pay'>('all');
 
-  const filteredTransactions = (appData.cashTransactions || []).filter((t) => {
+  const filteredTransactions = (branchTransactions || []).filter((t) => {
     const matchType =
       cashbookTypeFilter === 'all' ||
       (cashbookTypeFilter === 'receive' && (t.type === 'receive' || t.type === 'deposit')) ||
@@ -136,8 +144,8 @@ export const CashView: React.FC<CashViewProps> = ({
     }
   };
 
-  const receiptCount = (appData.cashTransactions || []).filter((t) => t.type === 'receive' || t.type === 'deposit').length;
-  const paymentCount = (appData.cashTransactions || []).filter((t) => t.type === 'pay' || t.type === 'withdraw').length;
+  const receiptCount = (branchTransactions || []).filter((t) => t.type === 'receive' || t.type === 'deposit').length;
+  const paymentCount = (branchTransactions || []).filter((t) => t.type === 'pay' || t.type === 'withdraw').length;
 
   return (
     <div className="w-full flex flex-col space-y-4 text-slate-800" dir="rtl">
@@ -241,27 +249,39 @@ export const CashView: React.FC<CashViewProps> = ({
           {/* Liquid Balances Card Bar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl p-3 border border-emerald-200 shadow-2xs">
-              <div className="text-[11px] font-bold text-emerald-800">💵 درج النقدية الرئيسي</div>
+              <div className="text-[11px] font-bold text-emerald-800 flex items-center justify-between">
+                <span>💵 درج نقدية الفرع</span>
+                {currentBranch && <span className="text-[10px] text-emerald-600">({currentBranch.name})</span>}
+              </div>
               <div className="text-lg font-black text-emerald-800 font-mono mt-0.5">
-                {(appData.cashBox?.drawer || 0).toFixed(2)} ج.م
+                {(branchCash?.drawer || 0).toFixed(2)} ج.م
               </div>
             </div>
             <div className="bg-white rounded-xl p-3 border border-rose-200 shadow-2xs">
-              <div className="text-[11px] font-bold text-rose-800">📱 فودافون كاش والمحافظ</div>
+              <div className="text-[11px] font-bold text-rose-800 flex items-center justify-between">
+                <span>📱 فودافون كاش والمحافظ</span>
+                {currentBranch && <span className="text-[10px] text-rose-600">({currentBranch.name})</span>}
+              </div>
               <div className="text-lg font-black text-rose-800 font-mono mt-0.5">
-                {(appData.cashBox?.vodafone || 0).toFixed(2)} ج.م
+                {(branchCash?.vodafone || 0).toFixed(2)} ج.م
               </div>
             </div>
             <div className="bg-white rounded-xl p-3 border border-purple-200 shadow-2xs">
-              <div className="text-[11px] font-bold text-purple-800">⚡ إنستاباي InstaPay</div>
+              <div className="text-[11px] font-bold text-purple-800 flex items-center justify-between">
+                <span>⚡ إنستاباي InstaPay</span>
+                {currentBranch && <span className="text-[10px] text-purple-600">({currentBranch.name})</span>}
+              </div>
               <div className="text-lg font-black text-purple-800 font-mono mt-0.5">
-                {(appData.cashBox?.instapay || 0).toFixed(2)} ج.م
+                {(branchCash?.instapay || 0).toFixed(2)} ج.م
               </div>
             </div>
             <div className="bg-white rounded-xl p-3 border border-blue-200 shadow-2xs">
-              <div className="text-[11px] font-bold text-blue-800">🏦 الحسابات البنكية</div>
+              <div className="text-[11px] font-bold text-blue-800 flex items-center justify-between">
+                <span>🏦 الحسابات البنكية</span>
+                {currentBranch && <span className="text-[10px] text-blue-600">({currentBranch.name})</span>}
+              </div>
               <div className="text-lg font-black text-blue-800 font-mono mt-0.5">
-                {(appData.cashBox?.bank || 0).toFixed(2)} ج.م
+                {(branchCash?.bank || 0).toFixed(2)} ج.م
               </div>
             </div>
           </div>
@@ -272,7 +292,7 @@ export const CashView: React.FC<CashViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setClosingActualCash((appData.cashBox?.drawer || 0).toString());
+                  setClosingActualCash((branchCash?.drawer || 0).toString());
                   setIsClosingModalOpen(true);
                 }}
                 className="bg-blue-700 hover:bg-blue-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"

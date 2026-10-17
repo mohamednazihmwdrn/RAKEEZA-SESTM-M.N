@@ -29,6 +29,7 @@ import {
   auditCompanyFinancialIntegrity,
 } from '../utils/accounting';
 import { exportIncomeStatementToExcel } from '../utils/excelExport';
+import { getScopedAppDataForBranch } from '../utils/branchIsolation';
 
 interface HomeViewProps {
   appData: AppData;
@@ -140,25 +141,29 @@ export function computeDateRangePnL(appData: AppData, start: string, end: string
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
-  // 1. Precise Financial and Operational Audit
-  const financialAudit = auditCompanyFinancialIntegrity(appData);
-  const actualStockMap = calculateAllActualInventoryStocks(appData);
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const currentBranch = (appData.branches || []).find((b) => b.id === activeBranchId) || appData.branches?.[0];
+  const scopedData = useMemo(() => getScopedAppDataForBranch(appData, activeBranchId), [appData, activeBranchId]);
+
+  // 1. Precise Financial and Operational Audit for this active branch
+  const financialAudit = auditCompanyFinancialIntegrity(scopedData);
+  const actualStockMap = calculateAllActualInventoryStocks(scopedData);
 
   const totalSales = Number(financialAudit.netSales || 0);
   const totalPurchases = Number(financialAudit.netPurchases || 0);
   const stockValue = Number(financialAudit.inventoryValuation || 0);
   const currencySymbol = appData.settings?.currencySymbol || 'ج.م';
 
-  const salesCount = (appData?.salesInvoices || []).length;
-  const purchasesCount = (appData?.purchaseInvoices || []).length;
+  const salesCount = (scopedData?.salesInvoices || []).length;
+  const purchasesCount = (scopedData?.purchaseInvoices || []).length;
   const customersCount = (appData?.customers || []).length;
   const suppliersCount = (appData?.suppliers || []).length;
 
-  // Real liquid breakdown
-  const drawerCash = Number(appData?.cashBox?.drawer || 0);
-  const vodafoneCash = Number(appData?.cashBox?.vodafone || 0);
-  const instapayCash = Number(appData?.cashBox?.instapay || 0);
-  const bankCash = Number(appData?.cashBox?.bank || 0);
+  // Real liquid breakdown for this branch
+  const drawerCash = Number(scopedData?.cashBox?.drawer || 0);
+  const vodafoneCash = Number(scopedData?.cashBox?.vodafone || 0);
+  const instapayCash = Number(scopedData?.cashBox?.instapay || 0);
+  const bankCash = Number(scopedData?.cashBox?.bank || 0);
   const totalLiquid = drawerCash + vodafoneCash + instapayCash + bankCash;
 
   const chequesUnderCollection = (appData?.cheques || []).filter(
@@ -259,7 +264,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
 
   // Computations for Period 1
   const periodAnalysis = useMemo(() => {
-    const res = computeDateRangePnL(appData, startDate, endDate);
+    const res = computeDateRangePnL(scopedData, startDate, endDate);
 
     // Smart Decision Making KPI (مؤشر القرار التحليلي السريع)
     let decisionBadge = {
@@ -295,12 +300,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
     }
 
     return { ...res, decisionBadge };
-  }, [appData, startDate, endDate]);
+  }, [scopedData, startDate, endDate]);
 
   // Computations for Period 2 (Comparison)
   const compPeriodAnalysis = useMemo(() => {
-    return computeDateRangePnL(appData, compStartDate, compEndDate);
-  }, [appData, compStartDate, compEndDate]);
+    return computeDateRangePnL(scopedData, compStartDate, compEndDate);
+  }, [scopedData, compStartDate, compEndDate]);
 
   // Growth / Decline calculations between Period 1 and Period 2
   const comparisonMetrics = useMemo(() => {
@@ -385,12 +390,27 @@ export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-2.5 pb-8 text-slate-800" dir="rtl">
       {/* الهيدر العلوي: خلفية بيضاء وكتابة سوداء متناسقة مع الواجهة الرئيسية */}
       <div className="bg-white text-slate-900 border-2 border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-between text-xs sm:text-sm font-bold shadow-xs">
-        <span className="tracking-wide text-slate-900 font-black">
-          {appData?.settings?.companyName || 'المحاسب المحترف'}
-        </span>
-        <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
-          لوحة التحكم الرئيسية
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="tracking-wide text-slate-900 font-black">
+            {appData?.settings?.companyName || 'المحاسب المحترف'}
+          </span>
+          {currentBranch && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 text-xs font-bold">
+              <Building2 className="w-3.5 h-3.5 text-blue-600" />
+              <span>فرع: {currentBranch.name}</span>
+              {currentBranch.isMain ? (
+                <span className="text-[10px] bg-blue-200 text-blue-900 px-1 rounded font-bold">الرئيسي</span>
+              ) : (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">مستقل</span>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
+            لوحة التحكم الرئيسية (حسابات وأرقام الفرع المحدد)
+          </span>
+        </div>
       </div>
 
       {/* شبكة البطاقات الرئيسية: الـ 11 قسماً الفريدة والمحددة بدقة تامة وبدون أي تكرار */}

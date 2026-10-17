@@ -32,6 +32,7 @@ import { UnifiedInvoiceItemSystem, InvoiceItemUnified, PaymentRow } from './Unif
 import { postPurchaseInvoice, deletePurchaseInvoice } from '../utils/posting';
 import { calculateSupplierBalance } from '../utils/accounting';
 import { RakeezaInvoiceWorkspace } from './RakeezaInvoiceWorkspace';
+import { getBranchItems, getMainBranchId, updateBranchCashBoxDelta } from '../utils/branchIsolation';
 
 interface PurchasesViewProps {
   appData: AppData;
@@ -121,7 +122,11 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     return s.name.toLowerCase().includes(q) || (s.phone && s.phone.toLowerCase().includes(q));
   });
 
-  const filteredItemsForSearch = appData.items.filter((i) => {
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const currentBranchItems = getBranchItems(appData.items, activeBranchId, mainBranchId);
+
+  const filteredItemsForSearch = currentBranchItems.filter((i) => {
     const q = itemName.trim().toLowerCase();
     if (!q) return true;
     return i.name.toLowerCase().includes(q) || (i.id && i.id.toString().includes(q));
@@ -598,8 +603,10 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
       inv.paidAmount = (inv.paidAmount || 0) + payAmount;
       inv.remainingAmount = inv.total - inv.paidAmount;
 
-      // Deduct from Treasury
+      // Deduct from Treasury and Branch Cashbox
       updatedData.cashBox[payMethod] = (updatedData.cashBox[payMethod] || 0) - payAmount;
+      const invBranch = inv.branchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, invBranch, payMethod, -payAmount);
 
       // Deduct from Supplier Balance
       const supp = updatedData.suppliers.find((s) => s.name === inv.supplierName);

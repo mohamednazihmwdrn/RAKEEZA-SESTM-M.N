@@ -5,6 +5,7 @@ import { printCashClosingWindow } from '../utils/printCashClosing';
 import { printCashBalancesReportWindow, compileCashBalancesData, formatEnNumber } from '../utils/printCashBalancesReport';
 import { printDailyTransactionsReportWindow } from '../utils/printDailyTransactionsReport';
 import { exportToExcel } from '../utils/excelExport';
+import { calculateBranchCashBox, updateBranchCashBoxDelta, getMainBranchId } from '../utils/branchIsolation';
 
 interface TreasuryViewProps {
   appData: AppData;
@@ -13,7 +14,12 @@ interface TreasuryViewProps {
 }
 
 export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateData, showToast }) => {
-  const cash = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(activeBranchId);
+
+  const targetBranchId = selectedBranchFilter !== 'all' ? selectedBranchFilter : activeBranchId;
+  const cash = calculateBranchCashBox(appData, targetBranchId, mainBranchId);
   const totalCash = (cash.drawer || 0) + (cash.vodafone || 0) + (cash.instapay || 0) + (cash.bank || 0);
 
   // Active view tab: 'transactions' or 'balances_matrix'
@@ -98,7 +104,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       return;
     }
 
-    const newCashBox = { ...cash, [depMethod]: (cash[depMethod] || 0) + amt };
+    const newCashBox = { ...(appData.cashBox || {}), [depMethod]: ((appData.cashBox?.[depMethod]) || 0) + amt };
+    const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, depMethod, amt);
 
     let updatedBankAccounts = appData.bankAccounts || [];
     if (depMethod === 'bank' && depBankId) {
@@ -109,6 +116,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
     const newTx: CashTransaction = {
       id: appData.nextCashId,
+      branchId: targetBranchId,
+      companyId: appData.companyId || 'COMP-000001',
       date: depDate || new Date().toISOString().split('T')[0],
       type: 'deposit',
       method: depMethod,
@@ -119,6 +128,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     const updatedData: AppData = {
       ...appData,
       cashBox: newCashBox,
+      branchCashBoxes: newBranchBoxes,
       bankAccounts: updatedBankAccounts,
       cashTransactions: [...appData.cashTransactions, newTx],
       nextCashId: appData.nextCashId + 1,
@@ -155,16 +165,21 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const newCashBox = {
-      ...cash,
-      [trFrom]: (cash[trFrom] || 0) - amt,
-      [trTo]: (cash[trTo] || 0) + amt,
+      ...(appData.cashBox || {}),
+      [trFrom]: ((appData.cashBox?.[trFrom]) || 0) - amt,
+      [trTo]: ((appData.cashBox?.[trTo]) || 0) + amt,
     };
+
+    let newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, trFrom, -amt);
+    newBranchBoxes = updateBranchCashBoxDelta({ ...appData, branchCashBoxes: newBranchBoxes }, targetBranchId, trTo, amt);
 
     const txDate = trDate || new Date().toISOString().split('T')[0];
     const userNote = trNote.trim() ? ` (${trNote.trim()})` : '';
 
     const txWithdraw: CashTransaction = {
       id: appData.nextCashId,
+      branchId: targetBranchId,
+      companyId: appData.companyId || 'COMP-000001',
       date: txDate,
       type: 'withdraw',
       method: trFrom,
@@ -174,6 +189,8 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
     const txDeposit: CashTransaction = {
       id: appData.nextCashId + 1,
+      branchId: targetBranchId,
+      companyId: appData.companyId || 'COMP-000001',
       date: txDate,
       type: 'deposit',
       method: trTo,
@@ -184,6 +201,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     const updatedData: AppData = {
       ...appData,
       cashBox: newCashBox,
+      branchCashBoxes: newBranchBoxes,
       cashTransactions: [...appData.cashTransactions, txWithdraw, txDeposit],
       nextCashId: appData.nextCashId + 2,
     };
@@ -215,12 +233,16 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const newCashBox = {
-      ...cash,
-      [wthMethod]: (cash[wthMethod] || 0) - amt,
+      ...(appData.cashBox || {}),
+      [wthMethod]: Math.max(0, ((appData.cashBox?.[wthMethod]) || 0) - amt),
     };
+
+    const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, wthMethod, -amt);
 
     const newTx: CashTransaction = {
       id: appData.nextCashId,
+      branchId: targetBranchId,
+      companyId: appData.companyId || 'COMP-000001',
       date: wthDate || new Date().toISOString().split('T')[0],
       type: 'withdraw',
       method: wthMethod,
@@ -231,6 +253,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     const updatedData: AppData = {
       ...appData,
       cashBox: newCashBox,
+      branchCashBoxes: newBranchBoxes,
       cashTransactions: [...appData.cashTransactions, newTx],
       nextCashId: appData.nextCashId + 1,
     };
@@ -310,11 +333,10 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     const idx = updatedData.cashTransactions.findIndex((t) => t.id === id);
     if (idx !== -1) {
       const t = updatedData.cashTransactions[idx];
-      if (t.type === 'receive' || t.type === 'deposit') {
-        updatedData.cashBox[t.method] = Math.max(0, (updatedData.cashBox[t.method] || 0) - t.amount);
-      } else {
-        updatedData.cashBox[t.method] = (updatedData.cashBox[t.method] || 0) + t.amount;
-      }
+      const delta = (t.type === 'receive' || t.type === 'deposit') ? -t.amount : t.amount;
+      updatedData.cashBox[t.method] = Math.max(0, (updatedData.cashBox[t.method] || 0) + delta);
+      const transBranch = t.branchId || targetBranchId;
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, t.method, delta);
       updatedData.cashTransactions.splice(idx, 1);
       onUpdateData(updatedData);
       showToast('تم حذف الحركة النقدية وتعديل رصيد الخزينة بنجاح', 'success');
@@ -323,6 +345,18 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
   // Filter Transactions
   const filteredTransactions = appData.cashTransactions.filter((t) => {
+    // Branch filter
+    if (selectedBranchFilter !== 'all') {
+      const isMain = selectedBranchFilter === mainBranchId || selectedBranchFilter === 'br-main';
+      if (t.branchId === selectedBranchFilter) {
+        // match
+      } else if (isMain && !t.branchId) {
+        // match
+      } else {
+        return false;
+      }
+    }
+
     // Method filter
     if (filterMethod !== 'all' && t.method !== filterMethod) return false;
 
@@ -351,9 +385,28 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     <div className="w-full max-w-7xl mx-auto flex flex-col space-y-6">
       {/* Action Toolbar */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap gap-3 items-center justify-between">
-        <div>
-          <h3 className="font-bold text-[#1a237e] text-base">🏦 إدارة الخزينة والأرصدة النقدية</h3>
-          <p className="text-gray-500 text-xs">إيداع، تحويل بين الوسائل والحسابات، سحب، ومتابعة حركة النقدية</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <h3 className="font-bold text-[#1a237e] text-base">🏦 إدارة الخزينة والأرصدة النقدية</h3>
+            <p className="text-gray-500 text-xs">إيداع، تحويل بين الوسائل والحسابات، سحب، ومتابعة حركة النقدية المستقلة لكل فرع</p>
+          </div>
+          {appData.branches && appData.branches.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-900 shadow-2xs">
+              <span>🏢 خزينة فرع:</span>
+              <select
+                value={selectedBranchFilter}
+                onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                className="bg-white border border-blue-300 rounded-lg px-2 py-1 text-xs font-black text-blue-900 outline-none cursor-pointer"
+              >
+                <option value="all">🌐 إجمالي كافة الفروع الموحدة</option>
+                {appData.branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.isMain ? '(الرئيسي)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">

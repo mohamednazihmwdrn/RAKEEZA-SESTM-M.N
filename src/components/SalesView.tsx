@@ -40,6 +40,7 @@ import { postSaleInvoice, deleteSaleInvoice } from '../utils/posting';
 import { calculateCustomerBalance } from '../utils/accounting';
 import { RakeezaInvoiceWorkspace } from './RakeezaInvoiceWorkspace';
 import { BigDataDiagnosticsModal } from './BigDataDiagnosticsModal';
+import { updateBranchCashBoxDelta, getBranchItems, getMainBranchId } from '../utils/branchIsolation';
 
 interface SalesViewProps {
   appData: AppData;
@@ -144,7 +145,11 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     return c.name.toLowerCase().includes(q) || (c.phone && c.phone.toLowerCase().includes(q));
   });
 
-  const filteredItemsForSearch = appData.items.filter((i) => {
+  const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
+  const mainBranchId = getMainBranchId(appData.branches);
+  const currentBranchItems = getBranchItems(appData.items, activeBranchId, mainBranchId);
+
+  const filteredItemsForSearch = currentBranchItems.filter((i) => {
     const q = itemName.trim().toLowerCase();
     if (!q) return true;
     return i.name.toLowerCase().includes(q) || (i.id && i.id.toString().includes(q));
@@ -740,6 +745,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       inv.remainingAmount = inv.total - inv.paidAmount;
 
       updatedData.cashBox[payMethod] += payAmount;
+      const invBranch = inv.branchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, invBranch, payMethod, payAmount);
 
       const cust = updatedData.customers.find((c) => c.name === inv.customerName);
       if (cust) cust.balance = (cust.balance || 0) - payAmount;

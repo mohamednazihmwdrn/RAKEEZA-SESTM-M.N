@@ -324,7 +324,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     const newInvoice: SaleInvoice = {
       id: nextId,
       companyId: appData.companyId || 'COMP-000001',
-      branchId: appData.activeBranchId || 'main',
+      branchId: activeBranchId,
       customerName: selectedCustomer.trim(),
       phone: customerPhone.trim(),
       date: today,

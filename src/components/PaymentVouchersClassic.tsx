@@ -25,6 +25,13 @@ import { AppData, CashTransaction, PurchaseInvoice } from '../types';
 import { printCashVoucherWindow } from '../utils/printCash';
 import { exportToExcel } from '../utils/excelExport';
 import { calculateSupplierBalance } from '../utils/accounting';
+import {
+  calculateBranchCashBox,
+  updateBranchCashBoxDelta,
+  getMainBranchId,
+  filterCashTransactionsByBranch,
+  filterPurchaseInvoicesByBranch,
+} from '../utils/branchIsolation';
 
 interface PaymentVouchersClassicProps {
   appData: AppData;
@@ -87,6 +94,7 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'supplier' | 'expense'>('all');
   const [methodFilter, setMethodFilter] = useState<'all' | 'drawer' | 'vodafone' | 'instapay' | 'bank'>('all');
+  const [branchFilter, setBranchFilter] = useState<string>(appData.activeBranchId || 'all');
 
   // Next Voucher Sequential ID (PAY-...)
   const nextVoucherCode = useMemo(() => {
@@ -105,20 +113,24 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
     return calculateSupplierBalance(matchedSupplier, appData);
   }, [matchedSupplier, appData]);
 
-  // Unpaid Invoices for this supplier
+  // Unpaid Invoices for this supplier (scoped to selected branch)
   const unpaidInvoices = useMemo(() => {
     if (paymentTargetType !== 'supplier' || !supplierName.trim()) return [];
-    return (appData.purchaseInvoices || []).filter((inv: PurchaseInvoice) => {
+    const mainId = getMainBranchId(appData.branches);
+    const branchPurchases = filterPurchaseInvoicesByBranch(appData.purchaseInvoices, selectedBranchId, mainId, false);
+    return branchPurchases.filter((inv: PurchaseInvoice) => {
       const match = inv.supplierName?.trim().toLowerCase() === supplierName.trim().toLowerCase();
       const rem = inv.remainingAmount ?? (inv.total - (inv.paidAmount || 0));
       return match && inv.type === 'ajel' && rem > 0 && inv.status !== 'cancelled';
     });
-  }, [paymentTargetType, supplierName, appData.purchaseInvoices]);
+  }, [paymentTargetType, supplierName, appData.purchaseInvoices, selectedBranchId, appData.branches]);
 
-  // Payments List (Filter cash transactions for pay / withdraw)
+  // Payments List (Filter cash transactions for pay / withdraw, strictly by branch)
   const paymentTransactions = useMemo(() => {
-    return (appData.cashTransactions || []).filter((t) => t.type === 'pay' || t.type === 'withdraw');
-  }, [appData.cashTransactions]);
+    const allPayments = (appData.cashTransactions || []).filter((t) => t.type === 'pay' || t.type === 'withdraw');
+    const mainId = getMainBranchId(appData.branches);
+    return filterCashTransactionsByBranch(allPayments, branchFilter, mainId, true);
+  }, [appData.cashTransactions, branchFilter, appData.branches]);
 
   // KPIs
   const stats = useMemo(() => {
@@ -136,8 +148,12 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
       else expenseDisbursed += val;
     });
 
-    const cashDrawerBalance = appData.cashBox?.drawer || 0;
-    const currentMethodBalance = appData.cashBox?.[method] || 0;
+    const targetBranch = branchFilter !== 'all' ? branchFilter : (selectedBranchId || appData.activeBranchId || 'br-main');
+    const mainId = getMainBranchId(appData.branches);
+    const branchCash = calculateBranchCashBox(appData, targetBranch, mainId);
+
+    const cashDrawerBalance = branchCash?.drawer || 0;
+    const currentMethodBalance = branchCash?.[method as keyof typeof branchCash] || 0;
 
     return {
       totalCount: paymentTransactions.length,
@@ -148,7 +164,7 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
       cashDrawerBalance,
       currentMethodBalance,
     };
-  }, [paymentTransactions, appData.cashBox, method]);
+  }, [paymentTransactions, appData, branchFilter, selectedBranchId, method]);
 
   // Filtered List
   const filteredPayments = useMemo(() => {
@@ -277,6 +293,9 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
       updatedData.cashBox[oldTrans.method] = (updatedData.cashBox[oldTrans.method] || 0) + oldTrans.amount;
       // Apply new cashbox deduction
       updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) - val;
+      const transBranch = oldTrans.branchId || selectedBranchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, oldTrans.method, oldTrans.amount);
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, -val);
 
       savedTransaction = {
         ...oldTrans,
@@ -337,15 +356,17 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
         });
       }
 
-      // Deduct from Cashbox
+      // Deduct from Cashbox and Branch Cashbox
       updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) - val;
+      const transBranch = selectedBranchId || appData.activeBranchId || 'br-main';
+      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, -val);
 
       savedTransaction = {
         id: nextId,
         voucherNo,
         syncId: `pay_${nextId}_${Date.now()}`,
         companyId: appData.companyId || 'COMP-000001',
-        branchId: selectedBranchId || 'main',
+        branchId: transBranch,
         date: voucherDate,
         time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
         type: 'pay',
@@ -388,8 +409,10 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
 
     const updatedData = { ...appData };
 
-    // Revert cashbox (refund to drawer)
+    // Revert cashbox (refund to drawer) and Branch Cashbox
     updatedData.cashBox[t.method] = (updatedData.cashBox[t.method] || 0) + t.amount;
+    const transBranch = t.branchId || appData.activeBranchId || 'br-main';
+    updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, t.method, t.amount);
 
     // Revert supplier balance if applicable
     if (t.supplierName) {
