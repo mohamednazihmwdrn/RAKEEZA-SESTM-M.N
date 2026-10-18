@@ -474,7 +474,7 @@ export function postPurchaseInvoice(
           const mKey = mapPaymentMethodToKey(oldInv.paymentMethod);
           const delta = wasReturn ? -oldInv.paidAmount : oldInv.paidAmount;
           data.cashBox[mKey] = (data.cashBox[mKey] || 0) + delta;
-          data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, key, delta);
+          data.branchCashBoxes = updateBranchCashBoxDelta(data, oldBr, mKey, delta);
         }
       }
 

@@ -166,6 +166,10 @@ export default function App() {
     isLicenseModalOpenRef.current = isLicenseModalOpen;
   }, [isLicenseModalOpen]);
 
+  // Mobile back press debouncer and navigation sync refs
+  const lastBackPressTimeRef = useRef<number>(0);
+  const isPopNavigatingRef = useRef<boolean>(false);
+
   const handleInspectItem = (type: any, data: any) => {
     setInspectModalItem({ type, data });
     setIsInspectModalOpen(true);
@@ -503,8 +507,8 @@ export default function App() {
               const compCodeOrId = activeSession.company.code || activeSession.company.id;
               const userCodeOrName = activeSession.user.code || activeSession.user.userCode || activeSession.user.username;
               const verifyRes = await verifyUserIdentityInFirebase(compCodeOrId, userCodeOrName, activeSession.user.uid);
-              if (!verifyRes.valid) {
-                console.warn('Session rejected during launch validation:', verifyRes.error);
+              if (!verifyRes.valid && (verifyRes.error?.includes('تعليق') || verifyRes.error?.includes('تعطيل'))) {
+                console.warn('Session revoked during launch validation:', verifyRes.error);
                 await logoutFromCloud();
                 setSession(null);
                 setIsAuthLoading(false);
@@ -891,17 +895,22 @@ export default function App() {
 
     if (safeInitPage !== 'home') {
       const parent = getParentPage(safeInitPage);
-      if (parent) {
+      window.history.replaceState({ page: 'home' }, '', '#home');
+      if (parent && parent !== 'home') {
+        window.history.pushState({ page: parent }, '', `#${parent}`);
         pushNavigationPage(parent);
       }
+      window.history.pushState({ page: safeInitPage }, '', `#${safeInitPage}`);
+      pushNavigationPage('home');
       pushNavigationPage(safeInitPage);
     } else {
+      window.history.replaceState({ page: 'home' }, '', '#home');
       pushNavigationPage('home');
     }
 
-    window.history.replaceState({ page: safeInitPage }, '', `#${safeInitPage}`);
-
     const handlePopState = (event: PopStateEvent) => {
+      isPopNavigatingRef.current = true;
+
       // 1. Intercept active modal/workspace back handler (Top Priority)
       if (consumeModalBack()) {
         window.history.pushState({ page: currentPageRef.current }, '', `#${currentPageRef.current}`);
@@ -935,8 +944,22 @@ export default function App() {
         return;
       }
 
-      // 3. Resolve target page from pop event or our explicit navigation stack
       const current = currentPageRef.current;
+
+      // 3. 🛡️ Exit Guard on Home: Double-tap back required to leave the application
+      if (current === 'home') {
+        const now = Date.now();
+        if (now - lastBackPressTimeRef.current < 2000) {
+          // Allow normal back exit on rapid double-tap
+          return;
+        }
+        lastBackPressTimeRef.current = now;
+        window.history.pushState({ page: 'home' }, '', '#home');
+        showToast('اضغط زر الرجوع مرة أخرى للخروج من المنظومة', 'info');
+        return;
+      }
+
+      // 4. Resolve target page from pop event or our explicit navigation stack
       let targetPage = event.state?.page;
 
       if (!targetPage) {
@@ -952,14 +975,9 @@ export default function App() {
         popNavigationPage(current);
       }
 
-      // 🛡️ Hierarchy Guard: If target resolved to 'home' but current page has a direct parent, step back to parent first!
-      if (!targetPage || targetPage === 'home') {
-        const parent = getParentPage(current);
-        if (parent && parent !== 'home' && parent !== current) {
-          targetPage = parent;
-        } else {
-          targetPage = 'home';
-        }
+      // 🛡️ Hierarchy Guard: If target resolved to current or invalid, step back to parent or home!
+      if (!targetPage || targetPage === current) {
+        targetPage = getParentPage(current) || 'home';
       }
 
       const currentUserActive = session?.user || appDataRef.current.users?.find((u) => u.id === appDataRef.current.currentUser) || appDataRef.current.users?.[0];
@@ -972,12 +990,18 @@ export default function App() {
         localStorage.setItem('rakeeza_current_page', verifiedTarget);
       } catch {}
 
+      window.history.replaceState({ page: verifiedTarget }, '', `#${verifiedTarget}`);
       setCurrentPage(verifiedTarget);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // 🛡️ Security Guard: Prevent bypassing restrictions by manually editing the URL hash
     const handleHashChange = () => {
+      if (isPopNavigatingRef.current) {
+        isPopNavigatingRef.current = false;
+        return;
+      }
+
       let hashPage = 'home';
       try {
         hashPage = decodeURIComponent(window.location.hash.replace('#', '')) || 'home';

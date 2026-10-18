@@ -68,6 +68,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
   const [selectedMethod, setSelectedMethod] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [searchTargetMode, setSearchTargetMode] = useState<'all' | 'customers' | 'suppliers'>('all');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(appData.activeBranchId || 'all');
+  const [draftBranchFilter, setDraftBranchFilter] = useState<string>(appData.activeBranchId || 'all');
 
   // Draft Filter Inputs (for typing before clicking Search)
   const [draftFromDate, setDraftFromDate] = useState(defaultFrom);
@@ -201,6 +203,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
     setSelectedRep(draftRep);
     setSelectedMethod(draftMethod);
     setSelectedType(draftType);
+    setSelectedBranchFilter(draftBranchFilter);
     showToast('تم تطبيق الفلاتر واستخراج التقرير بنجاح', 'info');
   };
 
@@ -216,6 +219,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
     setDraftMethod('');
     setDraftType('');
     setDraftTargetMode('all');
+    setDraftBranchFilter(appData.activeBranchId || 'all');
 
     setFromDate(monthAgoStr);
     setToDate(todayStr);
@@ -227,6 +231,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
     setSelectedMethod('');
     setSelectedType('');
     setSearchTargetMode('all');
+    setSelectedBranchFilter(appData.activeBranchId || 'all');
     showToast('تم إعادة ضبط جميع الفلاتر', 'info');
   };
 
@@ -400,6 +405,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
     invoiceType: selectedType,
     dataSource: isCustomMode ? customSource : undefined,
     groupBy: isCustomMode ? customGroupBy : undefined,
+    branchId: selectedBranchFilter,
   };
 
   const availableYears = firestoreShardingService.getAvailableFiscalYearsList(
@@ -1076,7 +1082,23 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
         </div>
 
         {/* Second Filter Row with Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs pt-1 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs pt-1 items-end">
+          <div>
+            <label className="block font-bold text-gray-600 mb-0.5">🏢 الفرع:</label>
+            <select
+              value={draftBranchFilter}
+              onChange={(e) => setDraftBranchFilter(e.target.value)}
+              className="w-full p-1.5 border-2 border-gray-200 rounded-lg text-xs focus:border-[#1a237e] bg-blue-50/40 font-bold"
+            >
+              <option value="all">🌐 جميع الفروع (مجمّع)</option>
+              {(appData.branches || []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name} {b.isMain ? '(الرئيسي)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block font-bold text-gray-600 mb-0.5">مندوب المبيعات:</label>
             <select
@@ -1138,9 +1160,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
       </div>
 
       {/* Applied Filters Badge Indicator */}
-      {(selectedCustomer || selectedSupplier || selectedItem || selectedRep || selectedMethod || selectedType || search || searchTargetMode !== 'all') && (
+      {(selectedCustomer || selectedSupplier || selectedItem || selectedRep || selectedMethod || selectedType || search || searchTargetMode !== 'all' || selectedBranchFilter !== 'all') && (
         <div className="bg-indigo-50 border border-indigo-200 p-2.5 rounded-xl text-xs flex flex-wrap gap-2 items-center text-[#1a237e]">
           <span className="font-bold">🎯 الفلاتر النشطة حالياً:</span>
+          {selectedBranchFilter !== 'all' && (
+            <span className="bg-blue-100 text-blue-900 font-bold px-2 py-0.5 rounded-md border border-blue-300 flex items-center gap-1">
+              🏢 الفرع: {appData.branches?.find((b) => b.id === selectedBranchFilter)?.name || selectedBranchFilter}
+            </span>
+          )}
           {searchTargetMode === 'customers' && (
             <span className="bg-indigo-100 font-bold px-2 py-0.5 rounded-md border border-indigo-300">
               النطاق: 👥 عملاء فقط

@@ -5,7 +5,7 @@ import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { exportToExcel } from '../utils/excelExport';
 import { TableActionButtons } from './TableActionButtons';
 import { SYSTEM_PERMISSIONS, PermissionDefinition } from '../utils/permissions';
-import { getStoredLocalSession } from '../services/cloudApi';
+import { getStoredLocalSession, getStoredBoundDevice, setStoredBoundDevice } from '../services/cloudApi';
 import {
   Shield,
   UserPlus,
@@ -231,6 +231,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         details: `تم تحديث بيانات وصلاحيات المستخدم "${name.trim()}" (الدور: ${role})`,
       };
 
+      // Sync bound device user list in localStorage immediately
+      const currentBound = getStoredBoundDevice();
+      if (currentBound) {
+        setStoredBoundDevice({
+          ...currentBound,
+          users: updatedUsers.map((u) => ({
+            id: u.id,
+            code: u.code || (u as any).userCode || 1,
+            name: u.name,
+            username: u.username,
+            role: u.role,
+            branchId: u.branchId,
+          })),
+        });
+      }
+
       onUpdateData({
         ...appData,
         users: updatedUsers,
@@ -267,6 +283,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
       updatedUsers = [...appData.users, newUser];
 
+      // Sync bound device user list in localStorage immediately
+      const currentBound = getStoredBoundDevice();
+      if (currentBound) {
+        setStoredBoundDevice({
+          ...currentBound,
+          users: updatedUsers.map((u) => ({
+            id: u.id,
+            code: u.code || (u as any).userCode || 1,
+            name: u.name,
+            username: u.username,
+            role: u.role,
+            branchId: u.branchId,
+          })),
+        });
+      }
+
       // Audit Log
       const auditLog = {
         id: `log-usr-${Date.now()}`,
@@ -276,7 +308,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         companyId: currentCompanyId,
         action: 'create_user',
         module: 'إدارة المستخدمين والصلاحيات',
-        details: `تم إنشاء حساب مستخدم جديد "${newUser.name}" (اسم الدخول: ${newUser.username}) مع تخصيص الصلاحيات`,
+        details: `تم إنشاء حساب مستخدم جديد "${newUser.name}" (كود: ${nextUserCode} - اسم الدخول: ${newUser.username}) مع تخصيص الصلاحيات`,
       };
 
       onUpdateData({
@@ -285,7 +317,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         auditLogs: [auditLog, ...(appData.auditLogs || [])],
       });
 
-      showToast(`تم إنشاء حساب المستخدم "${newUser.name}" بنجاح`, 'success');
+      showToast(`تم إنشاء حساب المستخدم "${newUser.name}" (كود الدخول: ${nextUserCode}) بنجاح`, 'success');
     }
 
     setIsModalOpen(false);
@@ -304,6 +336,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
     const updatedUsers = appData.users.filter((u) => u.id !== id);
     const updatedDeletedRecords = { ...(appData.deletedRecords || {}), [`users_${id}`]: Date.now() };
+
+    // Sync bound device in localStorage
+    const currentBound = getStoredBoundDevice();
+    if (currentBound) {
+      setStoredBoundDevice({
+        ...currentBound,
+        users: updatedUsers.map((u) => ({
+          id: u.id,
+          code: u.code || (u as any).userCode || 1,
+          name: u.name,
+          username: u.username,
+          role: u.role,
+          branchId: u.branchId,
+        })),
+      });
+    }
 
     const auditLog = {
       id: `log-usr-del-${Date.now()}`,

@@ -131,9 +131,9 @@ export function filterSalesInvoicesByBranch(
   const isMain = branchId === mainBranchId || branchId === 'br-main';
 
   return invoices.filter((inv) => {
-    if (inv.branchId === branchId) return true;
-    if (inv.branch === branchId) return true;
-    if (isMain && !inv.branchId && !inv.branch) return true;
+    const invBr = inv.branchId || (inv as any).branch;
+    if (invBr === branchId) return true;
+    if (isMain && !invBr) return true;
     return false;
   });
 }
@@ -153,9 +153,9 @@ export function filterPurchaseInvoicesByBranch(
   const isMain = branchId === mainBranchId || branchId === 'br-main';
 
   return invoices.filter((inv) => {
-    if (inv.branchId === branchId) return true;
-    if (inv.branch === branchId) return true;
-    if (isMain && !inv.branchId && !inv.branch) return true;
+    const invBr = inv.branchId || (inv as any).branch;
+    if (invBr === branchId) return true;
+    if (isMain && !invBr) return true;
     return false;
   });
 }

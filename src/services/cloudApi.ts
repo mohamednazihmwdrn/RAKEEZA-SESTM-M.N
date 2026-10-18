@@ -1017,23 +1017,39 @@ export async function verifyUserIdentityInFirebase(
   }
 
   // 1. Fetch Company Document from Firebase Firestore / Local / Server
-  const companyDoc = await lookupCompanyInFirebase(cleanCompany);
+  let companyDoc = await lookupCompanyInFirebase(cleanCompany);
   if (!companyDoc) {
-    return {
-      valid: false,
-      error: `كود الشركة "${companyIdOrCode}" غير مسجل في قاعدة بيانات فايربيس السحابية.`,
-    };
+    const bound = getStoredBoundDevice();
+    const localSess = getStoredLocalSession();
+    if (bound && (bound.companyId?.toUpperCase() === cleanCompany || bound.companyCode?.toUpperCase() === cleanCompany)) {
+      companyDoc = {
+        id: bound.companyId,
+        code: bound.companyCode,
+        name: bound.companyName,
+        adminEmail: bound.adminEmail,
+        status: 'active',
+        branches: bound.branches,
+        users: bound.users,
+      };
+    } else if (localSess?.valid && localSess.company && (localSess.company.id?.toUpperCase() === cleanCompany || localSess.company.code?.toUpperCase() === cleanCompany)) {
+      companyDoc = localSess.company;
+    } else {
+      return {
+        valid: false,
+        error: `كود الشركة "${companyIdOrCode}" غير مسجل في قاعدة بيانات فايربيس السحابية.`,
+      };
+    }
   }
 
   // 2. Validate Company Status
   if (companyDoc.status === 'suspended') {
     return {
       valid: false,
-      error: 'عذراً، تم تعليق حساب هذه الشركة في قاعدة بيانات فايربيس.',
+      error: 'عذراً، تم تعليق حساب هذه الشركة مؤقتاً.',
     };
   }
 
-  // 3. Locate User within Company Record in Firebase
+  // 3. Locate User within Company Record in Firebase / Local
   let compUsers: any[] = [];
   try {
     const tSnap = await getDoc(doc(db, 'tenants', companyDoc.id));
@@ -1051,13 +1067,17 @@ export async function verifyUserIdentityInFirebase(
     }
   }
 
+  const normUserCode = normalizeArabicNumerals(cleanUserCode).toLowerCase();
+
   let foundUser = compUsers.find(
     (u) =>
       String(u.code) === cleanUserCode ||
-      String(u.userCode) === cleanUserCode ||
+      String((u as any).userCode) === cleanUserCode ||
+      normalizeArabicNumerals(String(u.code || (u as any).userCode || '')) === normUserCode ||
       u.username?.toLowerCase() === cleanUserCode ||
       u.name?.toLowerCase() === cleanUserCode ||
-      u.id?.toLowerCase() === cleanUserCode
+      u.id?.toLowerCase() === cleanUserCode ||
+      (cleanUserCode.length > 2 && u.name?.toLowerCase().includes(cleanUserCode))
   );
 
   // Admin fallback on company document
@@ -1065,6 +1085,7 @@ export async function verifyUserIdentityInFirebase(
     !foundUser &&
     (cleanUserCode === '1' ||
       cleanUserCode === 'admin' ||
+      cleanUserCode === 'manager' ||
       cleanUserCode === companyDoc.adminUsername?.toLowerCase() ||
       cleanUserCode === companyDoc.adminName?.toLowerCase() ||
       cleanUserCode === 'nazihm338' ||
@@ -1085,10 +1106,24 @@ export async function verifyUserIdentityInFirebase(
     };
   }
 
+  // Final fallback to active session user if matching
+  if (!foundUser) {
+    const localSess = getStoredLocalSession();
+    if (
+      localSess?.valid &&
+      localSess.user &&
+      (String(localSess.user.code) === cleanUserCode ||
+        localSess.user.username?.toLowerCase() === cleanUserCode ||
+        localSess.user.id?.toLowerCase() === cleanUserCode)
+    ) {
+      foundUser = localSess.user;
+    }
+  }
+
   if (!foundUser) {
     return {
       valid: false,
-      error: `كود المستخدم أو اسم الحساب [${userCodeOrUsername}] غير مسجل لهذه الشركة في قاعدة بيانات فايربيس.`,
+      error: `كود المستخدم أو اسم الحساب [${userCodeOrUsername}] غير مسجل لهذه الشركة.`,
     };
   }
 
@@ -1240,16 +1275,45 @@ export async function loginToCloud(
     }
   }
 
+  const normPass = normalizeArabicNumerals(cleanPassword);
+  const normUserCode = normalizeArabicNumerals(cleanUserCode).toLowerCase();
+
+  const isPasswordMatch = (storedPass?: string): boolean => {
+    if (!storedPass) return false;
+    const cleanStored = String(storedPass).trim();
+    const normStored = normalizeArabicNumerals(cleanStored);
+    return (
+      cleanStored === cleanPassword ||
+      normStored === normPass ||
+      cleanStored === normPass ||
+      normStored === cleanPassword
+    );
+  };
+
+  const isUserMatch = (u: any): boolean => {
+    const uName = (u.name || '').trim().toLowerCase();
+    const uUser = (u.username || '').trim().toLowerCase();
+    const uId = (u.id || '').trim().toLowerCase();
+    const uCode = String(u.code || (u as any).userCode || '').trim();
+    const normCode = normalizeArabicNumerals(uCode);
+
+    return (
+      uUser === cleanUserCode.toLowerCase() ||
+      uUser === normUserCode ||
+      uName === cleanUserCode.toLowerCase() ||
+      uId === cleanUserCode.toLowerCase() ||
+      uCode === cleanUserCode ||
+      normCode === normUserCode ||
+      (cleanUserCode.length > 2 && uName.includes(cleanUserCode.toLowerCase()))
+    );
+  };
+
   let matchedUser = compUsers.find(
     (u) =>
-      (String(u.code) === cleanUserCode ||
-        String(u.userCode) === cleanUserCode ||
-        u.username?.toLowerCase() === cleanUserCode.toLowerCase() ||
-        u.name?.toLowerCase() === cleanUserCode.toLowerCase() ||
-        u.id?.toLowerCase() === cleanUserCode.toLowerCase()) &&
-      (String(u.password || '').trim() === cleanPassword ||
-        String(u.altPass || '').trim() === cleanPassword ||
-        (companyDoc.adminPassword && cleanPassword === String(companyDoc.adminPassword).trim()))
+      isUserMatch(u) &&
+      (isPasswordMatch(u.password) ||
+        isPasswordMatch((u as any).altPass) ||
+        (isPasswordMatch(companyDoc.adminPassword) && (u.role === 'company_admin' || u.role === 'admin' || u.code === 1)))
   );
 
   // Admin fallback verification
@@ -1265,12 +1329,13 @@ export async function loginToCloud(
       cleanUserCode.toLowerCase() === 'mohamed nazih' ||
       cleanUserCode.toLowerCase() === 'nazihm338' ||
       cleanUserCode.toLowerCase() === 'المدير العام';
+    const adminU = compUsers.find((u) => u.role === 'company_admin' || u.role === 'admin' || u.code === 1);
     const isAdminPass = Boolean(
-      companyDoc.adminPassword && String(companyDoc.adminPassword).trim() === cleanPassword
+      isPasswordMatch(companyDoc.adminPassword) || (adminU && isPasswordMatch(adminU.password))
     );
 
     if (isAdminCode && isAdminPass) {
-      matchedUser = {
+      matchedUser = adminU || {
         id: `u-${companyDoc.id}-admin`,
         uid: `UID-${companyDoc.id}-USR-1`,
         code: 1,
@@ -1288,14 +1353,7 @@ export async function loginToCloud(
 
   if (!matchedUser) {
     // Check if the user exists but the password was wrong
-    const userExists = compUsers.some(
-      (u) =>
-        String(u.code) === cleanUserCode ||
-        String(u.userCode) === cleanUserCode ||
-        u.username?.toLowerCase() === cleanUserCode.toLowerCase() ||
-        u.name?.toLowerCase() === cleanUserCode.toLowerCase() ||
-        u.id?.toLowerCase() === cleanUserCode.toLowerCase()
-    );
+    const userExists = compUsers.some((u) => isUserMatch(u));
 
     if (userExists) {
       return {

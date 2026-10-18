@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppData, CashTransaction } from '../types';
+import { AppData, CashTransaction, CashBox } from '../types';
 import { Modal } from './Modal';
 import { printCashClosingWindow } from '../utils/printCashClosing';
 import { printCashBalancesReportWindow, compileCashBalancesData, formatEnNumber } from '../utils/printCashBalancesReport';
@@ -104,7 +104,14 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       return;
     }
 
-    const newCashBox = { ...(appData.cashBox || {}), [depMethod]: ((appData.cashBox?.[depMethod]) || 0) + amt };
+    const currentBox = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
+    const newCashBox: CashBox = {
+      drawer: currentBox.drawer || 0,
+      vodafone: currentBox.vodafone || 0,
+      instapay: currentBox.instapay || 0,
+      bank: currentBox.bank || 0,
+      [depMethod]: (currentBox[depMethod] || 0) + amt,
+    };
     const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, depMethod, amt);
 
     let updatedBankAccounts = appData.bankAccounts || [];
@@ -164,10 +171,14 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       );
     }
 
-    const newCashBox = {
-      ...(appData.cashBox || {}),
-      [trFrom]: ((appData.cashBox?.[trFrom]) || 0) - amt,
-      [trTo]: ((appData.cashBox?.[trTo]) || 0) + amt,
+    const currentBox = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
+    const newCashBox: CashBox = {
+      drawer: currentBox.drawer || 0,
+      vodafone: currentBox.vodafone || 0,
+      instapay: currentBox.instapay || 0,
+      bank: currentBox.bank || 0,
+      [trFrom]: (currentBox[trFrom] || 0) - amt,
+      [trTo]: (currentBox[trTo] || 0) + amt,
     };
 
     let newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, trFrom, -amt);
@@ -232,9 +243,13 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       );
     }
 
-    const newCashBox = {
-      ...(appData.cashBox || {}),
-      [wthMethod]: Math.max(0, ((appData.cashBox?.[wthMethod]) || 0) - amt),
+    const currentBoxWth = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
+    const newCashBox: CashBox = {
+      drawer: currentBoxWth.drawer || 0,
+      vodafone: currentBoxWth.vodafone || 0,
+      instapay: currentBoxWth.instapay || 0,
+      bank: currentBoxWth.bank || 0,
+      [wthMethod]: Math.max(0, (currentBoxWth[wthMethod] || 0) - amt),
     };
 
     const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, wthMethod, -amt);

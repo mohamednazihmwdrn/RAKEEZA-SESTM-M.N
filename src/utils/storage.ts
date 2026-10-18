@@ -3,6 +3,7 @@ import { ensureProductPricesSynced } from './priceService';
 import { DEFAULT_COMPANIES } from './multiTenantService';
 import { saveToIndexedDB } from './indexedDbStorage';
 import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
+import { syncMissingBranchItems, getMainBranchId } from './branchIsolation';
 
 export const STORAGE_KEY = 'accounting_system_v8';
 
@@ -422,20 +423,29 @@ export function loadAppData(companyId?: string): AppData {
         }
       }
 
-      // Ensure all items have a valid companyId
+      // Ensure all items have a valid companyId and branchId
+      const mainId = getMainBranchId(loaded.branches);
       if (loaded.items && loaded.items.length > 0) {
         loaded.items = loaded.items.map((it) => ({
           ...it,
           companyId: it.companyId || 'COMP-000001',
+          branchId: it.branchId || mainId,
         }));
       }
+
+      // 🏢 Multi-Branch Isolation: Auto-sync missing master items with 0 stock and 0 prices for all branches
+      const syncRes = syncMissingBranchItems(loaded);
+      loaded.items = syncRes.items;
 
       return ensureProductPricesSynced(loaded);
     }
   } catch (e) {
     console.error('Failed to load data:', e);
   }
-  return ensureProductPricesSynced(getDefaultData());
+  const fallbackDef = getDefaultData();
+  const fallbackSync = syncMissingBranchItems(fallbackDef);
+  fallbackDef.items = fallbackSync.items;
+  return ensureProductPricesSynced(fallbackDef);
 }
 
 export function saveAppData(data: AppData, companyId?: string): void {

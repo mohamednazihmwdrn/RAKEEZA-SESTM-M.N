@@ -802,6 +802,24 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
           </button>
         </div>
 
+        {/* Branch Filter */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+          <Building2 className="w-3.5 h-3.5 text-slate-500 mr-1" />
+          <span className="font-bold text-slate-600 text-[11px]">الفرع:</span>
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="bg-white border border-slate-300 rounded px-2 py-0.5 font-bold text-slate-800 text-xs focus:outline-none"
+          >
+            <option value="all">جميع الفروع</option>
+            {(appData.branches || []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} {b.isMain ? '(الرئيسي)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Export Excel */}
         <button
           type="button"

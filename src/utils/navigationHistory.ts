@@ -11,6 +11,18 @@
  */
 
 export const PAGE_PARENT_MAP: Record<string, string> = {
+  // Main Top-Level Modules return to Home
+  'sales': 'home',
+  'purchases': 'home',
+  'cash': 'home',
+  'accounts': 'home',
+  'items': 'home',
+  'daily_operations': 'home',
+  'settings': 'home',
+  'reports': 'home',
+  'reports_group': 'home',
+  'owner_panel': 'home',
+
   // Accounts & Partners hierarchy
   'customers': 'accounts',
   'suppliers': 'accounts',
@@ -61,10 +73,7 @@ export const PAGE_PARENT_MAP: Record<string, string> = {
   'backup': 'settings',
   'branches': 'settings',
   'audit_trail': 'settings',
-
-  // Reports Group Root
-  'reports_group': 'home',
-  'reports': 'home',
+  'hr_payroll': 'daily_operations',
   'bi_analytics': 'reports_group',
 };
 
@@ -78,7 +87,7 @@ export function getParentPage(page: string): string | null {
     return PAGE_PARENT_MAP[page];
   }
 
-  // Handle reports hierarchy: reports_sales_تفصيلي -> reports_sales -> reports_group
+  // Handle reports hierarchy: reports_sales_تفصيلي -> reports_sales -> reports_group -> home
   if (page.startsWith('reports_') && page !== 'reports_group') {
     const parts = page.split('_');
     if (parts.length > 2) {
@@ -87,7 +96,7 @@ export function getParentPage(page: string): string | null {
     return 'reports_group';
   }
 
-  return null;
+  return 'home';
 }
 
 // Global Modal & Overlay Back Handler Registry
