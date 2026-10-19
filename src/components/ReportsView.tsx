@@ -40,7 +40,14 @@ interface ReportsViewProps {
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, onUpdateData, showToast, appData }) => {
-  const parts = pageId.split('_');
+  let decodedPageId = pageId || '';
+  try {
+    decodedPageId = decodeURIComponent(decodedPageId);
+    if (decodedPageId.includes('%')) {
+      decodedPageId = decodeURIComponent(decodedPageId);
+    }
+  } catch {}
+  const parts = decodedPageId.split('_');
 
   // Fiscal Year & Dates
   const currentActiveYear = appData.currentActiveFiscalYear || appData.settings?.fiscalYear || `${new Date().getFullYear()}`;
@@ -391,7 +398,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
   // Determine group and report name
   const isCustomMode = parts[1] === 'custom';
   const groupKey = isCustomMode ? 'custom' : parts[1];
-  const reportName = isCustomMode ? 'تقرير ديناميكي مخصص' : parts.slice(2).join('_').replace(/_/g, ' ');
+  let rawReportName = isCustomMode ? 'تقرير ديناميكي مخصص' : parts.slice(2).join('_').replace(/_/g, ' ');
+  try {
+    rawReportName = decodeURIComponent(rawReportName);
+    if (rawReportName.includes('%')) {
+      rawReportName = decodeURIComponent(rawReportName);
+    }
+  } catch {}
+  const reportName = rawReportName;
 
   const currentFilters: ReportFilters = {
     fromDate,

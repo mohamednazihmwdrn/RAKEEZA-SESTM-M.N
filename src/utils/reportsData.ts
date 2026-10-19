@@ -264,10 +264,19 @@ export interface ReportResult {
 
 export function generateReportData(
   group: string,
-  reportName: string,
+  rawReportName: string,
   filters: ReportFilters,
   rawAppData: AppData
 ): ReportResult {
+  let reportName = rawReportName || '';
+  try {
+    reportName = decodeURIComponent(reportName);
+    if (reportName.includes('%')) {
+      reportName = decodeURIComponent(reportName);
+    }
+  } catch {}
+  reportName = reportName.replace(/_/g, ' ').trim();
+
   const targetBranch = filters.branchId !== undefined ? filters.branchId : (rawAppData.activeBranchId || 'all');
   const appData = (targetBranch && targetBranch !== 'all')
     ? getScopedAppDataForBranch(rawAppData, targetBranch)

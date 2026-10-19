@@ -2150,15 +2150,7 @@ export function registerDeviceAndCompany(params: {
   const db = getCloudDatabase();
   db.usedRegistrationLinks = db.usedRegistrationLinks || [];
 
-  // 🔒 STRICT RULE per user requirements:
-  // لا يحق لأي رابط تم التسجيل به مرة، لا يمكن التسجيل بنفس الرابط مهما غير الباسورد!
-  const isEmailAlreadyRegistered =
-    db.companies.some(
-      (c) => c.email?.toLowerCase() === cleanEmail || c.adminEmail?.toLowerCase() === cleanEmail
-    ) ||
-    db.trialRegistry.some((t) => t.email?.toLowerCase() === cleanEmail) ||
-    db.usedRegistrationLinks.includes(cleanEmail);
-
+  // 🔒 If a unique one-time invite / registration link was used, ensure it cannot be reused
   const isLinkAlreadyRegistered =
     cleanLink &&
     (db.usedRegistrationLinks.includes(cleanLink) ||
@@ -2168,10 +2160,10 @@ export function registerDeviceAndCompany(params: {
           (c as any).storeSlug?.toLowerCase() === cleanLink
       ));
 
-  if (isEmailAlreadyRegistered || isLinkAlreadyRegistered) {
+  if (isLinkAlreadyRegistered) {
     return {
       success: false,
-      error: 'عذراً، هذا الرابط / الحساب تم التسجيل به مسبقاً في المنظومة. لا يحق ولا يمكن إعادة التسجيل بنفس الرابط مرة أخرى مهما تم تغيير كلمة المرور. يرجى تسجيل الدخول إلى حسابك أو مراجعة إدارة المنظومة.',
+      error: 'عذراً، هذا الرابط تم التسجيل به مسبقاً في المنظومة. لا يمكن إعادة التسجيل بنفس الرابط مرة أخرى.',
     };
   }
 
@@ -2191,8 +2183,6 @@ export function registerDeviceAndCompany(params: {
   const created = createNewCompanyCloud(newCompData, 'trial');
   const targetCompany = created.company;
 
-  // Record that this link and email have been consumed permanently
-  db.usedRegistrationLinks.push(cleanEmail);
   if (cleanLink) {
     db.usedRegistrationLinks.push(cleanLink);
   }
