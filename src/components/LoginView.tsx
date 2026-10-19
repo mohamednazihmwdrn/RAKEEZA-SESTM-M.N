@@ -79,6 +79,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState<boolean>(false);
+  const [isManualUserInput, setIsManualUserInput] = useState<boolean>(false);
+  const [manualUserInput, setManualUserInput] = useState<string>('');
 
   // Feedback & Loading States
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -343,8 +345,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setErrorMessage('الجهاز غير مربوط بأي منشأة.');
       return;
     }
-    if (!selectedUsername) {
-      setErrorMessage('يرجى اختيار اسم المستخدم من القائمة.');
+    const userToLogin = isManualUserInput ? manualUserInput.trim() : selectedUsername;
+    if (!userToLogin) {
+      setErrorMessage(isManualUserInput ? 'يرجى كتابة كود أو اسم المستخدم.' : 'يرجى اختيار اسم المستخدم من القائمة.');
       return;
     }
     if (!loginPassword) {
@@ -354,7 +357,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     setIsLoading(true);
     try {
-      const res = await loginToCloud(boundDevice.companyId, selectedUsername, loginPassword);
+      const res = await loginToCloud(boundDevice.companyId, userToLogin, loginPassword);
 
       if (res.success && res.user && res.company) {
         // Attach selected branch to user session if available
@@ -363,7 +366,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           branchId: selectedBranchId || res.user.branchId,
         };
 
-        setSuccessMessage('تم التحقق بنجاح! جاري الدخول إلى حسابك...');
+        setSuccessMessage('جاري تسجيل الدخول...');
         setTimeout(() => {
           onLoginSuccess({
             user: activeUser,
@@ -391,7 +394,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setLoginPassword('');
     setSelectedBranchId('');
     setShowUnbindConfirmModal(false);
-    setSuccessMessage('تم إلغاء ربط الجهاز بنجاح. يمكنك الآن تسجيل شركة جديدة أو ربطه بشركة أخرى.');
+    setSuccessMessage('تم إلغاء ربط الجهاز بنجاح.');
   };
 
   /**
@@ -494,7 +497,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             onTouchStart={handleHoldStart}
             onTouchEnd={handleHoldEnd}
             onTouchCancel={handleHoldEnd}
-            title="منظومة ركيزة RAKEEZA Cloud ERP (اضغط مطولاً للوحة المالك)"
+            title="منظومة ركيزة RAKEEZA Cloud ERP"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-amber-400 p-0.5 shadow-xl shadow-blue-500/20 flex items-center justify-center shrink-0">
               <img
@@ -527,15 +530,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
           {boundDevice ? (
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1.5 rounded-full shadow-inner">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="hidden sm:inline">الجهاز معتمد ومربوط بـ:</span>
-              <span className="font-bold text-white max-w-[130px] sm:max-w-none truncate">
+              <span className="font-bold text-white max-w-[150px] sm:max-w-none truncate">
                 {boundDevice.companyName}
               </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-xs font-medium text-amber-300 bg-amber-950/60 border border-amber-500/30 px-3 py-1.5 rounded-full">
               <Laptop className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>جهاز غير مربوط بشركة</span>
+              <span>غير متصل بمنشأة</span>
             </div>
           )}
         </div>
@@ -599,7 +601,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       type="button"
                       onClick={() => setShowUnbindConfirmModal(true)}
                       className="text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1 cursor-pointer"
-                      title="تغيير كود الشركة والدخول لشركة أخرى"
                     >
                       <Unlink className="w-3.5 h-3.5 text-amber-400" />
                       <span>تغيير الشركة</span>
@@ -610,7 +611,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       onClick={handleRefreshMetadata}
                       disabled={isRefreshingMetadata}
                       className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0"
-                      title="تحديث بيانات الفروع والمستخدمين من السحابة"
                     >
                       <RefreshCw className={`w-4 h-4 ${isRefreshingMetadata ? 'animate-spin text-blue-400' : ''}`} />
                     </button>
@@ -656,60 +656,99 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </div>
                   </div>
 
-                  {/* 2. User Dropdown (Strictly isolated to this company's users) */}
+                  {/* 2. User Dropdown or Code Input (Strictly isolated to this company's users) */}
                   <div>
-                    <label
-                      htmlFor="select-login-user"
-                      className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1.5 text-right"
-                    >
-                      اسم المستخدم <span className="text-rose-400">*</span>
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
-                        <User className="w-4 h-4 text-indigo-400" />
-                      </div>
-                      <select
-                        id="select-login-user"
-                        value={selectedUsername}
-                        onChange={(e) => {
-                          setSelectedUsername(e.target.value);
-                          setLoginPassword('');
-                        }}
-                        className="w-full pl-10 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none cursor-pointer text-right"
-                        disabled={isLoading}
-                        required
+                    <div className="flex justify-between items-center mb-1.5">
+                      <button
+                        type="button"
+                        onClick={handleRefreshMetadata}
+                        disabled={isRefreshingMetadata}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer select-none"
                       >
-                        {boundDevice.users && boundDevice.users.length > 0 ? (
-                          boundDevice.users.map((u) => (
-                            <option
-                              key={u.id}
-                              value={u.username || u.name}
-                              className="bg-slate-900 text-white py-2"
-                            >
-                              {u.name} ({u.username || 'user'}) - [
-                              {u.role === 'company_admin' || u.role === 'admin'
-                                ? 'المدير العام'
-                                : u.role === 'accountant'
-                                ? 'محاسب'
-                                : u.role === 'sales_rep'
-                                ? 'مسؤول مبيعات'
-                                : u.role === 'warehouse_keeper' || u.role === 'storekeeper'
-                                ? 'مسؤول مخازن'
-                                : u.role === 'cashier'
-                                ? 'كاشير'
-                                : 'مستخدم'}
-                              ]
-                            </option>
-                          ))
-                        ) : (
-                          <option value="admin" className="bg-slate-900 text-white">
-                            المدير العام (admin)
-                          </option>
-                        )}
-                      </select>
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                        <ChevronDown className="w-4 h-4" />
+                        <RefreshCw className={`w-3 h-3 ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
+                        <span>{isRefreshingMetadata ? 'جاري التحديث...' : 'تحديث'}</span>
+                      </button>
+                      <label
+                        htmlFor={isManualUserInput ? 'input-login-manual-user' : 'select-login-user'}
+                        className="block text-xs sm:text-sm font-semibold text-slate-200 text-right"
+                      >
+                        {isManualUserInput ? 'كود أو اسم المستخدم' : 'اسم المستخدم'} <span className="text-rose-400">*</span>
+                      </label>
+                    </div>
+
+                    {isManualUserInput ? (
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                          <User className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <input
+                          id="input-login-manual-user"
+                          type="text"
+                          value={manualUserInput}
+                          onChange={(e) => {
+                            setManualUserInput(e.target.value);
+                            setLoginPassword('');
+                          }}
+                          placeholder="كود أو اسم المستخدم"
+                          dir="ltr"
+                          className="w-full pl-3 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 font-mono text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left font-bold"
+                          disabled={isLoading}
+                          required
+                          autoFocus
+                        />
                       </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                          <User className="w-4 h-4 text-indigo-400" />
+                        </div>
+                        <select
+                          id="select-login-user"
+                          value={selectedUsername}
+                          onChange={(e) => {
+                            setSelectedUsername(e.target.value);
+                            setLoginPassword('');
+                          }}
+                          className="w-full pl-10 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none cursor-pointer text-right font-medium"
+                          disabled={isLoading}
+                          required
+                        >
+                          {boundDevice.users && boundDevice.users.length > 0 ? (
+                            boundDevice.users.map((u) => (
+                              <option
+                                key={u.id}
+                                value={u.username || u.name}
+                                className="bg-slate-900 text-white py-2"
+                              >
+                                {u.name} ({u.username || 'user'})
+                              </option>
+                            ))
+                          ) : (
+                            <option value="admin" className="bg-slate-900 text-white">
+                              المدير العام (admin)
+                            </option>
+                          )}
+                        </select>
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                          <ChevronDown className="w-4 h-4" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Toggle button between Dropdown and Manual User Code */}
+                    <div className="flex justify-start mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsManualUserInput(!isManualUserInput);
+                          if (!isManualUserInput && !manualUserInput && selectedUsername) {
+                            setManualUserInput(selectedUsername);
+                          }
+                        }}
+                        className="text-[11px] text-slate-400 hover:text-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>{isManualUserInput ? 'اختيار من القائمة' : 'إدخال يدوي'}</span>
+                      </button>
                     </div>
                   </div>
 
@@ -731,7 +770,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         type={showLoginPassword ? 'text' : 'password'}
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="أدخل كلمة المرور"
+                        placeholder="كلمة المرور"
                         dir="ltr"
                         autoComplete="current-password"
                         className="w-full pl-11 pr-11 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono text-left"
@@ -750,7 +789,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </div>
                   </div>
 
-                  {/* 4. Action Button: موافق (دخول للمنظومة) */}
+                  {/* 4. Action Button: دخول */}
                   <button
                     type="submit"
                     id="btn-quick-login-submit"
@@ -760,12 +799,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     {isLoading ? (
                       <>
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>جاري التحقق والدخول...</span>
+                        <span>جاري الدخول...</span>
                       </>
                     ) : (
                       <>
                         <LogIn className="w-5 h-5" />
-                        <span>موافق (دخول للمنظومة)</span>
+                        <span>دخول</span>
                       </>
                     )}
                   </button>
@@ -780,7 +819,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     className="text-xs text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-rose-500/10"
                   >
                     <Unlink className="w-3.5 h-3.5" />
-                    <span>إلغاء ربط هذا الجهاز / تبديل المنشأة</span>
+                    <span>تبديل المنشأة</span>
                   </button>
                 </div>
               </div>
@@ -789,13 +828,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
               /* 📱 STATE 1: DEVICE IS NOT BOUND -> FIRST TIME COMPANY SETUP / DEVICE BIND */
               /* ========================================================================= */
               <div id="unbound-device-container" className="space-y-6 animate-in fade-in">
-                {/* Title & Description */}
+                {/* Title */}
                 <div className="text-center">
                   <div className="inline-flex p-3 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 mb-3 shadow-inner">
                     <Laptop className="w-7 h-7" />
                   </div>
                   <h2 className="text-lg sm:text-xl font-black text-white tracking-wide">
-                    تهيئة وربط الجهاز بالمنظومة
+                    تسجيل الدخول
                   </h2>
                 </div>
 
@@ -815,7 +854,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     }`}
                   >
                     <Building2 className="w-4 h-4" />
-                    <span>ربط هذا الجهاز بشركتك (كود المنشأة)</span>
+                    <span>ربط بكود المنشأة</span>
                   </button>
 
                   <button
@@ -832,12 +871,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     }`}
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>تسجيل منشأة جديدة أول مرة</span>
+                    <span>تسجيل منشأة جديدة</span>
                   </button>
                 </div>
 
                 {setupTab === 'bind_existing' ? (
-                  /* TAB 1: BIND TO EXISTING COMPANY (Recommended for Multiple Devices & Branches) */
+                  /* TAB 1: BIND TO EXISTING COMPANY */
                   <form
                     id="form-bind-existing-company"
                     onSubmit={handleBindExistingCompanySubmit}
@@ -846,13 +885,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <div>
                       <label
                         htmlFor="input-existing-company-code"
-                        className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
+                        className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1.5 text-right"
                       >
-                        كود المنشأة أو الشركة <span className="text-rose-400">*</span>
+                        كود المنشأة <span className="text-rose-400">*</span>
                       </label>
-                      <p className="text-[11px] text-slate-400 mb-2 text-right">
-                        أدخل كود شركتك الذي أعطاه لك المدير (مثال: <span className="text-amber-300 font-mono font-bold">101</span> أو <span className="text-amber-300 font-mono font-bold">108</span>)، وسيتم تحميل أسماء المستخدمين فوراً لاختيار اسمك وإدخال الباسورد.
-                      </p>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -873,7 +909,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                                 }, 600);
                               }
                             }}
-                            placeholder="اكتب كود الشركة (مثال: 101)"
+                            placeholder="كود المنشأة"
                             dir="ltr"
                             className="w-full pl-3 pr-10 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 font-mono text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left uppercase font-bold"
                             disabled={isLoading}
@@ -894,21 +930,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           <span>عرض المستخدمين</span>
                         </button>
                       </div>
-
-                      {/* Quick Code Pill for demo */}
-                      <div className="flex items-center gap-2 pt-2 text-xs text-slate-400">
-                        <span>أكواد سريعة:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExistingCompanyCode('101');
-                            handleLookupCompany('101');
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 text-blue-300 hover:bg-slate-700 font-mono text-xs cursor-pointer border border-slate-700 transition"
-                        >
-                          101 (شركة ركيزة الافتراضية)
-                        </button>
-                      </div>
                     </div>
 
                     <button
@@ -920,18 +941,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       {isLoading ? (
                         <>
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>جاري جلب بيانات الشركة والمستخدمين...</span>
+                          <span>جاري التحميل...</span>
                         </>
                       ) : (
                         <>
                           <ShieldCheck className="w-5 h-5" />
-                          <span>تحقق واعتماد المنشأة على هذا الجهاز</span>
+                          <span>ربط المنشأة</span>
                         </>
                       )}
                     </button>
                   </form>
                 ) : (
-                  /* TAB 2: REGISTER NEW COMPANY (First Time Company Creation) */
+                  /* TAB 2: REGISTER NEW COMPANY */
                   <form
                     id="form-register-new-company"
                     onSubmit={handleRegisterNewCompanySubmit}
@@ -943,7 +964,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         htmlFor="reg-company-name"
                         className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
                       >
-                        اسم الشركة / المؤسسة <span className="text-rose-400">*</span>
+                        اسم المنشأة <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -954,7 +975,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           type="text"
                           value={regCompanyName}
                           onChange={(e) => setRegCompanyName(e.target.value)}
-                          placeholder="مثال: شركة النور للتجارة والمقاولات"
+                          placeholder="اسم المنشأة"
                           className="w-full pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-right"
                           disabled={isLoading}
                           required
@@ -968,7 +989,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         htmlFor="reg-admin-email"
                         className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
                       >
-                        إيميل المدير بـ Gmail للتعرف على الهوية <span className="text-rose-400">*</span>
+                        البريد الإلكتروني <span className="text-rose-400">*</span>
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -979,7 +1000,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           type="email"
                           value={regAdminEmail}
                           onChange={(e) => setRegAdminEmail(e.target.value)}
-                          placeholder="admin.owner@gmail.com"
+                          placeholder="name@example.com"
                           dir="ltr"
                           className="w-full pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left font-mono"
                           disabled={isLoading}
@@ -995,7 +1016,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           htmlFor="reg-admin-username"
                           className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
                         >
-                          اسم مستخدم الـ Admin <span className="text-rose-400">*</span>
+                          اسم المستخدم <span className="text-rose-400">*</span>
                         </label>
                         <div className="relative">
                           <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -1055,7 +1076,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         htmlFor="reg-branch-name"
                         className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
                       >
-                        اسم الفرع الرئيسي لهذا الجهاز
+                        اسم الفرع
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -1073,13 +1094,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Field 6: Registration Link / Token (Unique Link - One-time use) */}
+                    {/* Field 6: Registration Link / Token */}
                     <div>
                       <label
                         htmlFor="reg-link-identifier"
                         className="block text-xs sm:text-sm font-semibold text-slate-200 mb-1 text-right"
                       >
-                        رابط / كود التسجيل المعتمد (إن وجد)
+                        كود أو رابط التسجيل (اختياري)
                       </label>
                       <div className="relative">
                         <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
@@ -1090,15 +1111,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           type="text"
                           value={regLink}
                           onChange={(e) => setRegLink(e.target.value)}
-                          placeholder="رابط أو كود الدعوة (لا يمكن استخدامه إلا مرة واحدة)"
+                          placeholder="كود أو رابط التسجيل"
                           dir="ltr"
                           className="w-full pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all text-left font-mono"
                           disabled={isLoading}
                         />
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1 text-right">
-                        * تنبيه: أي رابط يتم التسجيل به مرة واحدة لا يمكن التسجيل به مجدداً مهما تم تغيير كلمة المرور.
-                      </p>
                     </div>
 
                     {/* Submit Button */}
@@ -1111,12 +1129,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       {isLoading ? (
                         <>
                           <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>جاري تسجيل المنشأة وحفظ ربط الجهاز...</span>
+                          <span>جاري التسجيل...</span>
                         </>
                       ) : (
                         <>
                           <Laptop className="w-5 h-5" />
-                          <span>تسجيل المنشأة واعتماد ربط هذا الجهاز</span>
+                          <span>تسجيل منشأة جديدة</span>
                         </>
                       )}
                     </button>

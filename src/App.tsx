@@ -626,16 +626,34 @@ export default function App() {
       }
     }
 
-    if (loginResult.user.role === 'owner') {
-      setCurrentPage('owner_panel');
-    } else {
-      const savedPage = localStorage.getItem('rakeeza_current_page');
-      if (savedPage && savedPage !== 'home' && savedPage !== 'login' && savedPage !== 'owner_panel') {
-        setCurrentPage(savedPage);
+    const targetPage = (loginResult.user.role === 'owner')
+      ? 'owner_panel'
+      : (() => {
+          const savedPage = localStorage.getItem('rakeeza_current_page');
+          if (savedPage && savedPage !== 'home' && savedPage !== 'login' && savedPage !== 'owner_panel') {
+            return savedPage;
+          }
+          return 'home';
+        })();
+
+    try {
+      pushNavigationPage('home');
+      window.history.replaceState({ page: 'home' }, '', '#home');
+      if (targetPage !== 'home') {
+        const parent = getParentPage(targetPage);
+        if (parent && parent !== 'home') {
+          pushNavigationPage(parent);
+          window.history.pushState({ page: parent }, '', `#${parent}`);
+        }
+        pushNavigationPage(targetPage);
+        window.history.pushState({ page: targetPage }, '', `#${targetPage}`);
       } else {
-        setCurrentPage('home');
+        // Guard state ahead of root so hardware back button intercepts on home
+        window.history.pushState({ page: 'home' }, '', '#home');
       }
-    }
+    } catch {}
+
+    setCurrentPage(targetPage);
   };
 
   // 🚪 Logout Handler
@@ -990,8 +1008,12 @@ export default function App() {
         localStorage.setItem('rakeeza_current_page', verifiedTarget);
       } catch {}
 
-      window.history.replaceState({ page: verifiedTarget }, '', `#${verifiedTarget}`);
       setCurrentPage(verifiedTarget);
+      if (verifiedTarget === 'home') {
+        window.history.pushState({ page: 'home' }, '', '#home');
+      } else {
+        window.history.replaceState({ page: verifiedTarget }, '', `#${verifiedTarget}`);
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 

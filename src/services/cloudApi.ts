@@ -731,36 +731,43 @@ export async function fetchCompanyPublicDetailsApi(query: string): Promise<{
         },
       ];
 
+      const userMap = new Map<string, any>();
+      // First populate from company doc users
+      if (Array.isArray(foundFirestoreDoc.users)) {
+        foundFirestoreDoc.users.forEach((u: any) => {
+          const k = String(u.id || u.username || u.code || u.userCode).toLowerCase();
+          userMap.set(k, u);
+        });
+      }
+
       try {
         const tenantSnap = await getDoc(doc(db, 'tenants', foundFirestoreDoc.id));
         if (tenantSnap.exists()) {
           const tData = tenantSnap.data() as any;
           if (tData.branches?.length) branches = tData.branches;
-          if (tData.users?.length) {
-            users = tData.users.map((u: any) => ({
-              id: u.id,
-              code: u.code || 1,
-              name: u.name,
-              username: u.username,
-              role: u.role,
-              branchId: u.branchId,
-            }));
+          if (Array.isArray(tData.users)) {
+            tData.users.forEach((u: any) => {
+              const k = String(u.id || u.username || u.code || u.userCode).toLowerCase();
+              const existing = userMap.get(k);
+              userMap.set(k, { ...existing, ...u });
+            });
           }
         }
       } catch (err) {
         console.warn('Tenant data lookup notice:', err);
       }
 
-      // If tenant snap didn't have users, check foundFirestoreDoc.users
-      if (users.length <= 1 && Array.isArray(foundFirestoreDoc.users) && foundFirestoreDoc.users.length > 0) {
-        users = foundFirestoreDoc.users.map((u: any) => ({
-          id: u.id,
-          code: u.code || 1,
-          name: u.name,
-          username: u.username,
-          role: u.role,
-          branchId: u.branchId,
-        }));
+      if (userMap.size > 0) {
+        users = Array.from(userMap.values())
+          .filter((u: any) => u.status !== 'disabled')
+          .map((u: any, idx: number) => ({
+            id: u.id || `u-${foundFirestoreDoc.id}-${idx + 1}`,
+            code: u.code || u.userCode || (idx + 1),
+            name: u.name || 'المستخدم',
+            username: u.username || `user_${idx + 1}`,
+            role: u.role || (idx === 0 ? 'company_admin' : 'user'),
+            branchId: u.branchId,
+          }));
       }
 
       const matchResult = matchesCompanyOrUsers(foundFirestoreDoc, queryInfo);

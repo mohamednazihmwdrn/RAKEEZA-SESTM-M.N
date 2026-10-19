@@ -478,7 +478,6 @@ export function authenticateUser(
 
   const cleanPass = (password || '').trim();
   const normPass = normalizeArabicNumerals(cleanPass);
-  const cleanUsername = (username || '').trim().toLowerCase();
   const normUsername = normalizeArabicNumerals(cleanUsername);
 
   const isPasswordMatch = (storedPass?: string): boolean => {
@@ -1554,6 +1553,39 @@ export function getTenantDataStrict(companyId: string): AppData | null {
     // If not existing yet, create clean isolated tenant data
     const base = getDefaultData();
     const company = db.companies.find((c) => c.id === companyId);
+    
+    // Ensure company users & admin password are preserved
+    const companyUsers: User[] = (company?.users && company.users.length > 0)
+      ? (company.users as User[])
+      : [
+          {
+            id: `u-${companyId}-admin`,
+            code: 1,
+            userCode: 1,
+            companyId,
+            name: company?.adminName || 'المدير العام',
+            username: company?.adminUsername || 'admin',
+            password: company?.adminPassword || '123456',
+            role: 'company_admin' as const,
+            status: 'active' as const,
+            permissions: { all: true },
+          },
+        ];
+
+    const companyBranches = ((company as any)?.branches && Array.isArray((company as any).branches) && (company as any).branches.length > 0)
+      ? ((company as any).branches as any)
+      : [
+          {
+            id: `br-${companyId}-main`,
+            code: 'HQ-01',
+            name: company?.address || 'المقر الرئيسي',
+            location: company?.address || 'المقر الرئيسي',
+            phone: company?.phone || '',
+            isMain: true,
+            manager: company?.adminName || 'المدير العام',
+          },
+        ];
+
     db.tenantsData[companyId] = {
       ...base,
       companyId,
@@ -1564,6 +1596,9 @@ export function getTenantDataStrict(companyId: string): AppData | null {
         taxNumber: company?.taxNumber || '',
         commercialReg: company?.commercialReg || '',
       },
+      users: companyUsers,
+      branches: companyBranches,
+      activeBranchId: companyBranches[0]?.id || `br-${companyId}-main`,
       items: [],
       salesInvoices: [],
       purchaseInvoices: [],
@@ -1572,6 +1607,44 @@ export function getTenantDataStrict(companyId: string): AppData | null {
       cashTransactions: [],
     };
     saveCloudDatabase(db);
+  } else {
+    // If tenant data exists but users are missing admin or company.users has newer users, merge them
+    const company = db.companies.find((c) => c.id === companyId);
+    if (company) {
+      let modified = false;
+      const tData = db.tenantsData[companyId];
+      if (!tData.users || tData.users.length === 0) {
+        tData.users = (company.users && company.users.length > 0)
+          ? company.users
+          : [
+              {
+                id: `u-${companyId}-admin`,
+                code: 1,
+                userCode: 1,
+                companyId,
+                name: company.adminName || 'المدير العام',
+                username: company.adminUsername || 'admin',
+                password: company.adminPassword || '123456',
+                role: 'company_admin' as const,
+                status: 'active' as const,
+                permissions: { all: true },
+              },
+            ];
+        modified = true;
+      } else if (company.adminPassword) {
+        // Ensure admin user password in tenant data matches company.adminPassword if changed
+        const adminU = tData.users.find(
+          (u) => u.username?.toLowerCase() === company.adminUsername?.toLowerCase() || u.role === 'company_admin' || u.code === 1
+        );
+        if (adminU && !adminU.password) {
+          adminU.password = company.adminPassword;
+          modified = true;
+        }
+      }
+      if (modified) {
+        saveCloudDatabase(db);
+      }
+    }
   }
   return db.tenantsData[companyId];
 }
@@ -2402,8 +2475,8 @@ export function getCompanyPublicInfo(query: string): {
   const branches = (
     (tenantData?.branches && tenantData.branches.length > 0)
       ? tenantData.branches
-      : (company.branches && (company.branches as any).length > 0)
-      ? (company.branches as any)
+      : ((company as any).branches && ((company as any).branches as any).length > 0)
+      ? ((company as any).branches as any)
       : [
           {
             id: `br-${company.id}-main`,
@@ -2417,30 +2490,41 @@ export function getCompanyPublicInfo(query: string): {
     isMain: b.isMain,
   }));
 
-  const rawUsersList = (
-    (tenantData?.users && tenantData.users.length > 0)
-      ? tenantData.users
-      : (company.users && company.users.length > 0)
-      ? company.users
-      : [
-          {
-            id: `u-${company.id}-admin`,
-            code: 1,
-            name: company.adminName || 'المدير العام',
-            username: company.adminUsername || 'admin',
-            role: 'company_admin',
-          },
-        ]
-  );
+  const userMap = new Map<string, any>();
+  if (company.users && Array.isArray(company.users)) {
+    company.users.forEach((u: any) => {
+      const key = String(u.id || u.username || (u as any).code || (u as any).userCode).toLowerCase();
+      userMap.set(key, u);
+    });
+  }
+  if (tenantData?.users && Array.isArray(tenantData.users)) {
+    tenantData.users.forEach((u: any) => {
+      const key = String(u.id || u.username || (u as any).code || (u as any).userCode).toLowerCase();
+      const existing = userMap.get(key);
+      userMap.set(key, { ...existing, ...u });
+    });
+  }
+  if (userMap.size === 0) {
+    userMap.set('admin', {
+      id: `u-${company.id}-admin`,
+      code: 1,
+      name: company.adminName || 'المدير العام',
+      username: company.adminUsername || 'admin',
+      role: 'company_admin',
+    });
+  }
+  const rawUsersList = Array.from(userMap.values());
 
-  const users = rawUsersList.map((u: any, idx: number) => ({
-    id: u.id || `u-${company.id}-${idx + 1}`,
-    code: u.code || (u as any).userCode || (idx + 1),
-    name: u.name || 'المستخدم',
-    username: u.username || `user_${u.code || idx + 1}`,
-    role: u.role || (idx === 0 ? 'company_admin' : 'user'),
-    branchId: u.branchId,
-  }));
+  const users = rawUsersList
+    .filter((u: any) => u.status !== 'disabled')
+    .map((u: any, idx: number) => ({
+      id: u.id || `u-${company.id}-${idx + 1}`,
+      code: u.code || (u as any).userCode || (idx + 1),
+      name: u.name || 'المستخدم',
+      username: u.username || `user_${idx + 1}`,
+      role: u.role || (idx === 0 ? 'company_admin' : 'user'),
+      branchId: u.branchId,
+    }));
 
   return {
     success: true,
