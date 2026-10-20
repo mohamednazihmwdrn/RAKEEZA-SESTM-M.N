@@ -855,7 +855,7 @@ export default function App() {
     } catch {}
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth < 1024) {
       setIsSidebarOpen(false);
     }
   };
@@ -882,7 +882,7 @@ export default function App() {
       setIsLicenseModalOpen(false);
       return;
     }
-    if (window.innerWidth <= 768 && isSidebarOpenRef.current) {
+    if (window.innerWidth < 1024 && isSidebarOpenRef.current) {
       setIsSidebarOpen(false);
       return;
     }
@@ -955,8 +955,8 @@ export default function App() {
         return;
       }
 
-      // 2. If mobile sidebar is open on phone screens, phone back button closes sidebar first
-      if (window.innerWidth <= 768 && isSidebarOpenRef.current) {
+      // 2. If mobile sidebar is open on phone/tablet screens, phone back button closes sidebar first
+      if (window.innerWidth < 1024 && isSidebarOpenRef.current) {
         setIsSidebarOpen(false);
         window.history.pushState({ page: currentPageRef.current }, '', `#${currentPageRef.current}`);
         return;
@@ -1805,11 +1805,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Sidebar Backdrop Overlay on Mobile */}
+      {/* Sidebar Backdrop Overlay on Mobile & Tablets */}
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="md:hidden fixed inset-0 bg-black/50 z-35 backdrop-blur-xs transition-opacity"
+          className="lg:hidden fixed inset-0 bg-black/50 z-35 backdrop-blur-xs transition-opacity"
           aria-hidden="true"
         />
       )}
@@ -1834,7 +1834,7 @@ export default function App() {
         className={`${
           appData.viewingClosedYear ? 'mt-[105px]' : 'mt-[56px]'
         } p-2.5 sm:p-4 md:p-6 pb-6 transition-all duration-300 flex-1 min-w-0 max-w-full overflow-x-hidden ${
-          isSidebarOpen ? 'md:mr-[290px]' : 'mr-0'
+          isSidebarOpen ? 'lg:mr-[290px]' : 'mr-0'
         }`}
       >
         <div className="w-full max-w-7xl mx-auto min-w-0 flex flex-col">
@@ -1917,7 +1917,7 @@ export default function App() {
       {/* System Footer & Developer Copyright */}
       <footer
         className={`no-print py-3.5 px-4 sm:px-6 bg-white border-t border-slate-200 text-xs text-slate-600 transition-all duration-300 shadow-xs mb-0 ${
-          isSidebarOpen ? 'md:mr-[290px]' : 'mr-0'
+          isSidebarOpen ? 'lg:mr-[290px]' : 'mr-0'
         }`}
       >
         <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">

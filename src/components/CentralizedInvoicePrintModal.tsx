@@ -6,7 +6,7 @@ import {
   subscribeToInvoicePrint,
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
-import { Printer, Download, X, Copy, Check, FileText } from 'lucide-react';
+import { Printer, Download, X, Copy, Check, FileText, ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -18,9 +18,34 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const [isOpen, setIsOpen] = useState(false);
   const [activePayload, setActivePayload] = useState<InvoicePrintPayload | null>(null);
   const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+  const [previewScale, setPreviewScale] = useState<number>(1);
+  const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const invoiceContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-calculate scale on window resize or size change if isAutoFit is active
+  useEffect(() => {
+    const updateScale = () => {
+      if (!isAutoFit) return;
+      if (typeof window === 'undefined') return;
+      const screenW = window.innerWidth;
+      // Target widths in mm converted to approx px (1mm ~ 3.78px)
+      const targetWidthMm = paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72;
+      const targetWidthPx = targetWidthMm * 3.78;
+      const availableW = Math.max(300, screenW - 32);
+      if (availableW < targetWidthPx) {
+        const factor = Math.max(0.42, Math.min(1, Math.round((availableW / targetWidthPx) * 100) / 100));
+        setPreviewScale(factor);
+      } else {
+        setPreviewScale(1);
+      }
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [paperSize, isAutoFit, isOpen]);
 
   // Subscribe to centralized print service events
   useEffect(() => {
@@ -32,7 +57,16 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           ? (localStorage.getItem('sys_print_pref_size') as PaperSize)
           : 'A4') ||
         'A4';
-      setPaperSize(initialSize === 'thermal' ? 'thermal' : initialSize === 'A5' ? 'A5' : 'A4');
+      setPaperSize(
+        initialSize === 'thermal'
+          ? 'thermal'
+          : initialSize === '58mm'
+          ? '58mm'
+          : initialSize === 'A5'
+          ? 'A5'
+          : 'A4'
+      );
+      setIsAutoFit(true);
       setIsOpen(true);
     });
     return () => unsubscribe();
@@ -175,11 +209,13 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       document.head.appendChild(styleEl);
     }
 
-    let pageSizeRule = '@page { size: A4 portrait; margin: 0; }';
+    let pageSizeRule = '@page { size: A4 portrait; margin: 4mm 5mm; }';
     if (paperSize === 'A5') {
-      pageSizeRule = '@page { size: A5 portrait; margin: 0; }';
+      pageSizeRule = '@page { size: A5 portrait; margin: 3mm 4mm; }';
     } else if (paperSize === 'thermal') {
-      pageSizeRule = '@page { size: 80mm auto; margin: 0; }';
+      pageSizeRule = '@page { size: 80mm auto; margin: 1.5mm; }';
+    } else if (paperSize === '58mm') {
+      pageSizeRule = '@page { size: 58mm auto; margin: 1mm; }';
     }
 
     styleEl.innerHTML = `
@@ -212,8 +248,42 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         #rakeeza-printable-invoice-container {
           box-shadow: none !important;
           margin: 0 auto !important;
+          transform: none !important;
           page-break-after: avoid !important;
           page-break-inside: avoid !important;
+          box-sizing: border-box !important;
+        }
+        body[data-paper-size="A4"] #rakeeza-printable-invoice-container {
+          width: 100% !important;
+          max-width: 200mm !important;
+          min-height: 280mm !important;
+          padding: 6mm 8mm !important;
+          border: 1.5px solid #000 !important;
+          font-size: 0.88rem !important;
+        }
+        body[data-paper-size="A5"] #rakeeza-printable-invoice-container {
+          width: 100% !important;
+          max-width: 140mm !important;
+          min-height: 196mm !important;
+          padding: 4mm 5mm !important;
+          border: 1.5px solid #000 !important;
+          font-size: 0.78rem !important;
+        }
+        body[data-paper-size="thermal"] #rakeeza-printable-invoice-container {
+          width: 72mm !important;
+          max-width: 72mm !important;
+          min-height: auto !important;
+          padding: 2mm !important;
+          border: 1px dashed #000 !important;
+          font-size: 0.72rem !important;
+        }
+        body[data-paper-size="58mm"] #rakeeza-printable-invoice-container {
+          width: 48mm !important;
+          max-width: 48mm !important;
+          min-height: auto !important;
+          padding: 1.5mm !important;
+          border: 1px dashed #000 !important;
+          font-size: 0.65rem !important;
         }
         .copyright-outside {
           display: none !important;
@@ -240,12 +310,12 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     try {
       setIsExportingPdf(true);
       const filename = `${invoiceTypeTitle}_${invoiceNumber}.pdf`;
-      const format = paperSize === 'A5' ? 'a5' : 'a4';
+      const format = paperSize === 'A5' ? 'a5' : paperSize === 'thermal' ? [80, 220] : paperSize === '58mm' ? [58, 200] : 'a4';
 
       await exportElementToPdf(invoiceContainerRef.current, filename, {
-        format,
+        format: typeof format === 'string' ? format : 'a4',
         orientation: 'portrait',
-        margin: paperSize === 'thermal' ? 2 : 4,
+        margin: paperSize === 'thermal' || paperSize === '58mm' ? 2 : 4,
         scale: 2,
       });
     } catch (err) {
@@ -267,6 +337,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const isThermalMode = paperSize === 'thermal' || paperSize === '58mm';
+
   return (
     <div
       id="centralized-print-modal-root"
@@ -275,8 +347,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       dir="rtl"
     >
       {/* 1. Fixed / Sticky Top Toolbar */}
-      <div className="w-full max-w-5xl px-3 pt-3 pb-2 sticky top-0 z-50 no-print-toolbar">
-        <div className="bg-[#1a237e] text-white p-3 sm:p-4 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-indigo-400/30">
+      <div className="w-full max-w-6xl px-3 pt-3 pb-2 sticky top-0 z-50 no-print-toolbar">
+        <div className="bg-[#1a237e] text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-indigo-400/30">
           {/* Left section: Title & Badge */}
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white">
@@ -293,16 +365,17 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             </div>
           </div>
 
-          {/* Center section: Paper Size Selector Buttons */}
-          <div className="flex items-center gap-1.5 bg-white/10 p-1 rounded-xl border border-white/20">
+          {/* Paper Size Selector Buttons */}
+          <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/20 flex-wrap">
             <button
               type="button"
               onClick={() => handleChangePaperSize('A4')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                 paperSize === 'A4'
                   ? 'bg-white text-[#1a237e] shadow-md font-black'
                   : 'text-white hover:bg-white/10'
               }`}
+              title="A4 (210mm × 297mm) - المقاس القياسي الكامل"
             >
               <span>📄</span>
               <span>مقاس A4</span>
@@ -310,11 +383,12 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <button
               type="button"
               onClick={() => handleChangePaperSize('A5')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                 paperSize === 'A5'
                   ? 'bg-white text-[#1a237e] shadow-md font-black'
                   : 'text-white hover:bg-white/10'
               }`}
+              title="A5 (148mm × 210mm) - مقاس مدمج نصف صفحة"
             >
               <span>📑</span>
               <span>مقاس A5</span>
@@ -322,14 +396,85 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <button
               type="button"
               onClick={() => handleChangePaperSize('thermal')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                 paperSize === 'thermal'
                   ? 'bg-white text-[#1a237e] shadow-md font-black'
                   : 'text-white hover:bg-white/10'
               }`}
+              title="حراري 80mm - بون فواتير نقاط البيع POS"
             >
               <span>🧾</span>
               <span>حراري 80mm</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangePaperSize('58mm')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                paperSize === '58mm'
+                  ? 'bg-white text-[#1a237e] shadow-md font-black'
+                  : 'text-white hover:bg-white/10'
+              }`}
+              title="حراري 58mm - بون صغير محمول"
+            >
+              <span>📟</span>
+              <span>حراري 58mm</span>
+            </button>
+          </div>
+
+          {/* Scale / Zoom Control Section */}
+          <div className="flex items-center gap-1.5 bg-black/25 px-2 py-1 rounded-xl border border-white/15">
+            <span className="text-[11px] text-indigo-200 font-bold hidden md:inline">مقياس العرض:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAutoFit(false);
+                setPreviewScale((s) => Math.max(0.4, Number((s - 0.05).toFixed(2))));
+              }}
+              className="p-1 hover:bg-white/15 rounded text-white cursor-pointer transition"
+              title="تصغير المعاينة"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <select
+              value={isAutoFit ? 'auto' : previewScale.toString()}
+              onChange={(e) => {
+                if (e.target.value === 'auto') {
+                  setIsAutoFit(true);
+                } else {
+                  setIsAutoFit(false);
+                  setPreviewScale(parseFloat(e.target.value));
+                }
+              }}
+              className="bg-white/10 text-white text-xs font-bold rounded px-1.5 py-1 border border-white/20 outline-none cursor-pointer"
+            >
+              <option value="auto" className="bg-slate-900 text-white">ملاءمة العرض (Fit)</option>
+              <option value="1" className="bg-slate-900 text-white">100% (أصلي)</option>
+              <option value="0.9" className="bg-slate-900 text-white">90%</option>
+              <option value="0.8" className="bg-slate-900 text-white">80%</option>
+              <option value="0.7" className="bg-slate-900 text-white">70%</option>
+              <option value="0.6" className="bg-slate-900 text-white">60%</option>
+              <option value="0.5" className="bg-slate-900 text-white">50%</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAutoFit(false);
+                setPreviewScale((s) => Math.min(1.3, Number((s + 0.05).toFixed(2))));
+              }}
+              className="p-1 hover:bg-white/15 rounded text-white cursor-pointer transition"
+              title="تكبير المعاينة"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsAutoFit(true);
+              }}
+              className={`p-1 rounded text-white cursor-pointer transition ${isAutoFit ? 'bg-indigo-600' : 'hover:bg-white/15'}`}
+              title="ملاءمة الشاشة التلقائية"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -338,18 +483,18 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <button
               type="button"
               onClick={handlePrint}
-              className="bg-[#00c853] hover:bg-[#00b248] active:bg-[#009624] text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              className="bg-[#00c853] hover:bg-[#00b248] active:bg-[#009624] text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
               title="طباعة الفاتورة بالمقاس المحدد"
             >
               <Printer className="w-4 h-4" />
-              <span>طباعة ({paperSize === 'thermal' ? 'حراري 80mm' : paperSize})</span>
+              <span>طباعة ({paperSize === 'thermal' ? 'حراري 80mm' : paperSize === '58mm' ? 'حراري 58mm' : paperSize})</span>
             </button>
 
             <button
               type="button"
               onClick={handleSavePdf}
               disabled={isExportingPdf}
-              className="bg-[#d84315] hover:bg-[#bf360c] active:bg-[#992600] disabled:opacity-50 text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+              className="bg-[#d84315] hover:bg-[#bf360c] active:bg-[#992600] disabled:opacity-50 text-white px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
               title="حفظ الفاتورة كملف PDF"
             >
               <Download className="w-4 h-4" />
@@ -378,20 +523,29 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       </div>
 
       {/* 2. Interactive Preview Canvas Stage */}
-      <div className="w-full flex-1 flex flex-col items-center py-6 px-2 sm:px-4 print-stage-wrapper">
+      <div 
+        className="w-full flex-1 flex flex-col items-center py-6 px-2 sm:px-4 print-stage-wrapper overflow-x-auto"
+        style={{
+          minHeight: 'calc(100vh - 120px)',
+          paddingBottom: `${Math.max(40, (1 - previewScale) * (paperSize === 'A4' ? 950 : 650))}px`,
+        }}
+      >
         <div
           ref={invoiceContainerRef}
           id="rakeeza-printable-invoice-container"
           className="bg-white text-black flex flex-col justify-between transition-all duration-200"
           style={{
             fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
-            border: paperSize === 'thermal' ? '1px dashed #000' : '1.5px solid #000',
-            width: paperSize === 'A4' ? '210mm' : paperSize === 'A5' ? '148mm' : '76mm',
-            minHeight: paperSize === 'A4' ? '297mm' : paperSize === 'A5' ? '210mm' : 'auto',
-            padding: paperSize === 'A4' ? '8mm 10mm' : paperSize === 'A5' ? '5mm 6mm' : '4mm 3mm',
-            fontSize: paperSize === 'A5' ? '0.82rem' : paperSize === 'thermal' ? '0.75rem' : '0.88rem',
-            boxShadow: paperSize === 'thermal' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
+            border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '1.5px solid #000',
+            width: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+            maxWidth: '100%',
+            minHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '196mm' : 'auto',
+            padding: paperSize === 'A4' ? '7mm 8mm' : paperSize === 'A5' ? '4mm 5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
+            fontSize: paperSize === 'A5' ? '0.78rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
+            boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
             boxSizing: 'border-box',
+            transform: `scale(${previewScale})`,
+            transformOrigin: 'top center',
           }}
         >
           <div>
@@ -459,20 +613,20 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <div
               style={{
                 display: 'flex',
-                flexDirection: paperSize === 'thermal' ? 'column' : 'row',
+                flexDirection: isThermalMode ? 'column' : 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                border: '1.5px solid #000',
-                padding: '5px 10px',
+                border: isThermalMode ? '1px dashed #000' : '1.5px solid #000',
+                padding: isThermalMode ? '4px 6px' : paperSize === 'A5' ? '4px 8px' : '5px 10px',
                 marginBottom: '8px',
-                fontSize: '0.8rem',
+                fontSize: paperSize === '58mm' ? '0.68rem' : isThermalMode ? '0.74rem' : paperSize === 'A5' ? '0.78rem' : '0.82rem',
                 lineHeight: 1.4,
                 width: '100%',
                 backgroundColor: '#fafafa',
-                gap: paperSize === 'thermal' ? '4px' : '0px',
+                gap: isThermalMode ? '4px' : '0px',
               }}
             >
-              <div style={{ textAlign: paperSize === 'thermal' ? 'center' : 'right' }}>
+              <div style={{ textAlign: isThermalMode ? 'center' : 'right' }}>
                 <p style={{ margin: '1px 0' }}>
                   <strong>{partyLabel}:</strong> <span>{partyName}</span>
                 </p>
@@ -484,14 +638,14 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: '1px 0' }}>
                   <strong>{invoiceTypeTitle}</strong> -{' '}
-                  <strong style={{ fontSize: '1rem' }}>#{invoiceNumber}</strong>
+                  <strong style={{ fontSize: isThermalMode ? '0.88rem' : '1rem' }}>#{invoiceNumber}</strong>
                 </p>
                 <p style={{ margin: '1px 0' }}>
                   <strong>وسيلة الدفع:</strong> <span>{paymentMethodType}</span>
                 </p>
               </div>
 
-              <div style={{ textAlign: paperSize === 'thermal' ? 'center' : 'left' }}>
+              <div style={{ textAlign: isThermalMode ? 'center' : 'left' }}>
                 <p style={{ margin: '1px 0' }}>
                   <strong>التاريخ:</strong> <span>{invoiceDate}</span>
                 </p>
@@ -673,7 +827,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <div
               style={{
                 display: 'flex',
-                justifyContent: paperSize === 'thermal' ? 'center' : 'flex-end',
+                justifyContent: isThermalMode ? 'center' : 'flex-end',
                 marginTop: '6px',
                 marginBottom: '8px',
                 width: '100%',
@@ -681,11 +835,11 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             >
               <div
                 style={{
-                  width: paperSize === 'thermal' ? '100%' : '240px',
+                  width: isThermalMode ? '100%' : paperSize === 'A5' ? '190px' : '240px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '2px',
-                  fontSize: '0.82rem',
+                  fontSize: paperSize === '58mm' ? '0.7rem' : isThermalMode ? '0.76rem' : paperSize === 'A5' ? '0.78rem' : '0.82rem',
                   fontWeight: 'bold',
                 }}
               >

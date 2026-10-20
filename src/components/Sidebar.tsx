@@ -139,6 +139,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setOpenReportsSub((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleNav = (page: string) => {
+    onNavigate(page);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024 && onClose) {
+      onClose();
+    }
+  };
+
   const navItemClass = (pageKey: string, extraActiveStyle?: string) => {
     const isActive = activePage === pageKey;
     if (isActive) {
@@ -152,14 +159,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <nav
-      className={`fixed top-0 md:top-[56px] right-0 bottom-0 w-[85vw] max-w-[320px] md:w-[280px] bg-white text-black overflow-y-auto transition-all duration-300 z-50 md:z-40 py-0 md:py-1 shadow-2xl border-l border-slate-200 no-print ${
+      className={`fixed top-0 lg:top-[56px] right-0 bottom-0 w-[85vw] max-w-[320px] lg:w-[280px] bg-white text-black overflow-y-auto transition-all duration-300 z-50 lg:z-40 py-0 lg:py-1 shadow-2xl border-l border-slate-200 no-print ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}
       dir="rtl"
     >
       <div className="flex flex-col text-sm">
-        {/* Mobile Drawer Top Bar */}
-        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-10">
+        {/* Mobile & Tablet Drawer Top Bar */}
+        <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-10">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
               <Building2 className="w-4 h-4 text-white" />
@@ -185,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Desktop Sidebar System Branding Header */}
-        <div className="hidden md:flex items-center gap-2.5 px-4 py-3 bg-white border-b border-slate-200 mb-1">
+        <div className="hidden lg:flex items-center gap-2.5 px-4 py-3 bg-white border-b border-slate-200 mb-1">
           <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
             <Building2 className="w-4 h-4 text-white" />
           </div>
@@ -202,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الرئيسية / Dashboard */}
         {canAccessPage(currentUser, 'home') && (
           <div
-            onClick={() => onNavigate('home')}
+            onClick={() => handleNav('home')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'home'
             )}`}
@@ -215,7 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* نقطة البيع السريعة POS */}
         {canAccessPage(currentUser, 'pos') && (
           <div
-            onClick={() => onNavigate('pos')}
+            onClick={() => handleNav('pos')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'pos'
             )}`}
@@ -231,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* إدارة المبيعات */}
         {canAccessPage(currentUser, 'sales') && (
           <div
-            onClick={() => onNavigate('sales')}
+            onClick={() => handleNav('sales')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'sales'
             )}`}
@@ -244,7 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* إدارة الأسعار */}
         {canAccessPage(currentUser, 'price_management') && (
           <div
-            onClick={() => onNavigate('price_management')}
+            onClick={() => handleNav('price_management')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'price_management'
             )}`}
@@ -260,7 +267,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* قائمة أسعار الشركات والتصنيفات */}
         {canAccessPage(currentUser, 'company_prices') && (
           <div
-            onClick={() => onNavigate('company_prices')}
+            onClick={() => handleNav('company_prices')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'company_prices'
             )}`}
@@ -276,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* عروض الأسعار والطلبيات */}
         {canAccessPage(currentUser, 'quotes_orders') && (
           <div
-            onClick={() => onNavigate('quotes_orders')}
+            onClick={() => handleNav('quotes_orders')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'quotes_orders'
             )}`}
@@ -289,7 +296,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* علاقات العملاء CRM */}
         {canAccessPage(currentUser, 'crm_pipeline') && (
           <div
-            onClick={() => onNavigate('crm_pipeline')}
+            onClick={() => handleNav('crm_pipeline')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'crm_pipeline'
             )}`}
@@ -305,7 +312,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* طلبات الويب سايت */}
         {canAccessPage(currentUser, 'web_orders') && (
           <div
-            onClick={() => onNavigate('web_orders')}
+            onClick={() => handleNav('web_orders')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'web_orders'
             )}`}
@@ -327,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* منتجات وأسعار الكتالوج */}
         {canAccessPage(currentUser, 'catalog_manager') && (
           <div
-            onClick={() => onNavigate('catalog_manager')}
+            onClick={() => handleNav('catalog_manager')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'catalog_manager'
             )}`}
@@ -343,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* إدارة المشتريات */}
         {canAccessPage(currentUser, 'purchases') && (
           <div
-            onClick={() => onNavigate('purchases')}
+            onClick={() => handleNav('purchases')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'purchases'
             )}`}
@@ -356,7 +363,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* حسابات العملاء والموردين */}
         {canAccessPage(currentUser, 'accounts') && (
           <div
-            onClick={() => onNavigate('accounts')}
+            onClick={() => handleNav('accounts')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center justify-between ${navItemClass(
               'accounts'
             )}`}
@@ -372,7 +379,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* العملاء */}
         {canAccessPage(currentUser, 'customers') && (
           <div
-            onClick={() => onNavigate('customers')}
+            onClick={() => handleNav('customers')}
             className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
               'customers'
             )}`}
@@ -385,7 +392,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الموردين */}
         {canAccessPage(currentUser, 'suppliers') && (
           <div
-            onClick={() => onNavigate('suppliers')}
+            onClick={() => handleNav('suppliers')}
             className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
               'suppliers'
             )}`}
@@ -399,7 +406,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* سندات القبض والصرف */}
         {canAccessPage(currentUser, 'cash') && (
           <div
-            onClick={() => onNavigate('cash')}
+            onClick={() => handleNav('cash')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center justify-between ${navItemClass(
               'cash'
             )}`}
@@ -415,7 +422,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* سندات القبض */}
         {canAccessPage(currentUser, 'receipts') && (
           <div
-            onClick={() => onNavigate('receipts')}
+            onClick={() => handleNav('receipts')}
             className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
               'receipts'
             )}`}
@@ -428,7 +435,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* سندات الصرف */}
         {canAccessPage(currentUser, 'payments') && (
           <div
-            onClick={() => onNavigate('payments')}
+            onClick={() => handleNav('payments')}
             className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
               'payments'
             )}`}
@@ -441,7 +448,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* مصفوفة أرصدة الخزينة والحسابات البنكية */}
         {canAccessPage(currentUser, 'treasury') && (
           <div
-            onClick={() => onNavigate('treasury')}
+            onClick={() => handleNav('treasury')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'treasury'
             )}`}
@@ -457,7 +464,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الشيكات وأوراق القبض والدفع */}
         {canAccessPage(currentUser, 'cheques') && (
           <div
-            onClick={() => onNavigate('cheques')}
+            onClick={() => handleNav('cheques')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'cheques'
             )}`}
@@ -473,7 +480,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* التسوية البنكية والاعتمادات */}
         {canAccessPage(currentUser, 'bank_reconciliation') && (
           <div
-            onClick={() => onNavigate('bank_reconciliation')}
+            onClick={() => handleNav('bank_reconciliation')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'bank_reconciliation'
             )}`}
@@ -504,7 +511,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="bg-slate-50 border-y border-slate-200 text-xs">
                 {canAccessPage(currentUser, 'items') && (
                   <div
-                    onClick={() => onNavigate('items')}
+                    onClick={() => handleNav('items')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'items'
                     )}`}
@@ -514,7 +521,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'items') && (
                   <div
-                    onClick={() => onNavigate('item_movement')}
+                    onClick={() => handleNav('item_movement')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'item_movement'
                     )}`}
@@ -524,7 +531,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'inventory') && (
                   <div
-                    onClick={() => onNavigate('inventory')}
+                    onClick={() => handleNav('inventory')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'inventory'
                     )}`}
@@ -534,7 +541,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'physical_inventory') && (
                   <div
-                    onClick={() => onNavigate('physical_inventory')}
+                    onClick={() => handleNav('physical_inventory')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'physical_inventory'
                     )}`}
@@ -544,7 +551,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'serial_warranty') && (
                   <div
-                    onClick={() => onNavigate('serial_warranty')}
+                    onClick={() => handleNav('serial_warranty')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
                       'serial_warranty'
                     )}`}
@@ -555,7 +562,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'manufacturing') && (
                   <div
-                    onClick={() => onNavigate('manufacturing')}
+                    onClick={() => handleNav('manufacturing')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
                       'manufacturing'
                     )}`}
@@ -572,7 +579,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الفروع والتحويلات */}
         {canAccessPage(currentUser, 'branches') && (
           <div
-            onClick={() => onNavigate('branches')}
+            onClick={() => handleNav('branches')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'branches'
             )}`}
@@ -610,7 +617,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="bg-slate-50 border-y border-slate-200 text-xs">
                 {canAccessPage(currentUser, 'accounts_tree') && (
                   <div
-                    onClick={() => onNavigate('accounts_tree')}
+                    onClick={() => handleNav('accounts_tree')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
                       'accounts_tree'
                     )}`}
@@ -621,7 +628,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {(canAccessPage(currentUser, 'daily_operations') || canAccessPage(currentUser, 'daily_entries')) && (
                   <div
-                    onClick={() => onNavigate('daily_operations')}
+                    onClick={() => handleNav('daily_operations')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'daily_operations'
                     )}`}
@@ -631,7 +638,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'trial_balance') && (
                   <div
-                    onClick={() => onNavigate('trial_balance')}
+                    onClick={() => handleNav('trial_balance')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'trial_balance'
                     )}`}
@@ -641,7 +648,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'income_statement') && (
                   <div
-                    onClick={() => onNavigate('income_statement')}
+                    onClick={() => handleNav('income_statement')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'income_statement'
                     )}`}
@@ -651,7 +658,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'balance_sheet') && (
                   <div
-                    onClick={() => onNavigate('balance_sheet')}
+                    onClick={() => handleNav('balance_sheet')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'balance_sheet'
                     )}`}
@@ -661,7 +668,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'monthly_profit_report') && (
                   <div
-                    onClick={() => onNavigate('monthly_profit_report')}
+                    onClick={() => handleNav('monthly_profit_report')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
                       'monthly_profit_report'
                     )}`}
@@ -672,7 +679,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'cash_flow_closing') && (
                   <div
-                    onClick={() => onNavigate('cash_flow_closing')}
+                    onClick={() => handleNav('cash_flow_closing')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
                       'cash_flow_closing'
                     )}`}
@@ -683,7 +690,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'fixed_assets') && (
                   <div
-                    onClick={() => onNavigate('fixed_assets')}
+                    onClick={() => handleNav('fixed_assets')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
                       'fixed_assets'
                     )}`}
@@ -693,7 +700,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {canAccessPage(currentUser, 'year_end_closing') && (
                   <div
-                    onClick={() => onNavigate('year_end_closing')}
+                    onClick={() => handleNav('year_end_closing')}
                     className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
                       'year_end_closing'
                     )}`}
@@ -710,7 +717,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الفاتورة الإلكترونية والضرائب */}
         {canAccessPage(currentUser, 'e_invoicing') && (
           <div
-            onClick={() => onNavigate('e_invoicing')}
+            onClick={() => handleNav('e_invoicing')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'e_invoicing'
             )}`}
@@ -723,7 +730,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* المندوبين والعمولات والائتمان */}
         {canAccessPage(currentUser, 'sales_reps') && (
           <div
-            onClick={() => onNavigate('sales_reps')}
+            onClick={() => handleNav('sales_reps')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'sales_reps'
             )}`}
@@ -736,7 +743,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الموارد البشرية والرواتب */}
         {canAccessPage(currentUser, 'hr_payroll') && (
           <div
-            onClick={() => onNavigate('hr_payroll')}
+            onClick={() => handleNav('hr_payroll')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'hr_payroll'
             )}`}
@@ -752,7 +759,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* ذكاء الأعمال والتحليلات BI */}
         {canAccessPage(currentUser, 'bi_analytics') && (
           <div
-            onClick={() => onNavigate('bi_analytics')}
+            onClick={() => handleNav('bi_analytics')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'bi_analytics'
             )}`}
@@ -782,7 +789,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {openItems.reports_group && (
               <div className="bg-slate-50 border-y border-slate-200 text-xs">
                 <div
-                  onClick={() => onNavigate('reports_group')}
+                  onClick={() => handleNav('reports_group')}
                   className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 text-black font-bold ${
                     activePage === 'reports_group' ? 'bg-slate-200 text-black font-black border-r-4 border-black' : 'hover:bg-slate-100'
                   }`}
@@ -796,7 +803,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   return (
                     <div
                       key={group.key}
-                      onClick={() => onNavigate(catPageId)}
+                      onClick={() => handleNav(catPageId)}
                       className={`min-h-[36px] pr-9 pl-4 py-1.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${
                         isCatActive
                           ? 'bg-slate-200 text-black font-black border-r-4 border-black'
@@ -821,7 +828,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* سجل التدقيق والرقابة */}
         {canAccessPage(currentUser, 'audit_trail') && (
           <div
-            onClick={() => onNavigate('audit_trail')}
+            onClick={() => handleNav('audit_trail')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'audit_trail'
             )}`}
@@ -834,7 +841,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* الإعدادات العامة */}
         {canAccessPage(currentUser, 'settings') && (
           <div
-            onClick={() => onNavigate('settings')}
+            onClick={() => handleNav('settings')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'settings'
             )}`}
@@ -847,7 +854,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* المستخدمين والصلاحيات */}
         {canAccessPage(currentUser, 'users') && (
           <div
-            onClick={() => onNavigate('users')}
+            onClick={() => handleNav('users')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
               'users'
             )}`}
@@ -867,7 +874,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* النسخ الاحتياطي والاستعادة */}
         {canAccessPage(currentUser, 'backup') && (
           <div
-            onClick={() => onNavigate('backup')}
+            onClick={() => handleNav('backup')}
             className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
               'backup'
             )}`}

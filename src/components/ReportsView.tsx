@@ -398,14 +398,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
   // Determine group and report name
   const isCustomMode = parts[1] === 'custom';
   const groupKey = isCustomMode ? 'custom' : parts[1];
-  let rawReportName = isCustomMode ? 'تقرير ديناميكي مخصص' : parts.slice(2).join('_').replace(/_/g, ' ');
-  try {
-    rawReportName = decodeURIComponent(rawReportName);
-    if (rawReportName.includes('%')) {
-      rawReportName = decodeURIComponent(rawReportName);
+  let rawReportName = isCustomMode ? 'تقرير ديناميكي مخصص' : parts.slice(2).join(' ');
+  let decodeAttempts = 0;
+  while (rawReportName.includes('%') && decodeAttempts < 4) {
+    try {
+      const decoded = decodeURIComponent(rawReportName);
+      if (decoded === rawReportName) break;
+      rawReportName = decoded;
+    } catch {
+      break;
     }
-  } catch {}
-  const reportName = rawReportName;
+    decodeAttempts++;
+  }
+  const reportName = rawReportName.replace(/_/g, ' ').trim();
 
   const currentFilters: ReportFilters = {
     fromDate,
@@ -705,36 +710,36 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
       {/* Header bar */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full md:w-auto">
           <button
             onClick={() => onNavigate(isCustomMode ? 'reports_group' : `reports_${groupKey}`)}
-            className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+            className="bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
           >
             ↩ العودة
           </button>
-          <div>
-            <h3 className="font-bold text-[#1a237e] text-base">{reportData.title || reportName}</h3>
-            <span className="text-xs text-gray-500">بيانات دقيقة 100% محسوبة من فواتير وحسابات النظام الحقيقية</span>
+          <div className="min-w-0">
+            <h3 className="font-bold text-[#1a237e] text-sm sm:text-base truncate">{reportData.title || reportName}</h3>
+            <span className="text-[11px] text-gray-500 hidden sm:block">بيانات دقيقة 100% محسوبة من فواتير وحسابات النظام الحقيقية</span>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
           <button
             onClick={handleExportExcel}
-            className="bg-[#2e7d32] hover:bg-[#1b5e20] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm"
+            className="bg-[#2e7d32] hover:bg-[#1b5e20] text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm shrink-0"
           >
-            📊 تصدير Excel
+            📊 Excel
           </button>
           <button
             onClick={handleExportPdf}
-            className="bg-[#c2410c] hover:bg-[#9a3412] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm"
+            className="bg-[#c2410c] hover:bg-[#9a3412] text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm shrink-0"
           >
-            📥 تصدير PDF
+            📥 PDF
           </button>
           <button
             onClick={handlePrintReport}
-            className="bg-[#1a237e] hover:bg-[#0d47a1] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm"
+            className="bg-[#1a237e] hover:bg-[#0d47a1] text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm shrink-0"
           >
             🖨️ طباعة التقرير
           </button>

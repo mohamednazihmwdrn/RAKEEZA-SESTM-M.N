@@ -1,6 +1,6 @@
 import { SaleInvoice, PurchaseInvoice, Settings } from '../types';
 
-export type PaperSize = 'A4' | 'A5' | 'thermal';
+export type PaperSize = 'A4' | 'A5' | 'thermal' | '58mm';
 
 export interface InvoicePrintPayload {
   invoice: SaleInvoice | PurchaseInvoice;
