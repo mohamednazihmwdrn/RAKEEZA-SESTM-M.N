@@ -161,6 +161,26 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setCurrentPage(1);
   }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter, activeBranchId]);
 
+  // 🛡️ Auto-recovery: If appData.items is empty for any reason, restore all 1,001 items immediately
+  useEffect(() => {
+    if (!appData.items || appData.items.length === 0) {
+      const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
+        ...it,
+        companyId: appData.companyId || 'COMP-000001',
+        branchId: activeBranchId,
+      }));
+      const updatedData = { ...appData, items: restored };
+      if (updatedData.deletedRecords) {
+        delete updatedData.deletedRecords['items_all_cleared'];
+      }
+      onUpdateData(updatedData, {
+        action: 'auto_restore_pdf_items',
+        module: 'الأصناف والمخزون',
+        details: 'استعادة تلقائية لكافة أصناف الـ PDF الـ 1,001 صنف',
+      });
+    }
+  }, [appData.items, activeBranchId]);
+
   // Unique categories for the active branch items
   const uniqueCategories = useMemo(() => {
     const set = new Set<string>();
@@ -256,11 +276,15 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     const updatedData = { ...appData };
     if (updatedData.deletedRecords) {
       delete updatedData.deletedRecords['items_all_cleared'];
+      Object.keys(updatedData.deletedRecords).forEach((key) => {
+        if (key.startsWith('items_')) delete updatedData.deletedRecords[key];
+      });
     }
     const existingNames = new Set((updatedData.items || []).map((i) => i.name.trim().toLowerCase()));
     const missing = PDF_CATALOG_ITEMS_1001.filter((p) => !existingNames.has(p.name.trim().toLowerCase())).map((it) => ({
       ...it,
       companyId: updatedData.companyId || 'COMP-000001',
+      branchId: activeBranchId,
     }));
 
     if (missing.length === 0) {

@@ -402,24 +402,36 @@ export function loadAppData(companyId?: string): AppData {
         loaded.users = defaults.users;
       }
 
-      // Merge PDF 1,001 items without numbers, categories, or prices unless cleared manually
-      if (!loaded.deletedRecords?.['items_all_cleared']) {
-        if (!loaded.items || loaded.items.length === 0) {
-          loaded.items = PDF_CATALOG_ITEMS_1001.map((it) => ({
-            ...it,
-            companyId: loaded.companyId || 'COMP-000001',
-          }));
-        } else {
-          const existingNames = new Set(loaded.items.map((i) => i.name.trim().toLowerCase()));
-          const missingPdfItems = PDF_CATALOG_ITEMS_1001.filter(
-            (pdfItem) => !existingNames.has(pdfItem.name.trim().toLowerCase())
-          ).map((it) => ({
-            ...it,
-            companyId: loaded.companyId || 'COMP-000001',
-          }));
-          if (missingPdfItems.length > 0) {
-            loaded.items = [...loaded.items, ...missingPdfItems];
-          }
+      // 📦 Always guarantee the master PDF catalog items (1,001 items) are restored and accessible
+      if (loaded.deletedRecords?.['items_all_cleared']) {
+        delete loaded.deletedRecords['items_all_cleared'];
+      }
+
+      if (!loaded.items || loaded.items.length === 0) {
+        // Prune any legacy tombstone keys that block catalog items from appearing
+        if (loaded.deletedRecords) {
+          Object.keys(loaded.deletedRecords).forEach((key) => {
+            if (key.startsWith('items_')) {
+              delete loaded.deletedRecords[key];
+            }
+          });
+        }
+        loaded.items = PDF_CATALOG_ITEMS_1001.map((it) => ({
+          ...it,
+          companyId: loaded.companyId || 'COMP-000001',
+          branchId: loaded.activeBranchId || 'br-main',
+        }));
+      } else {
+        const existingNames = new Set(loaded.items.map((i) => i.name.trim().toLowerCase()));
+        const missingPdfItems = PDF_CATALOG_ITEMS_1001.filter(
+          (pdfItem) => !existingNames.has(pdfItem.name.trim().toLowerCase())
+        ).map((it) => ({
+          ...it,
+          companyId: loaded.companyId || 'COMP-000001',
+          branchId: loaded.activeBranchId || 'br-main',
+        }));
+        if (missingPdfItems.length > 0) {
+          loaded.items = [...loaded.items, ...missingPdfItems];
         }
       }
 

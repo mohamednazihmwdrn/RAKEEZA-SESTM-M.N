@@ -33,9 +33,9 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       // Target widths in mm converted to approx px (1mm ~ 3.78px)
       const targetWidthMm = paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72;
       const targetWidthPx = targetWidthMm * 3.78;
-      const availableW = Math.max(300, screenW - 32);
+      const availableW = Math.max(280, screenW - (screenW < 640 ? 16 : 32));
       if (availableW < targetWidthPx) {
-        const factor = Math.max(0.42, Math.min(1, Math.round((availableW / targetWidthPx) * 100) / 100));
+        const factor = Math.max(0.38, Math.min(1, Math.round((availableW / targetWidthPx) * 100) / 100));
         setPreviewScale(factor);
       } else {
         setPreviewScale(1);
@@ -55,16 +55,16 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         payload.preferredPaperSize ||
         (typeof window !== 'undefined'
           ? (localStorage.getItem('sys_print_pref_size') as PaperSize)
-          : 'A4') ||
-        'A4';
+          : 'A5') ||
+        'A5';
       setPaperSize(
         initialSize === 'thermal'
           ? 'thermal'
           : initialSize === '58mm'
           ? '58mm'
-          : initialSize === 'A5'
-          ? 'A5'
-          : 'A4'
+          : initialSize === 'A4'
+          ? 'A4'
+          : 'A5'
       );
       setIsAutoFit(true);
       setIsOpen(true);
@@ -524,30 +524,40 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
       {/* 2. Interactive Preview Canvas Stage */}
       <div 
-        className="w-full flex-1 flex flex-col items-center py-6 px-2 sm:px-4 print-stage-wrapper overflow-x-auto"
+        className="w-full flex-1 flex flex-col items-center py-6 px-2 sm:px-4 print-stage-wrapper overflow-x-hidden"
         style={{
           minHeight: 'calc(100vh - 120px)',
           paddingBottom: `${Math.max(40, (1 - previewScale) * (paperSize === 'A4' ? 950 : 650))}px`,
         }}
       >
+        {/* Responsive proportional viewport scaler for phone screens without clipping */}
         <div
-          ref={invoiceContainerRef}
-          id="rakeeza-printable-invoice-container"
-          className="bg-white text-black flex flex-col justify-between transition-all duration-200"
           style={{
-            fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
-            border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '1.5px solid #000',
-            width: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+            width: `${Math.round((paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72) * 3.78 * previewScale)}px`,
             maxWidth: '100%',
-            minHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '196mm' : 'auto',
-            padding: paperSize === 'A4' ? '7mm 8mm' : paperSize === 'A5' ? '4mm 5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
-            fontSize: paperSize === 'A5' ? '0.78rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
-            boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
-            boxSizing: 'border-box',
-            transform: `scale(${previewScale})`,
-            transformOrigin: 'top center',
+            display: 'flex',
+            justifyContent: 'center',
+            overflow: 'visible',
           }}
         >
+          <div
+            ref={invoiceContainerRef}
+            id="rakeeza-printable-invoice-container"
+            className="bg-white text-black flex flex-col justify-between transition-all duration-200"
+            style={{
+              fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
+              border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '1.5px solid #000',
+              width: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              minWidth: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              minHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '196mm' : 'auto',
+              padding: paperSize === 'A4' ? '7mm 8mm' : paperSize === 'A5' ? '4mm 5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
+              fontSize: paperSize === 'A5' ? '0.78rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
+              boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
+              boxSizing: 'border-box',
+              transform: `scale(${previewScale})`,
+              transformOrigin: 'top center',
+            }}
+          >
           <div>
             {/* الترويسة الديناميكية المعتمدة */}
             <div
@@ -923,6 +933,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             </div>
           </div>
         </div>
+      </div>
 
         {/* حقوق الملكية خارج الفاتورة */}
         <div

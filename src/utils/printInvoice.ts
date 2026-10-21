@@ -5,7 +5,7 @@ export function generateInvoicePrintHtml(
   inv: SaleInvoice | PurchaseInvoice,
   isSales: boolean,
   settings: Settings,
-  preferredPaperSize: 'A4' | 'A5' | 'thermal' | '80mm' = 'A4'
+  preferredPaperSize: 'A4' | 'A5' | 'thermal' | '80mm' | '58mm' = 'A4'
 ): string {
   const isSaleInv = isSales;
   const partyLabel = isSaleInv ? 'اسم العميل' : 'اسم المورد';
@@ -107,8 +107,10 @@ export function generateInvoicePrintHtml(
           .join('');
 
   // Paper size normalization
-  const initialPaperSize =
-    preferredPaperSize === '80mm' || preferredPaperSize === 'thermal'
+  const initialPaperSize: PaperSize =
+    preferredPaperSize === '58mm'
+      ? '58mm'
+      : preferredPaperSize === '80mm' || preferredPaperSize === 'thermal'
       ? 'thermal'
       : preferredPaperSize === 'A5'
       ? 'A5'
@@ -185,30 +187,94 @@ export function generateInvoicePrintHtml(
     font-weight: bold;
   }
 
+  .toolbar-center {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .paper-buttons-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 3px 4px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
   .paper-size-btn {
-    background: rgba(255, 255, 255, 0.15);
+    background: transparent;
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.78rem;
+    border: 1px solid transparent;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
   }
 
   .paper-size-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .paper-size-btn.active {
     background: #fff;
     color: #1a237e;
     border-color: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+
+  .scale-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 3px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .scale-label {
+    font-size: 0.72rem;
+    color: #cbd5e1;
+    font-weight: bold;
+  }
+
+  .scale-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.15s;
+  }
+
+  .scale-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .scale-select {
+    background: #1e293b;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
   }
 
   .action-btn {
@@ -250,40 +316,49 @@ export function generateInvoicePrintHtml(
     flex-direction: column;
     justify-content: space-between;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transition: width 0.2s ease, min-height 0.2s ease;
+    transition: width 0.2s ease, min-height 0.2s ease, transform 0.2s ease;
+    box-sizing: border-box;
+    transform-origin: top center;
   }
 
   /* --- أبعاد ونسب مقاس A4 --- */
   body[data-paper-size="A4"] .invoice-container {
-    width: 210mm;
-    min-height: 297mm;
-    padding: 8mm 10mm;
+    width: 200mm;
+    max-width: 100%;
+    min-height: 280mm;
+    padding: 7mm 8mm;
   }
 
   /* --- أبعاد ونسب مقاس A5 --- */
   body[data-paper-size="A5"] .invoice-container {
-    width: 148mm;
-    min-height: 210mm;
-    padding: 5mm 6mm;
+    width: 140mm;
+    max-width: 100%;
+    min-height: 196mm;
+    padding: 4mm 5mm;
   }
   body[data-paper-size="A5"] {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
+  body[data-paper-size="A5"] .header h2 { font-size: 1rem; }
+  body[data-paper-size="A5"] .header p { font-size: 0.7rem; }
+  body[data-paper-size="A5"] table th, body[data-paper-size="A5"] table td { padding: 3px 4px; font-size: 0.75rem; }
+  body[data-paper-size="A5"] .summary-vertical-list { width: 190px; }
 
   /* --- المقاس الحراري Thermal 80mm --- */
   body[data-paper-size="thermal"] .invoice-container {
-    width: 76mm;
+    width: 72mm;
+    max-width: 100%;
     min-height: auto;
-    padding: 4mm 3mm;
+    padding: 2.5mm 2mm;
     border: 1px dashed #000;
     box-shadow: none;
   }
   body[data-paper-size="thermal"] {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
   }
   body[data-paper-size="thermal"] .info-box {
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     text-align: center;
   }
   body[data-paper-size="thermal"] .info-item {
@@ -293,6 +368,42 @@ export function generateInvoicePrintHtml(
     justify-content: center;
   }
   body[data-paper-size="thermal"] .summary-vertical-list {
+    width: 100%;
+  }
+
+  /* --- المقاس الحراري Mini 58mm --- */
+  body[data-paper-size="58mm"] .invoice-container {
+    width: 48mm;
+    max-width: 100%;
+    min-height: auto;
+    padding: 1.5mm 1mm;
+    border: 1px dashed #000;
+    box-shadow: none;
+  }
+  body[data-paper-size="58mm"] {
+    font-size: 0.65rem;
+  }
+  body[data-paper-size="58mm"] .header {
+    flex-direction: column;
+    text-align: center;
+  }
+  body[data-paper-size="58mm"] .header-right, body[data-paper-size="58mm"] .header-center, body[data-paper-size="58mm"] .header-left {
+    text-align: center;
+    width: 100%;
+  }
+  body[data-paper-size="58mm"] .info-box {
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+  body[data-paper-size="58mm"] table th, body[data-paper-size="58mm"] table td {
+    padding: 2px 2px;
+    font-size: 0.62rem;
+  }
+  body[data-paper-size="58mm"] .bottom-section {
+    justify-content: center;
+  }
+  body[data-paper-size="58mm"] .summary-vertical-list {
     width: 100%;
   }
 
@@ -414,37 +525,63 @@ export function generateInvoicePrintHtml(
 
     /* طباعة A4 */
     body[data-paper-size="A4"] .invoice-container {
-      width: 210mm !important;
-      min-height: 297mm !important;
-      padding: 8mm 10mm !important;
+      width: 100% !important;
+      max-width: 200mm !important;
+      min-height: 280mm !important;
+      padding: 6mm 8mm !important;
       margin: 0 auto !important;
       border: 1.5px solid #000 !important;
       box-shadow: none !important;
+      transform: none !important;
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
+      box-sizing: border-box !important;
     }
 
     /* طباعة A5 */
     body[data-paper-size="A5"] .invoice-container {
-      width: 148mm !important;
-      min-height: 210mm !important;
-      padding: 5mm 6mm !important;
+      width: 100% !important;
+      max-width: 140mm !important;
+      min-height: 196mm !important;
+      padding: 4mm 5mm !important;
       margin: 0 auto !important;
       border: 1.5px solid #000 !important;
       box-shadow: none !important;
+      font-size: 0.78rem !important;
+      transform: none !important;
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
+      box-sizing: border-box !important;
     }
 
-    /* الطباعة الحرارية */
+    /* الطباعة الحرارية 80mm */
     body[data-paper-size="thermal"] .invoice-container {
-      width: 76mm !important;
+      width: 72mm !important;
+      max-width: 72mm !important;
       min-height: auto !important;
-      padding: 3mm !important;
-      border: none !important;
+      padding: 2mm !important;
+      border: 1px dashed #000 !important;
       box-shadow: none !important;
+      font-size: 0.72rem !important;
+      transform: none !important;
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
+      box-sizing: border-box !important;
+    }
+
+    /* الطباعة الحرارية 58mm */
+    body[data-paper-size="58mm"] .invoice-container {
+      width: 48mm !important;
+      max-width: 48mm !important;
+      min-height: auto !important;
+      padding: 1.5mm !important;
+      border: 1px dashed #000 !important;
+      box-shadow: none !important;
+      font-size: 0.65rem !important;
+      transform: none !important;
+      page-break-after: avoid !important;
+      page-break-inside: avoid !important;
+      box-sizing: border-box !important;
     }
     
     .copyright-outside { 
@@ -466,20 +603,42 @@ export function generateInvoicePrintHtml(
     <span class="toolbar-badge">${invoiceTypeTitle} #${invoiceNumber}</span>
   </div>
 
-  <div class="toolbar-right">
-    <button type="button" class="paper-size-btn ${initialPaperSize === 'A4' ? 'active' : ''}" id="btn-size-a4" onclick="setPaperSize('A4')">
-      📄 مقاس A4
-    </button>
-    <button type="button" class="paper-size-btn ${initialPaperSize === 'A5' ? 'active' : ''}" id="btn-size-a5" onclick="setPaperSize('A5')">
-      📑 مقاس A5
-    </button>
-    <button type="button" class="paper-size-btn ${initialPaperSize === 'thermal' ? 'active' : ''}" id="btn-size-thermal" onclick="setPaperSize('thermal')">
-      🧾 حراري 80mm
-    </button>
+  <div class="toolbar-center">
+    <div class="paper-buttons-group">
+      <button type="button" class="paper-size-btn ${initialPaperSize === 'A4' ? 'active' : ''}" id="btn-size-a4" onclick="setPaperSize('A4')">
+        📄 مقاس A4
+      </button>
+      <button type="button" class="paper-size-btn ${initialPaperSize === 'A5' ? 'active' : ''}" id="btn-size-a5" onclick="setPaperSize('A5')">
+        📑 مقاس A5
+      </button>
+      <button type="button" class="paper-size-btn ${initialPaperSize === 'thermal' ? 'active' : ''}" id="btn-size-thermal" onclick="setPaperSize('thermal')">
+        🧾 حراري 80mm
+      </button>
+      <button type="button" class="paper-size-btn ${initialPaperSize === '58mm' ? 'active' : ''}" id="btn-size-58mm" onclick="setPaperSize('58mm')">
+        📟 حراري 58mm
+      </button>
+    </div>
 
+    <div class="scale-controls-group">
+      <span class="scale-label">مقياس العرض:</span>
+      <button type="button" class="scale-btn" onclick="stepScale(-0.05)" title="تصغير">➖</button>
+      <select id="selPreviewScale" class="scale-select" onchange="applyPreviewScale(this.value)">
+        <option value="auto">ملاءمة العرض (Fit)</option>
+        <option value="1" selected>100% (أصلي)</option>
+        <option value="0.9">90%</option>
+        <option value="0.8">80%</option>
+        <option value="0.7">70%</option>
+        <option value="0.6">60%</option>
+        <option value="0.5">50%</option>
+      </select>
+      <button type="button" class="scale-btn" onclick="stepScale(0.05)" title="تكبير">➕</button>
+    </div>
+  </div>
+
+  <div class="toolbar-right">
     <button type="button" class="action-btn btn-print" onclick="window.print()">
       <span>🖨️</span>
-      <span>طباعة الفاتورة</span>
+      <span>طباعة الآن</span>
     </button>
     <button type="button" class="action-btn btn-pdf" onclick="saveAsPdf()">
       <span>💾</span>
@@ -586,6 +745,9 @@ export function generateInvoicePrintHtml(
 </div>
 
 <script>
+  var currentScaleMode = 'auto';
+  var currentScaleFactor = 1;
+
   function setPaperSize(size) {
     document.body.setAttribute('data-paper-size', size);
     
@@ -593,9 +755,11 @@ export function generateInvoicePrintHtml(
     var btnA4 = document.getElementById('btn-size-a4');
     var btnA5 = document.getElementById('btn-size-a5');
     var btnThermal = document.getElementById('btn-size-thermal');
+    var btn58mm = document.getElementById('btn-size-58mm');
     if (btnA4) btnA4.classList.toggle('active', size === 'A4');
     if (btnA5) btnA5.classList.toggle('active', size === 'A5');
     if (btnThermal) btnThermal.classList.toggle('active', size === 'thermal');
+    if (btn58mm) btn58mm.classList.toggle('active', size === '58mm');
 
     // Update dynamic @page CSS
     var styleEl = document.getElementById('dynamic-page-size');
@@ -605,17 +769,69 @@ export function generateInvoicePrintHtml(
       document.head.appendChild(styleEl);
     }
     if (size === 'A4') {
-      styleEl.innerHTML = '@page { size: A4 portrait; margin: 0; }';
+      styleEl.innerHTML = '@page { size: A4 portrait; margin: 4mm 5mm; }';
     } else if (size === 'A5') {
-      styleEl.innerHTML = '@page { size: A5 portrait; margin: 0; }';
+      styleEl.innerHTML = '@page { size: A5 portrait; margin: 3mm 4mm; }';
     } else if (size === 'thermal') {
-      styleEl.innerHTML = '@page { size: 80mm auto; margin: 0; }';
+      styleEl.innerHTML = '@page { size: 80mm auto; margin: 1.5mm; }';
+    } else if (size === '58mm') {
+      styleEl.innerHTML = '@page { size: 58mm auto; margin: 1mm; }';
     }
 
     try {
       localStorage.setItem('sys_print_pref_size', size);
     } catch(e) {}
+
+    applyPreviewScale(currentScaleMode);
   }
+
+  function applyPreviewScale(mode) {
+    currentScaleMode = mode;
+    var container = document.querySelector('.invoice-container');
+    if (!container) return;
+
+    var size = document.body.getAttribute('data-paper-size') || 'A4';
+    var targetMm = size === 'A4' ? 200 : size === 'A5' ? 140 : size === '58mm' ? 48 : 72;
+    var targetPx = targetMm * 3.78;
+    var screenW = window.innerWidth - 30;
+
+    if (mode === 'auto') {
+      if (screenW < targetPx) {
+        currentScaleFactor = Math.max(0.42, Math.min(1, Math.round((screenW / targetPx) * 100) / 100));
+      } else {
+        currentScaleFactor = 1;
+      }
+    } else {
+      currentScaleFactor = parseFloat(mode) || 1;
+    }
+
+    container.style.transform = 'scale(' + currentScaleFactor + ')';
+    var sel = document.getElementById('selPreviewScale');
+    if (sel && mode !== 'auto') {
+      sel.value = currentScaleFactor.toString();
+    } else if (sel && mode === 'auto') {
+      sel.value = 'auto';
+    }
+  }
+
+  function stepScale(delta) {
+    currentScaleFactor = Math.max(0.4, Math.min(1.3, Number((currentScaleFactor + delta).toFixed(2))));
+    currentScaleMode = currentScaleFactor.toString();
+    var container = document.querySelector('.invoice-container');
+    if (container) {
+      container.style.transform = 'scale(' + currentScaleFactor + ')';
+    }
+    var sel = document.getElementById('selPreviewScale');
+    if (sel) {
+      sel.value = currentScaleFactor.toString();
+    }
+  }
+
+  window.addEventListener('resize', function() {
+    if (currentScaleMode === 'auto') {
+      applyPreviewScale('auto');
+    }
+  });
 
   function saveAsPdf() {
     var container = document.querySelector('.invoice-container');
@@ -626,13 +842,13 @@ export function generateInvoicePrintHtml(
 
     if (window.html2pdf) {
       var opt = {
-        margin: size === 'thermal' ? [3, 2, 3, 2] : [0, 0, 0, 0],
+        margin: size === 'thermal' || size === '58mm' ? [2, 1, 2, 1] : [4, 4, 4, 4],
         filename: filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: {
           unit: 'mm',
-          format: size === 'A5' ? 'a5' : size === 'thermal' ? [80, 220] : 'a4',
+          format: size === 'A5' ? 'a5' : size === '58mm' ? [58, 200] : size === 'thermal' ? [80, 220] : 'a4',
           orientation: 'portrait'
         }
       };
@@ -647,7 +863,7 @@ export function generateInvoicePrintHtml(
     try {
       savedSize = localStorage.getItem('sys_print_pref_size');
     } catch(e) {}
-    if (savedSize && (savedSize === 'A4' || savedSize === 'A5' || savedSize === 'thermal')) {
+    if (savedSize && (savedSize === 'A4' || savedSize === 'A5' || savedSize === 'thermal' || savedSize === '58mm')) {
       setPaperSize(savedSize);
     } else {
       setPaperSize('${initialPaperSize}');
@@ -664,10 +880,12 @@ export function printInvoiceWindow(
   isSales: boolean,
   settings: Settings,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void,
-  preferredPaperSize?: 'A4' | 'A5' | 'thermal' | '80mm'
+  preferredPaperSize?: 'A4' | 'A5' | 'thermal' | '80mm' | '58mm'
 ) {
   const normPaperSize: PaperSize =
-    preferredPaperSize === '80mm' || preferredPaperSize === 'thermal'
+    preferredPaperSize === '58mm'
+      ? '58mm'
+      : preferredPaperSize === '80mm' || preferredPaperSize === 'thermal'
       ? 'thermal'
       : preferredPaperSize === 'A5'
       ? 'A5'

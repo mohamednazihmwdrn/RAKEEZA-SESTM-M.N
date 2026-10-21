@@ -67,14 +67,16 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
   };
 
   // Trigger Unified High-Precision Print
-  const handlePrint = (isThermal: boolean = false) => {
+  // Trigger Unified High-Precision Print (A4, A5, or Thermal)
+  const handlePrint = (format: 'A4' | 'A5' | 'thermal' = 'A4') => {
+    const isThermal = format === 'thermal';
     if (type === 'sale' || type === 'purchase') {
       const inv = data as SaleInvoice | PurchaseInvoice;
       const isSale = type === 'sale';
-      printInvoiceWindow(inv, isSale, appData.settings, showToast, isThermal ? 'thermal' : 'A4');
+      printInvoiceWindow(inv, isSale, appData.settings, showToast, format);
     } else if (type === 'cash') {
       const c = data as CashTransaction;
-      if (!isThermal) {
+      if (!isThermal && format === 'A4') {
         printCashVoucherWindow(c, appData, showToast);
       } else {
         openUnifiedPrintWindow(
@@ -375,7 +377,7 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handlePrint(false)}
+              onClick={() => handlePrint('A4')}
               className="bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] text-white px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-xs"
               title="طباعة سريعة ومباشرة للمستند"
             >
@@ -622,22 +624,25 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
         <div className="bg-slate-100 p-4 px-6 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => handlePrint(false)}
-              className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              onClick={() => handlePrint('A4')}
+              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="معاينة وطباعة مقاس A4 قياسي"
             >
-              <span>⚡</span>
-              <span>طباعة سريع</span>
+              <span>📄</span>
+              <span>طباعة A4</span>
             </button>
             <button
-              onClick={() => handlePrint(false)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              onClick={() => handlePrint('A5')}
+              className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="معاينة وطباعة مقاس A5 مدمج"
             >
-              <span>🖨️</span>
-              <span>طباعة A4 / A5 وتصدير PDF</span>
+              <span>📑</span>
+              <span>طباعة A5</span>
             </button>
             <button
-              onClick={() => handlePrint(true)}
+              onClick={() => handlePrint('thermal')}
               className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="معاينة وطباعة إيصال بون حراري 80mm"
             >
               <span>🧾</span>
               <span>إيصال حراري 80mm</span>

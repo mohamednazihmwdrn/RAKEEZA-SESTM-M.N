@@ -294,53 +294,69 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
     background: #334155;
   }
 
-  /* الإطار الخارجي الموحد لكل التقارير */
+  /* الإطار الخارجي الموحد لكل التقارير والحركات */
   .invoice-container { 
     background: #fff; 
-    width: 100vw; 
-    min-height: calc(100vh - 25px);
-    max-width: 100%; 
-    margin: 10px auto; 
+    width: 200mm; 
+    max-width: calc(100vw - 24px); 
+    min-height: 280mm;
+    margin: 12px auto; 
     padding: 6mm 8mm; 
-    border: 3px solid #000; 
+    border: 2px solid #000; 
     display: flex; 
     flex-direction: column; 
     justify-content: space-between;
-    transition: all 0.2s ease;
+    transition: width 0.2s ease, min-height 0.2s ease, transform 0.2s ease;
+    box-sizing: border-box;
+    transform-origin: top center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+
+  body.size-a4 .invoice-container {
+    width: 200mm;
+    max-width: calc(100vw - 24px);
+    min-height: 280mm;
+    padding: 6mm 8mm;
+    border: 2px solid #000;
   }
 
   /* A5 mode scaling */
   body.size-a5 {
-    font-size: 0.72rem;
+    font-size: 0.76rem;
   }
   body.size-a5 .invoice-container {
-    padding: 3mm 4mm;
-    min-height: calc(100vh - 12px);
+    width: 140mm;
+    max-width: calc(100vw - 24px);
+    min-height: 196mm;
+    padding: 4mm 5mm;
+    border: 1.5px solid #000;
   }
-  body.size-a5 .header-right h2 { font-size: 0.95rem; }
-  body.size-a5 .header-right p, body.size-a5 .phones-list { font-size: 0.65rem; }
-  body.size-a5 .logo-img { max-height: 40px; max-width: 65px; }
-  body.size-a5 .report-info-box { padding: 3px 6px; font-size: 0.7rem; }
+  body.size-a5 .header-right h2 { font-size: 1rem; }
+  body.size-a5 .header-right p, body.size-a5 .phones-list { font-size: 0.68rem; }
+  body.size-a5 .logo-img { max-height: 42px; max-width: 70px; }
+  body.size-a5 .report-info-box { padding: 3px 6px; font-size: 0.72rem; }
   body.size-a5 .kpi-card { padding: 2px 4px; }
   body.size-a5 .kpi-card .kpi-title { font-size: 0.65rem; }
   body.size-a5 .kpi-card .kpi-value { font-size: 0.8rem; }
-  body.size-a5 table th, body.size-a5 table td { padding: 2.5px 3.5px; font-size: 0.68rem; }
-  body.size-a5 .summary-vertical-list { width: 210px; font-size: 0.75rem; }
-  body.size-a5 .invoice-footer-note { font-size: 0.68rem; padding-top: 2px; }
+  body.size-a5 table th, body.size-a5 table td { padding: 2.5px 3.5px; font-size: 0.72rem; }
+  body.size-a5 .summary-vertical-list { width: 190px; font-size: 0.76rem; }
+  body.size-a5 .invoice-footer-note { font-size: 0.7rem; padding-top: 2px; }
   body.size-a5 .copyright-outside { font-size: 0.65rem; padding: 1px 0; }
 
-  /* Thermal 80mm & 58mm POS styles */
+  /* Thermal 80mm POS styles */
   body.size-80mm {
     font-size: 0.72rem;
     background: #fff;
     padding: 0;
   }
   body.size-80mm .invoice-container {
-    width: 76mm;
+    width: 72mm;
+    max-width: calc(100vw - 16px);
     min-height: auto;
-    border: none;
-    padding: 2mm;
-    margin: 0 auto;
+    border: 1px dashed #000;
+    box-shadow: none;
+    padding: 2.5mm 2mm;
+    margin: 8px auto;
   }
   body.size-80mm .header {
     flex-direction: column;
@@ -360,7 +376,7 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
     grid-template-columns: repeat(2, 1fr);
   }
   body.size-80mm table th, body.size-80mm table td {
-    padding: 2px 3px;
+    padding: 2px 2px;
     font-size: 0.68rem;
   }
   body.size-80mm .summary-vertical-list {
@@ -371,17 +387,48 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
     font-size: 0.65rem;
   }
 
+  /* Thermal 58mm POS styles */
   body.size-58mm {
     font-size: 0.65rem;
     background: #fff;
     padding: 0;
   }
   body.size-58mm .invoice-container {
-    width: 54mm;
+    width: 48mm;
+    max-width: calc(100vw - 12px);
     min-height: auto;
-    border: none;
-    padding: 1.5mm;
-    margin: 0 auto;
+    border: 1px dashed #000;
+    box-shadow: none;
+    padding: 1.5mm 1mm;
+    margin: 6px auto;
+  }
+  body.size-58mm .header {
+    flex-direction: column;
+    text-align: center;
+    border-bottom: 1px dashed #000;
+  }
+  body.size-58mm .header-right, body.size-58mm .header-center, body.size-58mm .header-left {
+    width: 100%;
+    text-align: center;
+  }
+  body.size-58mm .report-info-box {
+    flex-direction: column;
+    text-align: center;
+    border: 1px dashed #000;
+  }
+  body.size-58mm .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  body.size-58mm table th, body.size-58mm table td {
+    padding: 1.5px 1.5px;
+    font-size: 0.6rem;
+  }
+  body.size-58mm .summary-vertical-list {
+    width: 100%;
+  }
+  body.size-58mm .copyright-outside {
+    color: #000;
+    font-size: 0.6rem;
   }
   body.size-58mm .header {
     flex-direction: column;
@@ -525,23 +572,64 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
 
   @media print {
     .no-print-toolbar { display: none !important; }
-    body { background: none; padding: 0; margin: 0; }
+    body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
     .invoice-container { 
-      border: 3px solid #000 !important; 
-      width: 100vw !important; 
-      height: calc(100vh - 20px) !important;
-      min-height: calc(100vh - 20px) !important;
-      margin: 0 !important;
-      padding: 5mm !important; 
-      box-shadow: none; 
-      page-break-after: avoid; 
-      page-break-inside: avoid;
+      box-shadow: none !important; 
+      transform: none !important;
+      page-break-after: avoid !important; 
+      page-break-inside: avoid !important;
+      box-sizing: border-box !important;
+    }
+    body.size-a4 .invoice-container {
+      width: 100% !important;
+      max-width: 200mm !important;
+      min-height: 280mm !important;
+      margin: 0 auto !important;
+      padding: 6mm 8mm !important;
+      border: 2px solid #000 !important;
+    }
+    body.size-a5 .invoice-container {
+      width: 100% !important;
+      max-width: 140mm !important;
+      min-height: 196mm !important;
+      margin: 0 auto !important;
+      padding: 4mm 5mm !important;
+      border: 1.5px solid #000 !important;
+      font-size: 0.76rem !important;
+    }
+    body.size-80mm .invoice-container {
+      width: 72mm !important;
+      max-width: 72mm !important;
+      min-height: auto !important;
+      height: auto !important;
+      margin: 0 auto !important;
+      padding: 2mm !important;
+      border: 1px dashed #000 !important;
+      font-size: 0.72rem !important;
+    }
+    body.size-58mm .invoice-container {
+      width: 48mm !important;
+      max-width: 48mm !important;
+      min-height: auto !important;
+      height: auto !important;
+      margin: 0 auto !important;
+      padding: 1.5mm !important;
+      border: 1px dashed #000 !important;
+      font-size: 0.65rem !important;
+    }
+    body.size-letter .invoice-container {
+      width: 100% !important;
+      max-width: 205mm !important;
+      min-height: 265mm !important;
+      margin: 0 auto !important;
+      padding: 6mm 8mm !important;
+      border: 2px solid #000 !important;
     }
     .no-print { display: none !important; }
   }
 </style>
 </head>
-<body>
+<body class="${config.isThermal ? 'size-80mm' : 'size-a4'}">
 
 <div class="no-print-toolbar no-print">
   <div class="toolbar-title-box">
@@ -552,11 +640,23 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
     <div class="toolbar-field">
       <label for="selPaperSize">حجم الورق:</label>
       <select id="selPaperSize" class="toolbar-select" onchange="updatePrintLayout()">
-        <option value="A4" selected>A4 (قياسي)</option>
+        <option value="A4" ${config.isThermal ? '' : 'selected'}>A4 (قياسي)</option>
         <option value="A5">A5 (مدمج)</option>
-        <option value="80mm">حراري (80mm / Receipt)</option>
+        <option value="80mm" ${config.isThermal ? 'selected' : ''}>حراري (80mm / Receipt)</option>
         <option value="58mm">حراري (58mm / Mini)</option>
         <option value="Letter">Letter</option>
+      </select>
+    </div>
+    <div class="toolbar-field">
+      <label for="selZoomScale">مقياس العرض:</label>
+      <select id="selZoomScale" class="toolbar-select" onchange="applyZoomScale(this.value)">
+        <option value="auto">ملاءمة العرض (Fit)</option>
+        <option value="1" selected>100% (أصلي)</option>
+        <option value="0.9">90%</option>
+        <option value="0.8">80%</option>
+        <option value="0.7">70%</option>
+        <option value="0.6">60%</option>
+        <option value="0.5">50%</option>
       </select>
     </div>
     <div class="toolbar-field">
@@ -651,6 +751,38 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
 </div>
 
 <script>
+  let currentZoomMode = 'auto';
+
+  function applyZoomScale(mode) {
+    currentZoomMode = mode;
+    const container = document.querySelector('.invoice-container');
+    if (!container) return;
+    const sizeEl = document.getElementById('selPaperSize');
+    const size = sizeEl ? sizeEl.value : 'A4';
+    const targetMm = size === 'A4' ? 200 : size === 'A5' ? 140 : size === '58mm' ? 48 : 72;
+    const targetPx = targetMm * 3.78;
+    const screenW = window.innerWidth - 30;
+
+    let factor = 1;
+    if (mode === 'auto') {
+      if (screenW < targetPx) {
+        factor = Math.max(0.42, Math.min(1, Math.round((screenW / targetPx) * 100) / 100));
+      } else {
+        factor = 1;
+      }
+    } else {
+      factor = parseFloat(mode) || 1;
+    }
+    container.style.transform = 'scale(' + factor + ')';
+    const sel = document.getElementById('selZoomScale');
+    if (sel && mode !== 'auto') sel.value = factor.toString();
+    else if (sel && mode === 'auto') sel.value = 'auto';
+  }
+
+  window.addEventListener('resize', () => {
+    if (currentZoomMode === 'auto') applyZoomScale('auto');
+  });
+
   function updatePrintLayout() {
     const sizeEl = document.getElementById('selPaperSize');
     const orientEl = document.getElementById('selOrientation');
@@ -672,9 +804,11 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
     }
 
     if (size === '80mm') {
-      styleEl.innerHTML = '@page { size: 80mm auto; margin: 2mm 2mm; }';
+      styleEl.innerHTML = '@page { size: 80mm auto; margin: 1.5mm 1.5mm; }';
     } else if (size === '58mm') {
       styleEl.innerHTML = '@page { size: 58mm auto; margin: 1mm 1mm; }';
+    } else if (size === 'A5') {
+      styleEl.innerHTML = '@page { size: A5 ' + orient + '; margin: 3mm 4mm; }';
     } else {
       styleEl.innerHTML = '@page { size: ' + size + ' ' + orient + '; margin: ' + marginVal + '; }';
     }
@@ -687,6 +821,8 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
       localStorage.setItem('sys_print_pref_orient', orient);
       localStorage.setItem('sys_print_pref_margin', marginType);
     } catch(e) {}
+
+    applyZoomScale(currentZoomMode);
   }
 
   function triggerPrint() {
@@ -777,6 +913,7 @@ export function openUnifiedPrintWindow(
       notes: d.notes,
       footerNote: d.footerNote || 'نظام إدارة الشركات والمحاسبة',
       signatures: d.signatures,
+      isThermal: d.isThermal,
     };
   }
 

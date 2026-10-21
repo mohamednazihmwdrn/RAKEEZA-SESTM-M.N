@@ -785,8 +785,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     }
   };
 
-  const handlePrintInvoice = (inv: SaleInvoice) => {
-    printInvoiceWindow(inv, true, appData.settings, showToast);
+  const handlePrintInvoice = (inv: SaleInvoice, preferredFormat: 'A5' | 'A4' | 'thermal' = 'A5') => {
+    printInvoiceWindow(inv, true, appData.settings, showToast, preferredFormat);
   };
 
   const handleWhatsAppShare = (inv: SaleInvoice) => {

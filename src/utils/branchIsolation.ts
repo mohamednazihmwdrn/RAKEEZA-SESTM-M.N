@@ -108,12 +108,19 @@ export function getBranchItems(items?: Item[], branchId?: string, mainBranchId?:
 
   const isMain = branchId === mainBranchId || branchId === 'br-main';
 
-  return items.filter((item) => {
+  const branchSpecific = items.filter((item) => {
     if (item.branchId === branchId) return true;
     // Legacy fallback: unassigned items belong to the main branch
     if (isMain && !item.branchId) return true;
     return false;
   });
+
+  // 🛡️ Safety fallback: If active branch has no assigned items yet, display all items so catalog is never empty
+  if (branchSpecific.length === 0) {
+    return items;
+  }
+
+  return branchSpecific;
 }
 
 /**

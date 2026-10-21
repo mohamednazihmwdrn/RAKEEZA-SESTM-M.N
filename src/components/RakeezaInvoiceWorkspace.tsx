@@ -5,6 +5,7 @@ import { postSaleInvoice, postPurchaseInvoice, mapPaymentMethodToKey } from '../
 import { printInvoiceWindow } from '../utils/printInvoice';
 import { registerModalBackHandler } from '../utils/navigationHistory';
 import { getBranchItems, getMainBranchId } from '../utils/branchIsolation';
+import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
 
 export interface RakeezaInvoiceWorkspaceProps {
   isOpen: boolean;
@@ -271,20 +272,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const mainBranchId = getMainBranchId(appData.branches);
   const scopedBranchItems = getBranchItems(appData.items, activeBranchId, mainBranchId);
 
-  const [localItemsDatabase, setLocalItemsDatabase] = useState<any[]>(() => {
-    if (!scopedBranchItems || scopedBranchItems.length === 0) return [];
-
-    return scopedBranchItems.map((i, idx) => {
+  // Map raw Item array into Workspace DB format
+  const mapRawItemsToDb = (itemsList: Item[]) => {
+    return itemsList.map((i, idx) => {
       const bPrice = Number(i.purchasePrice || i.costPrice || 0);
-      const cPrice = Number(i.salePrice || i.price || 0);
-      const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || (cPrice > 0 ? cPrice * 0.95 : bPrice * 1.1));
+      const cPrice = Number(i.salePrice || i.price || (bPrice > 0 ? bPrice * 1.25 : 10));
+      const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || (cPrice > 0 ? cPrice * 0.90 : bPrice * 1.15));
       const wbPrice = Number((i as any).wholesalePurchasePrice || (i as any).wholesaleBuyPrice || (bPrice > 0 ? bPrice * 0.95 : bPrice));
       return {
         code: i.code || `ITM-${String(idx + 1).padStart(3, '0')}`,
         name: i.name,
         group: i.category || 'عام',
         company: i.material || 'عام',
-        typeName: i.unit || 'عام',
+        typeName: i.unit || 'قطعة',
         stock: Number(i.quantity ?? 0),
         buyPrice: bPrice,
         cashPrice: cPrice,
@@ -293,7 +293,50 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         itemId: i.id,
       };
     });
+  };
+
+  // Safe fallback guarantees 1,001 catalog items are never 0
+  const rawAvailableItems = useMemo(() => {
+    if (scopedBranchItems && scopedBranchItems.length > 0) return scopedBranchItems;
+    if (appData.items && appData.items.length > 0) return appData.items;
+    return PDF_CATALOG_ITEMS_1001;
+  }, [scopedBranchItems, appData.items]);
+
+  const [localItemsDatabase, setLocalItemsDatabase] = useState<any[]>(() => {
+    return mapRawItemsToDb(rawAvailableItems);
   });
+
+  // Reactive sync when appData.items or active branch updates
+  useEffect(() => {
+    setLocalItemsDatabase(mapRawItemsToDb(rawAvailableItems));
+  }, [rawAvailableItems]);
+
+  // Auto-healing: If appData.items was wiped or empty, instantly restore the 1,001 items
+  useEffect(() => {
+    if (!appData.items || appData.items.length === 0) {
+      const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
+        ...it,
+        companyId: appData.companyId || 'COMP-000001',
+        branchId: activeBranchId,
+      }));
+      onUpdateData(
+        { ...appData, items: restored },
+        { action: 'restore_items', module: 'الأصناف', details: 'استعادة الأصناف التلقائية (1001 صنف)' }
+      );
+    }
+  }, [appData.items, activeBranchId]);
+
+  // 🔍 Quick Search Bar on-screen state
+  const [workspaceItemSearch, setWorkspaceItemSearch] = useState('');
+  const [showWorkspaceItemDropdown, setShowWorkspaceItemDropdown] = useState(false);
+
+  const filteredWorkspaceItems = useMemo(() => {
+    const q = workspaceItemSearch.trim().toLowerCase();
+    if (!q) return [];
+    return localItemsDatabase.filter(
+      (i) => (i.name && i.name.toLowerCase().includes(q)) || (i.code && i.code.toLowerCase().includes(q))
+    ).slice(0, 15);
+  }, [workspaceItemSearch, localItemsDatabase]);
 
   // Current Invoice Items
   const [currentInvoiceItems, setCurrentInvoiceItems] = useState<WorkspaceItemRow[]>(() => {
@@ -1143,7 +1186,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       createdBy: appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام',
     };
 
-    printInvoiceWindow(tempInvoice, isSale, appData.settings, showToast);
+    printInvoiceWindow(tempInvoice, isSale, appData.settings, showToast, 'A5');
   };
 
   return (
@@ -1152,7 +1195,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       dir="rtl"
       onKeyDown={handleKeyDownEnterNav}
     >
-      {/* 📱 Scoped CSS matching Image 2 100% with crisp non-truncated headers and zero horizontal scroll */}
+      {/* 📱 Scoped CSS formatted for high-definition mobile ergonomics and crisp readability */}
       <style>{`
         .app-container {
           width: 100%;
@@ -1190,8 +1233,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .header-title {
           background: #1e293b;
           color: #fff;
-          padding: 5px 8px;
-          font-size: 10.5px;
+          padding: 6px 10px;
+          font-size: 11px;
           font-weight: bold;
           display: flex;
           justify-content: space-between;
@@ -1202,15 +1245,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           border-top-right-radius: inherit;
         }
         #liveTime {
-          font-size: 9.5px;
+          font-size: 10px;
           font-family: inherit;
           font-weight: bold;
         }
         .main-content {
-          padding: 4px;
+          padding: 5px;
           display: flex;
           flex-direction: column;
-          gap: 3px;
+          gap: 4px;
           flex: 1;
           overflow-x: hidden;
           overflow-y: hidden;
@@ -1220,11 +1263,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .invoice-card {
           background: #f8fafc;
           border: 1px solid #cbd5e1;
-          border-radius: 3px;
-          padding: 3px;
+          border-radius: 4px;
+          padding: 4px;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 2px;
+          gap: 3px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
@@ -1232,13 +1275,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .field-inline {
           display: flex;
           flex-direction: column;
-          gap: 1px;
+          gap: 1.5px;
           min-width: 0;
           position: relative;
           box-sizing: border-box;
         }
         .field-inline label {
-          font-size: 8px;
+          font-size: 9px;
           font-weight: bold;
           color: #475569;
           white-space: nowrap;
@@ -1246,14 +1289,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           text-overflow: ellipsis;
         }
         .field-inline input, .field-inline select {
-          padding: 2px 4px;
+          padding: 3px 5px;
           border: 1px solid #cbd5e1;
-          border-radius: 3px;
-          font-size: 9px;
+          border-radius: 4px;
+          font-size: 10px;
           outline: none;
           background: #fff;
           width: 100%;
-          height: 22px;
+          height: 25px;
           box-sizing: border-box;
         }
         .field-inline input:focus, .field-inline select:focus {
@@ -1263,28 +1306,28 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .span-2 { grid-column: span 2; }
         .span-3 { grid-column: span 3; }
 
-        /* 🟡 شريط حالة الحساب والدائن/المدين (طبق الأصل للصورة 2) */
+        /* 🟡 شريط حالة الحساب والدائن/المدين */
         .account-status-bar {
           background: #fefce8;
           border: 1px solid #fef08a;
-          border-radius: 3px;
-          padding: 3px 6px;
+          border-radius: 4px;
+          padding: 4px 6px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 8.5px;
+          font-size: 9.5px;
           font-weight: bold;
           flex-shrink: 0;
           width: 100%;
           box-sizing: border-box;
         }
 
-        /* 🏷️ نظام تسعير الفاتورة (طبق الأصل للصورة 2) */
+        /* 🏷️ نظام تسعير الفاتورة */
         .pricing-tier-bar {
           background: #fff;
           border: 1px solid #cbd5e1;
-          border-radius: 3px;
-          padding: 3px 5px;
+          border-radius: 4px;
+          padding: 3px 6px;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1295,8 +1338,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
         .pricing-tier-btn {
           flex: 1;
-          padding: 2px 4px;
-          font-size: 8.5px;
+          padding: 3px 4px;
+          font-size: 9px;
           font-weight: bold;
           border-radius: 3px;
           cursor: pointer;
@@ -1327,19 +1370,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .top-actions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 3px;
+          gap: 4px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
         }
         .btn-action-top {
           width: 100%;
-          padding: 5px;
+          padding: 6px;
           background: #2563eb;
           color: white;
           border: none;
-          border-radius: 3px;
-          font-size: 9.5px;
+          border-radius: 4px;
+          font-size: 10px;
           font-weight: bold;
           cursor: pointer;
           display: flex;
@@ -1358,7 +1401,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           overflow-y: auto;
           overflow-x: hidden;
           border: 1px solid #cbd5e1;
-          border-radius: 3px;
+          border-radius: 4px;
           background: #fff;
           min-height: 0;
           box-sizing: border-box;
@@ -1376,51 +1419,48 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           white-space: nowrap;
           box-sizing: border-box;
         }
-        /* 📏 ترويسة الجدول بدون أي اختصارات أو نقاط قطع */
         th {
           background: #f1f5f9;
           color: #1e293b;
           font-weight: 700;
-          height: 20px;
-          font-size: 7.2px;
-          padding: 1px 1px;
+          height: 24px;
+          font-size: 9px;
+          padding: 2px 2px;
           position: sticky;
           top: 0;
           z-index: 2;
           overflow: hidden;
-          letter-spacing: -0.25px;
           text-align: center;
         }
         tbody tr {
-          height: 19px;
+          height: 24px;
         }
         tbody tr td {
-          padding: 1px 2px;
-          height: 19px;
-          line-height: 1.15;
-          font-size: 7.2px;
+          padding: 2px 3px;
+          height: 24px;
+          line-height: 1.2;
+          font-size: 9px;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        /* النسب الدقيقة لظهور كافة الكلمات كاملة على الهاتف: م | الصنف | الوصف | العدد | سعر | اجمالي | إجراء */
-        .col-seq { width: 5%; text-align: center; font-size: 7.2px; }
-        .col-item { width: 27%; text-align: right; padding-right: 3px; font-weight: 600; font-size: 7.2px; }
-        .col-desc { width: 16%; text-align: right; padding-right: 2px; font-size: 7.2px; }
-        .col-qty { width: 11%; text-align: center; font-size: 7.2px; }
-        .col-price { width: 13%; text-align: center; font-size: 7.2px; }
-        .col-total { width: 16%; font-weight: bold; text-align: center; font-size: 7.2px; }
+        .col-seq { width: 6%; text-align: center; font-size: 9px; }
+        .col-item { width: 28%; text-align: right; padding-right: 4px; font-weight: 600; font-size: 9px; }
+        .col-desc { width: 16%; text-align: right; padding-right: 2px; font-size: 9px; }
+        .col-qty { width: 11%; text-align: center; font-size: 9px; }
+        .col-price { width: 12%; text-align: center; font-size: 9px; }
+        .col-total { width: 15%; font-weight: bold; text-align: center; font-size: 9px; }
         .col-action { width: 12%; text-align: center; }
 
         .invoice-item-actions {
           display: inline-flex;
-          gap: 4px;
+          gap: 6px;
           justify-content: center;
           align-items: center;
         }
         .invoice-item-actions i {
           cursor: pointer;
-          font-size: 9.5px;
-          padding: 1px;
+          font-size: 11px;
+          padding: 2px;
         }
         .bottom-fixed-area {
           flex-shrink: 0;
@@ -1439,7 +1479,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .summary-bar {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 2.5px;
+          gap: 3px;
           background: #ffffff;
           color: #0f172a;
           border: 1.5px solid #cbd5e1;
@@ -1451,11 +1491,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .summary-item {
-          font-size: 8px;
+          font-size: 8.5px;
           background: #f8fafc;
           border: 1px solid #e2e8f0;
           color: #334155;
-          padding: 2.5px 2px;
+          padding: 3px 2px;
           border-radius: 3px;
           box-sizing: border-box;
         }
@@ -1463,30 +1503,30 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           font-weight: bold;
           color: #16a34a;
           display: block;
-          font-size: 8.5px;
+          font-size: 9.5px;
         }
         .summary-net {
           grid-column: span 3;
           background: #f0fdf4 !important;
           border: 1.5px solid #86efac !important;
           color: #166534 !important;
-          font-size: 9.5px !important;
+          font-size: 10.5px !important;
           font-weight: bold !important;
         }
-        .summary-net span { color: #15803d !important; font-size: 11px !important; font-weight: 900 !important; }
+        .summary-net span { color: #15803d !important; font-size: 12.5px !important; font-weight: 900 !important; }
         .btn-action-bar {
           display: flex;
-          gap: 3px;
+          gap: 4px;
           width: 100%;
           box-sizing: border-box;
         }
         .btn-action {
           flex: 1;
-          padding: 5px;
+          padding: 7px;
           border: none;
-          border-radius: 3px;
+          border-radius: 4px;
           font-weight: bold;
-          font-size: 8.5px;
+          font-size: 10px;
           color: white;
           cursor: pointer;
           text-align: center;
@@ -1893,6 +1933,85 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             >
               <i className="fa-solid fa-sliders ml-1"></i> الخصم والدفع
             </button>
+          </div>
+
+          {/* 🔍 Quick Search Bar on-screen for direct mobile item addition from 1,001 items */}
+          <div className="relative w-full my-1">
+            <div className="flex items-center gap-1.5 bg-blue-50/80 p-1.5 rounded border border-blue-200">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={workspaceItemSearch}
+                  onChange={(e) => {
+                    setWorkspaceItemSearch(e.target.value);
+                    setShowWorkspaceItemDropdown(true);
+                  }}
+                  onFocus={() => {
+                    if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
+                  }}
+                  placeholder="🔍 اكتب اسم أو كود الصنف للإضافة المباشرة (1,001 صنف)..."
+                  className="w-full text-[11px] py-1 px-2.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-600 font-sans shadow-inner"
+                />
+                {workspaceItemSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceItemSearch('');
+                      setShowWorkspaceItemDropdown(false);
+                    }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <span className="text-[9.5px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 whitespace-nowrap">
+                {localItemsDatabase.length} صنف متاح
+              </span>
+            </div>
+
+            {/* Quick Autocomplete Dropdown */}
+            {showWorkspaceItemDropdown && filteredWorkspaceItems.length > 0 && (
+              <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-slate-300 rounded shadow-xl z-50 max-h-56 overflow-y-auto">
+                {filteredWorkspaceItems.map((item) => {
+                  const itemPrice = getItemPriceForTier(item, activePricingTier);
+                  return (
+                    <div
+                      key={item.itemId || item.code}
+                      onClick={() => {
+                        openItemDetailCard(item);
+                        setWorkspaceItemSearch('');
+                        setShowWorkspaceItemDropdown(false);
+                      }}
+                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex items-center justify-between"
+                    >
+                      <div className="flex flex-col text-right">
+                        <span className="font-bold text-[11px] text-slate-800">{item.name}</span>
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {item.code} {item.typeName ? `• ${item.typeName}` : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-left">
+                        <div className="flex flex-col items-end">
+                          <span className="text-[11px] font-bold text-emerald-700 font-mono">
+                            {itemPrice > 0 ? `${itemPrice.toFixed(2)} ج.م` : 'بدون سعر'}
+                          </span>
+                          <span className="text-[9px] text-slate-500">
+                            مخزون: {item.stock}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2 py-1 rounded"
+                        >
+                          + إضافة
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* 5. Compact Items Table (تنسيق مدمج مع ظهور كامل لترويسات الأعمدة طبقاً للصورة 2) */}

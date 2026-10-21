@@ -24,6 +24,7 @@ export const InvoiceCardTemplate: React.FC<InvoiceCardTemplateProps> = ({
   onDelete,
 }) => {
   const [paperSize, setPaperSize] = useState<'A4' | 'A5' | 'thermal'>('A4');
+  const [previewScale, setPreviewScale] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const invoiceContainerRef = useRef<HTMLDivElement>(null);
 
@@ -181,6 +182,22 @@ export const InvoiceCardTemplate: React.FC<InvoiceCardTemplateProps> = ({
             </button>
           </div>
 
+          {/* محدد مقياس العرض للمعاينة */}
+          <div className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-xl border border-white/20">
+            <span className="text-[11px] text-indigo-200 font-bold hidden sm:inline">مقياس العرض:</span>
+            <select
+              value={previewScale.toString()}
+              onChange={(e) => setPreviewScale(parseFloat(e.target.value))}
+              className="bg-white/15 text-white text-xs font-bold rounded px-1.5 py-1 border border-white/25 outline-none cursor-pointer"
+            >
+              <option value="1" className="bg-slate-900 text-white">100% (أصلي)</option>
+              <option value="0.9" className="bg-slate-900 text-white">90%</option>
+              <option value="0.8" className="bg-slate-900 text-white">80%</option>
+              <option value="0.7" className="bg-slate-900 text-white">70%</option>
+              <option value="0.6" className="bg-slate-900 text-white">60%</option>
+            </select>
+          </div>
+
           {/* أزرار الإجراءات */}
           <button
             type="button"
@@ -234,18 +251,26 @@ export const InvoiceCardTemplate: React.FC<InvoiceCardTemplateProps> = ({
       </div>
 
       {/* مساحة معاينة الفاتورة بالتصميم المعتمد المطابق لكود المستخدم */}
-      <div className="w-full overflow-x-auto flex flex-col items-center py-4 bg-[#eef1f5] rounded-2xl border border-slate-300">
+      <div 
+        className="w-full overflow-x-auto flex flex-col items-center py-4 bg-[#eef1f5] rounded-2xl border border-slate-300"
+        style={{
+          paddingBottom: `${Math.max(20, (1 - previewScale) * (paperSize === 'A4' ? 850 : 550))}px`,
+        }}
+      >
         <div
           ref={invoiceContainerRef}
           className="bg-white text-black flex flex-col justify-between transition-all duration-200"
           style={{
             border: paperSize === 'thermal' ? '1px dashed #000' : '1.5px solid #000',
-            width: paperSize === 'A4' ? '210mm' : paperSize === 'A5' ? '148mm' : '76mm',
-            minHeight: paperSize === 'A4' ? '297mm' : paperSize === 'A5' ? '210mm' : 'auto',
-            padding: paperSize === 'A4' ? '8mm 10mm' : paperSize === 'A5' ? '5mm 6mm' : '4mm 3mm',
-            fontSize: paperSize === 'A5' ? '0.82rem' : paperSize === 'thermal' ? '0.75rem' : '0.88rem',
+            width: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : '72mm',
+            maxWidth: '100%',
+            minHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '196mm' : 'auto',
+            padding: paperSize === 'A4' ? '7mm 8mm' : paperSize === 'A5' ? '4mm 5mm' : '2.5mm 2mm',
+            fontSize: paperSize === 'A5' ? '0.78rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
             boxShadow: paperSize === 'thermal' ? 'none' : '0 4px 12px rgba(0, 0, 0, 0.15)',
             boxSizing: 'border-box',
+            transform: `scale(${previewScale})`,
+            transformOrigin: 'top center',
           }}
         >
           <div>

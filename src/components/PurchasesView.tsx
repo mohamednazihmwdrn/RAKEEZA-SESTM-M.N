@@ -646,8 +646,8 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     }
   };
 
-  const handlePrintInvoice = (inv: PurchaseInvoice) => {
-    printInvoiceWindow(inv, false, appData.settings, showToast);
+  const handlePrintInvoice = (inv: PurchaseInvoice, preferredFormat: 'A5' | 'A4' | 'thermal' = 'A5') => {
+    printInvoiceWindow(inv, false, appData.settings, showToast, preferredFormat);
   };
 
   // Print Purchases List

@@ -137,15 +137,32 @@ export function getPrintToolbarStyles(): string {
     color: white;
   }
 
-  /* Responsive layout modes */
+  /* Responsive layout modes for A4, A5, Thermal 80mm & 58mm */
+  body.size-a4 .report-container,
+  body.size-a4 .invoice-container,
+  body.size-a4 .voucher-container {
+    width: 200mm !important;
+    max-width: calc(100vw - 24px) !important;
+    min-height: 280mm !important;
+    padding: 6mm 8mm !important;
+    margin: 10px auto !important;
+    box-sizing: border-box !important;
+    transform-origin: top center;
+  }
+
   body.size-a5 {
-    font-size: 0.72rem;
+    font-size: 0.76rem;
   }
   body.size-a5 .report-container,
   body.size-a5 .invoice-container,
   body.size-a5 .voucher-container {
-    padding: 3mm 4mm !important;
-    min-height: calc(100vh - 12px) !important;
+    width: 140mm !important;
+    max-width: calc(100vw - 20px) !important;
+    min-height: 196mm !important;
+    padding: 4mm 5mm !important;
+    margin: 10px auto !important;
+    box-sizing: border-box !important;
+    transform-origin: top center;
   }
 
   body.size-80mm {
@@ -156,12 +173,16 @@ export function getPrintToolbarStyles(): string {
   body.size-80mm .report-container,
   body.size-80mm .invoice-container,
   body.size-80mm .voucher-container {
-    width: 76mm !important;
+    width: 72mm !important;
+    max-width: calc(100vw - 16px) !important;
     min-height: auto !important;
     height: auto !important;
-    border: none !important;
-    padding: 2mm !important;
-    margin: 0 auto !important;
+    border: 1px dashed #000 !important;
+    padding: 2.5mm 2mm !important;
+    margin: 8px auto !important;
+    box-sizing: border-box !important;
+    transform-origin: top center;
+    box-shadow: none !important;
   }
 
   body.size-58mm {
@@ -172,12 +193,16 @@ export function getPrintToolbarStyles(): string {
   body.size-58mm .report-container,
   body.size-58mm .invoice-container,
   body.size-58mm .voucher-container {
-    width: 54mm !important;
+    width: 48mm !important;
+    max-width: calc(100vw - 12px) !important;
     min-height: auto !important;
     height: auto !important;
-    border: none !important;
-    padding: 1.5mm !important;
-    margin: 0 auto !important;
+    border: 1px dashed #000 !important;
+    padding: 1.5mm 1mm !important;
+    margin: 6px auto !important;
+    box-sizing: border-box !important;
+    transform-origin: top center;
+    box-shadow: none !important;
   }
 
   body.orient-landscape .report-container,
@@ -208,6 +233,59 @@ export function getPrintToolbarStyles(): string {
     .no-print-toolbar, .no-print-bar, .no-print {
       display: none !important;
     }
+    body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    .report-container, .invoice-container, .voucher-container {
+      box-shadow: none !important;
+      transform: none !important;
+      page-break-after: avoid !important;
+      page-break-inside: avoid !important;
+      box-sizing: border-box !important;
+    }
+    body.size-a4 .report-container,
+    body.size-a4 .invoice-container,
+    body.size-a4 .voucher-container {
+      width: 100% !important;
+      max-width: 200mm !important;
+      min-height: 280mm !important;
+      margin: 0 auto !important;
+      padding: 6mm 8mm !important;
+      border: 2px solid #000 !important;
+    }
+    body.size-a5 .report-container,
+    body.size-a5 .invoice-container,
+    body.size-a5 .voucher-container {
+      width: 100% !important;
+      max-width: 140mm !important;
+      min-height: 196mm !important;
+      margin: 0 auto !important;
+      padding: 4mm 5mm !important;
+      border: 1.5px solid #000 !important;
+      font-size: 0.76rem !important;
+    }
+    body.size-80mm .report-container,
+    body.size-80mm .invoice-container,
+    body.size-80mm .voucher-container {
+      width: 72mm !important;
+      max-width: 72mm !important;
+      min-height: auto !important;
+      height: auto !important;
+      margin: 0 auto !important;
+      padding: 2mm !important;
+      border: 1px dashed #000 !important;
+      font-size: 0.72rem !important;
+    }
+    body.size-58mm .report-container,
+    body.size-58mm .invoice-container,
+    body.size-58mm .voucher-container {
+      width: 48mm !important;
+      max-width: 48mm !important;
+      min-height: auto !important;
+      height: auto !important;
+      margin: 0 auto !important;
+      padding: 1.5mm !important;
+      border: 1px dashed #000 !important;
+      font-size: 0.65rem !important;
+    }
   }
   `;
 }
@@ -228,6 +306,18 @@ export function getPrintToolbarHtml(docBadgeTitle: string, initialPaperSize = 'A
         <option value="80mm" ${initialPaperSize === '80mm' ? 'selected' : ''}>حراري (80mm / Receipt)</option>
         <option value="58mm" ${initialPaperSize === '58mm' ? 'selected' : ''}>حراري (58mm / Mini)</option>
         <option value="Letter" ${initialPaperSize === 'Letter' ? 'selected' : ''}>Letter</option>
+      </select>
+    </div>
+    <div class="toolbar-field">
+      <label for="selZoomScale">مقياس العرض:</label>
+      <select id="selZoomScale" class="toolbar-select" onchange="applyZoomScale(this.value)">
+        <option value="auto">ملاءمة العرض (Fit)</option>
+        <option value="1" selected>100% (أصلي)</option>
+        <option value="0.9">90%</option>
+        <option value="0.8">80%</option>
+        <option value="0.7">70%</option>
+        <option value="0.6">60%</option>
+        <option value="0.5">50%</option>
       </select>
     </div>
     <div class="toolbar-field">
@@ -258,6 +348,41 @@ export function getPrintToolbarHtml(docBadgeTitle: string, initialPaperSize = 'A
 export function getPrintToolbarScript(): string {
   return `
 <script>
+  let currentZoomMode = 'auto';
+
+  function applyZoomScale(mode) {
+    currentZoomMode = mode;
+    const containers = document.querySelectorAll('.report-container, .invoice-container, .voucher-container');
+    if (!containers || containers.length === 0) return;
+    const sizeEl = document.getElementById('selPaperSize');
+    const size = sizeEl ? sizeEl.value : 'A4';
+    const targetMm = size === 'A5' ? 140 : size === '58mm' ? 48 : size === '80mm' ? 72 : 200;
+    const targetPx = targetMm * 3.78;
+    const screenW = window.innerWidth - 30;
+
+    let factor = 1;
+    if (mode === 'auto') {
+      if (screenW < targetPx) {
+        factor = Math.max(0.42, Math.min(1, Math.round((screenW / targetPx) * 100) / 100));
+      } else {
+        factor = 1;
+      }
+    } else {
+      factor = parseFloat(mode) || 1;
+    }
+
+    containers.forEach(function(c) {
+      c.style.transform = 'scale(' + factor + ')';
+    });
+    const sel = document.getElementById('selZoomScale');
+    if (sel && mode !== 'auto') sel.value = factor.toString();
+    else if (sel && mode === 'auto') sel.value = 'auto';
+  }
+
+  window.addEventListener('resize', function() {
+    if (currentZoomMode === 'auto') applyZoomScale('auto');
+  });
+
   function updatePrintLayout() {
     const sizeEl = document.getElementById('selPaperSize');
     const orientEl = document.getElementById('selOrientation');
@@ -299,6 +424,8 @@ export function getPrintToolbarScript(): string {
     else marginCSS = size.includes('mm') ? '2mm' : '5mm';
 
     dynamicPageStyle.innerHTML = '@page { size: ' + pageSizeCSS + '; margin: ' + marginCSS + '; }';
+
+    applyZoomScale(currentZoomMode);
   }
 
   function triggerPrint() {
