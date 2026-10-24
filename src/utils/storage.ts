@@ -74,6 +74,7 @@ export function getDefaultData(companyId?: string): AppData {
       fiscalYear: '2026',
     },
     users: [
+      // 🏢 فرع الاخوة (br-main)
       {
         id: 'user1',
         code: 1,
@@ -81,40 +82,59 @@ export function getDefaultData(companyId?: string): AppData {
         username: 'admin',
         password: '123',
         role: 'admin',
+        branchId: 'br-main',
         permissions: { all: true },
-      },
-      {
-        id: 'user4',
-        code: 4,
-        name: 'محمود سعيد (المحاسب المالي)',
-        username: 'accountant',
-        password: '123',
-        role: 'accountant',
-      },
-      {
-        id: 'user5',
-        code: 5,
-        name: 'خالد عبد الرحمن (مسؤول المبيعات)',
-        username: 'sales',
-        password: '123',
-        role: 'sales_rep',
-      },
-      {
-        id: 'user3',
-        code: 3,
-        name: 'سامح إبراهيم (مسؤول المخازن)',
-        username: 'warehouse',
-        password: '123',
-        role: 'warehouse_keeper',
       },
       {
         id: 'user2',
         code: 2,
-        name: 'أحمد محمود (كاشير الفرع الرئيسي)',
+        name: 'أحمد محمود (كاشير ومبيعات)',
         username: 'cashier',
         password: '123',
         role: 'cashier',
+        branchId: 'br-main',
         permissions: { sales: true, pos: true, quotes: true },
+      },
+      {
+        id: 'user3',
+        code: 3,
+        name: 'سامح إبراهيم (مسؤول مخزن)',
+        username: 'warehouse',
+        password: '123',
+        role: 'warehouse_keeper',
+        branchId: 'br-main',
+        permissions: { inventory: true, items: true },
+      },
+      // 🏢 فرع الموان (br-mowan)
+      {
+        id: 'user4',
+        code: 4,
+        name: 'محمود سعيد (مدير فرع الموان)',
+        username: 'mowan_admin',
+        password: '123',
+        role: 'accountant',
+        branchId: 'br-mowan',
+        permissions: { dashboard: true, accounts: true, sales: true },
+      },
+      {
+        id: 'user5',
+        code: 5,
+        name: 'خالد عبد الرحمن (كاشير مبيعات الموان)',
+        username: 'mowan_cashier',
+        password: '123',
+        role: 'cashier',
+        branchId: 'br-mowan',
+        permissions: { sales: true, pos: true },
+      },
+      {
+        id: 'user6',
+        code: 6,
+        name: 'ياسر فوزي (أمين مخزن الموان)',
+        username: 'mowan_warehouse',
+        password: '123',
+        role: 'warehouse_keeper',
+        branchId: 'br-mowan',
+        permissions: { inventory: true, items: true },
       },
     ],
     currentUser: 'user1',
@@ -158,8 +178,8 @@ export function getDefaultData(companyId?: string): AppData {
       { id: 'cc-3', code: 'CC-03', name: 'فرع الجيزة والمعارض', manager: 'مدير الفرع' },
     ],
     branches: [
-      { id: 'br-main', code: 'HQ-01', name: 'الفرع الرئيسي والمخزن المركزي', location: 'القاهرة - المقر الرئيسي', phone: '01029190615', isMain: true, manager: 'Mohamed Nazih' },
-      { id: 'br-branch2', code: 'BR-02', name: 'فرع الجيزة والمعرض', location: 'الجيزة - شارع التحرير', phone: '01100000000', isMain: false, manager: 'أحمد محمود' },
+      { id: 'br-main', code: 'HQ-01', name: 'فرع الاخوة', location: 'المقر الرئيسي', phone: '01029190615', isMain: true, manager: 'Mohamed Nazih' },
+      { id: 'br-mowan', code: 'BR-02', name: 'فرع الموان', location: 'فرع الموان', phone: '01100000000', isMain: false, manager: 'محمود سعيد' },
     ],
     activeBranchId: 'br-main',
     stockTransfers: [],
@@ -388,11 +408,77 @@ export function loadAppData(companyId?: string): AppData {
         loaded.companyCatalogConfigs['COMP-000001'].storeName = 'شركة ركيزة للمحاسبة والتجارة RAKEEZA';
       }
 
-      // Ensure all standard test roles (accountant, sales, warehouse) exist in users list
+      // 🏢 Migrate branches: Ensure "فرع الاخوة" and "فرع الموان" are distinct and properly configured
+      if (!loaded.branches || loaded.branches.length === 0) {
+        loaded.branches = defaults.branches;
+      } else {
+        let hasMowan = false;
+        loaded.branches = loaded.branches.map((b, idx) => {
+          if (b.id === 'br-main' || b.isMain || idx === 0) {
+            return {
+              ...b,
+              id: 'br-main',
+              isMain: true,
+              name: 'فرع الاخوة',
+            };
+          }
+          if (b.id === 'br-branch2' || b.id === 'br-mowan' || idx === 1 || b.name.includes('الموان') || b.name.includes('الجيزة')) {
+            hasMowan = true;
+            return {
+              ...b,
+              id: 'br-mowan',
+              isMain: false,
+              name: 'فرع الموان',
+            };
+          }
+          return b;
+        });
+
+        if (!hasMowan) {
+          loaded.branches.push({
+            id: 'br-mowan',
+            code: 'BR-02',
+            name: 'فرع الموان',
+            location: 'فرع الموان',
+            phone: '01100000000',
+            isMain: false,
+            manager: 'محمود سعيد',
+          });
+        }
+      }
+
+      if (loaded.activeBranchId === 'br-branch2') {
+        loaded.activeBranchId = 'br-mowan';
+      } else if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
+        loaded.activeBranchId = 'br-main';
+      }
+
+      // Ensure all users have strict branchId assignment:
+      // user1, user2, user3 -> 'br-main' (فرع الاخوة)
+      // user4, user5, user6 -> 'br-mowan' (فرع الموان)
       if (loaded.users && Array.isArray(loaded.users)) {
+        loaded.users = loaded.users.map((u) => {
+          let targetBranch = u.branchId;
+          if (targetBranch === 'br-branch2') targetBranch = 'br-mowan';
+
+          if (u.id === 'user1' || u.id === 'user2' || u.id === 'user3' || u.username === 'admin' || u.username === 'cashier' || u.username === 'warehouse') {
+            targetBranch = 'br-main';
+          } else if (u.id === 'user4' || u.id === 'user5' || u.id === 'user6' || u.username?.includes('mowan') || u.name?.includes('الموان')) {
+            targetBranch = 'br-mowan';
+          } else if (!targetBranch) {
+            targetBranch = 'br-main';
+          }
+
+          return {
+            ...u,
+            branchId: targetBranch,
+          };
+        });
+
+        // Ensure all default users exist
         for (const defaultUser of defaults.users) {
           const exists = loaded.users.some(
-            (u) => u.username?.toLowerCase() === defaultUser.username?.toLowerCase() || (defaultUser.role !== 'admin' && u.role === defaultUser.role)
+            (u) => u.id === defaultUser.id || u.username?.toLowerCase() === defaultUser.username?.toLowerCase()
           );
           if (!exists) {
             loaded.users.push(defaultUser);

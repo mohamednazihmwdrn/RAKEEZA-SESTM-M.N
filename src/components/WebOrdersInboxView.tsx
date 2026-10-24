@@ -709,27 +709,10 @@ ${itemsSummary}
 
           {/* Company Filter & Search */}
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-            {!isOwner ? (
-              <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl px-3 py-2 text-xs font-black flex items-center gap-1.5">
-                <span>🔒</span>
-                <span>وارد: {activeCompany.name}</span>
-              </div>
-            ) : (
-              companies.length > 1 && (
-                <select
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value)}
-                  className="bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
-                >
-                  <option value="all">🏢 جميع الشركات</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code || c.id})
-                    </option>
-                  ))}
-                </select>
-              )
-            )}
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl px-3 py-2 text-xs font-black flex items-center gap-1.5">
+              <span>🔒</span>
+              <span>وارد: {activeCompany.name}</span>
+            </div>
 
             <input
               type="text"

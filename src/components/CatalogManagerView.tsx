@@ -392,27 +392,10 @@ export const CatalogManagerView: React.FC<CatalogManagerViewProps> = ({
               </span>
             </div>
 
-            {!isOwner ? (
-              <div className="bg-white text-slate-900 font-black text-sm p-3 rounded-xl border border-slate-300 flex items-center justify-between">
-                <span>{activeCompany.name}</span>
-                <span className="text-[11px] text-emerald-700 font-bold">🔒 بياناتك معزولة ومحمية</span>
-              </div>
-            ) : (
-              <select
-                value={selectedCompanyId}
-                onChange={(e) => {
-                  setSelectedCompanyId(e.target.value);
-                  showToast(`تم التبديل إلى كتالوج شركة: ${companies.find((c) => c.id === e.target.value)?.name}`, 'info');
-                }}
-                className="bg-slate-900/90 text-white font-black text-sm p-2.5 rounded-xl border border-slate-700 focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer"
-              >
-                {companies.map((comp) => (
-                  <option key={comp.id} value={comp.id} className="bg-slate-900 text-white">
-                    {comp.name} ({comp.code || comp.id})
-                  </option>
-                ))}
-              </select>
-            )}
+            <div className="bg-white text-slate-900 font-black text-sm p-3 rounded-xl border border-slate-300 flex items-center justify-between">
+              <span>{activeCompany.name}</span>
+              <span className="text-[11px] text-emerald-700 font-bold">🔒 بياناتك معزولة ومحمية</span>
+            </div>
 
             <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-slate-300">
               <span>رابط متجر هذه الشركة:</span>

@@ -6,6 +6,7 @@ import { exportToExcel } from '../utils/excelExport';
 import { TableActionButtons } from './TableActionButtons';
 import { SYSTEM_PERMISSIONS, PermissionDefinition } from '../utils/permissions';
 import { getStoredLocalSession, getStoredBoundDevice, setStoredBoundDevice } from '../services/cloudApi';
+import { getBranchUsers, getMainBranchId } from '../utils/branchIsolation';
 import {
   Shield,
   UserPlus,
@@ -32,6 +33,19 @@ interface UsersViewProps {
 export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, showToast }) => {
   const currentCompanyId = appData.companyId || 'COMP-000001';
   const currentUser = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
+  const mainBranchId = getMainBranchId(appData.branches);
+
+  // 🏢 Selected branch for isolation filter (defaulting to the active branch)
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
+    return appData.activeBranchId || mainBranchId || 'br-main';
+  });
+
+  // Keep in sync with appData.activeBranchId if external change occurs
+  React.useEffect(() => {
+    if (appData.activeBranchId) {
+      setSelectedBranchId(appData.activeBranchId);
+    }
+  }, [appData.activeBranchId]);
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,12 +57,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('user');
-  const [assignedBranchId, setAssignedBranchId] = useState<string>('');
+  const [assignedBranchId, setAssignedBranchId] = useState<string>(selectedBranchId);
   const [userStatus, setUserStatus] = useState<'active' | 'disabled'>('active');
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
 
-  // Display all users in the company
+  // All company users vs isolated branch users
   const companyUsers = appData.users || [];
+  const displayedUsers = getBranchUsers(companyUsers, selectedBranchId, mainBranchId, false);
+  const activeBranchObj = appData.branches?.find((b) => b.id === selectedBranchId) || appData.branches?.[0];
 
   // Reset Form
   const handleOpenNewUserModal = () => {
@@ -58,7 +74,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
     setPassword('');
     setPhone('');
     setRole('user');
-    setAssignedBranchId('');
+    setAssignedBranchId(selectedBranchId);
     setUserStatus('active');
 
     // Default basic permissions
@@ -81,7 +97,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
     setPassword(user.password || '');
     setPhone(user.phone || '');
     setRole(user.role);
-    setAssignedBranchId(user.branchId || '');
+    setAssignedBranchId(user.branchId || selectedBranchId);
     setUserStatus(user.status || 'active');
 
     // Convert stored permissions
@@ -275,8 +291,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         password: password.trim(),
         phone: phone.trim(),
         role,
-        branchId: assignedBranchId ? assignedBranchId : undefined,
-        allowedBranches: assignedBranchId ? [assignedBranchId] : undefined,
+        branchId: assignedBranchId ? assignedBranchId : selectedBranchId,
+        allowedBranches: assignedBranchId ? [assignedBranchId] : [selectedBranchId],
         status: userStatus,
         permissions: permissionPayload,
         createdAt: new Date().toISOString().split('T')[0],
@@ -418,23 +434,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
   const handlePrintUsers = () => {
     openUnifiedPrintWindow(
       {
-        reportTitle: 'دليل وحسابات مستخدمي المنظومة والصلاحيات',
-        subTitle: `سجل موظفي ومستخدمي شركة: ${appData.settings?.companyName || 'الشركة'}`,
+        reportTitle: `دليل وحسابات مستخدمي ${activeBranchObj?.name || 'الفرع'}`,
+        subTitle: `سجل موظفي ومستخدمي فرع: ${activeBranchObj?.name || 'الفرع'} - ${appData.settings?.companyName || 'الشركة'}`,
         serial: 'USERS-AUDIT',
-        branch: 'إدارة الصلاحيات وأمن المعلومات',
+        branch: activeBranchObj?.name || 'إدارة الصلاحيات وأمن المعلومات',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
         kpis: [
-          { title: 'إجمالي المستخدمين', value: `${companyUsers.length} مستخدم` },
-          { title: 'المدراء / الأدمن', value: `${companyUsers.filter((u) => u.role === 'admin' || u.role === 'company_admin').length} مدير` },
-          { title: 'الحسابات النشطة', value: `${companyUsers.filter((u) => u.status !== 'disabled').length} نشط` },
+          { title: `مستخدمو ${activeBranchObj?.name || 'الفرع'}`, value: `${displayedUsers.length} مستخدم` },
+          { title: 'المدراء / الأدمن', value: `${displayedUsers.filter((u) => u.role === 'admin' || u.role === 'company_admin').length} مدير` },
+          { title: 'الحسابات النشطة', value: `${displayedUsers.filter((u) => u.status !== 'disabled').length} نشط` },
         ],
-        columns: ['#', 'الاسم بالكامل', 'اسم الدخول', 'الدور / الصلاحية', 'الحالة', 'الهاتف'],
-        rows: companyUsers.map((u, idx) => [
+        columns: ['#', 'الاسم بالكامل', 'اسم الدخول', 'الفرع المخصص', 'الدور / الصلاحية', 'الحالة', 'الهاتف'],
+        rows: displayedUsers.map((u, idx) => [
           idx + 1,
           u.name,
           u.username,
-          u.role === 'admin' || u.role === 'company_admin' ? 'مدير شركة (Admin)' : 'مستخدم مخصص',
+          activeBranchObj?.name || 'الفرع',
+          u.role === 'admin' || u.role === 'company_admin' ? 'مدير (Admin)' : 'مستخدم مخصص',
           u.status === 'disabled' ? 'معطل ⛔' : 'نشط ✅',
           u.phone || '—',
         ]),
@@ -447,17 +464,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
   const handleExportUsersExcel = () => {
     exportToExcel({
-      filename: `دليل_مستخدمي_الشركة_${new Date().toISOString().split('T')[0]}`,
+      filename: `دليل_مستخدمي_${(activeBranchObj?.name || 'الفرع').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`,
       sheetName: 'المستخدمين',
-      data: companyUsers,
+      data: displayedUsers,
       columns: [
         { header: 'كود المستخدم', key: 'id', width: 14 },
         { header: 'الاسم بالكامل', key: 'name', width: 25 },
         { header: 'اسم الدخول', key: 'username', width: 20 },
         {
+          header: 'الفرع',
+          getValue: () => activeBranchObj?.name || 'الفرع',
+          width: 18,
+        },
+        {
           header: 'نوع الصلاحية',
           getValue: (u: any) =>
-            u.role === 'admin' || u.role === 'company_admin' ? 'مدير عام (Admin)' : 'مستخدم مصرح',
+            u.role === 'admin' || u.role === 'company_admin' ? 'مدير (Admin)' : 'مستخدم مصرح',
           width: 18,
         },
         {
@@ -468,9 +490,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         { header: 'الهاتف', key: 'phone', width: 16 },
       ],
       companyName: appData.settings?.companyName || 'منظومة ركيزة',
-      reportTitle: 'دليل وسجل حسابات مستخدمي المنظومة والصلاحيات',
+      reportTitle: `دليل وسجل حسابات مستخدمي ${activeBranchObj?.name || 'الفرع'} والصلاحيات`,
     });
-    showToast('تم تصدير دليل المستخدمين إلى Excel بنجاح', 'success');
+    showToast(`تم تصدير دليل مستخدمي ${activeBranchObj?.name || 'الفرع'} إلى Excel بنجاح`, 'success');
   };
 
   // Group permissions by category for the modal view
@@ -487,13 +509,13 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             </div>
             <div>
               <h4 className="text-slate-900 font-extrabold text-base sm:text-lg flex items-center gap-2">
-                <span>إدارة مستخدمي وصلاحيات الشركة</span>
+                <span>إدارة مستخدمي وصلاحيات الفروع</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">
-                  {companyUsers.length} مستخدم
+                  {displayedUsers.length} في {activeBranchObj?.name || 'الفرع'}
                 </span>
               </h4>
               <p className="text-xs text-slate-500">
-                عزل تام لحسابات موظفي شركتك مع التحكم الدقيق في صلاحيات كل مستخدم
+                استقلالية وعزل تام: كل فرع له مستخدموه الخاصون به ولا تظهر حسابات الفروع الأخرى
               </p>
             </div>
           </div>
@@ -503,27 +525,71 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
           <TableActionButtons
             onPrint={handlePrintUsers}
             onExportExcel={handleExportUsersExcel}
-            printLabel="طباعة السجل"
+            printLabel="طباعة مستخدمي الفرع"
           />
           <button
             onClick={handleOpenNewUserModal}
             className="bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-all"
           >
             <UserPlus className="w-4 h-4" />
-            <span>إضافة مستخدم جديد</span>
+            <span>إضافة مستخدم لـ {activeBranchObj?.name || 'الفرع'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* 🏢 Dedicated Branch Tabs - فرع الاخوة / فرع الموان */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-slate-600 ml-1">تحديد الفرع:</span>
+          {appData.branches?.map((b) => {
+            const isSelected = selectedBranchId === b.id;
+            const branchUserCount = getBranchUsers(companyUsers, b.id, mainBranchId, false).length;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => {
+                  setSelectedBranchId(b.id);
+                  if (onUpdateData && appData.activeBranchId !== b.id) {
+                    onUpdateData({ ...appData, activeBranchId: b.id });
+                  }
+                }}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center gap-2 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                }`}
+              >
+                <span>🏢 {b.name}</span>
+                <span
+                  className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {branchUserCount} مستخدم
+                </span>
+                {isSelected && <span className="text-emerald-300 text-xs">● معروض</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="text-xs font-bold flex items-center gap-2 bg-emerald-50 text-emerald-900 px-3 py-1.5 rounded-xl border border-emerald-200">
+          <span>🔒 عزل فروع مستقل:</span>
+          <span>حسابات <strong>{activeBranchObj?.name || 'الفرع'}</strong> معزولة تماماً عن باقي الفروع</span>
         </div>
       </div>
 
       {/* Users Responsive Cards (< md) */}
       <div className="block md:hidden space-y-3">
-        {companyUsers.length === 0 ? (
+        {displayedUsers.length === 0 ? (
           <div className="bg-white rounded-2xl p-6 text-center text-slate-400 border border-slate-200">
             <span className="text-3xl block mb-2">👥</span>
-            <p className="font-bold text-sm text-slate-700">لا يوجد مستخدمين مسجلين</p>
+            <p className="font-bold text-sm text-slate-700">لا يوجد مستخدمين مسجلين في {activeBranchObj?.name || 'هذا الفرع'}</p>
+            <p className="text-xs text-slate-400 mt-1">انقر على &apos;إضافة مستخدم جديد&apos; لتعيين مستخدم لهذا الفرع</p>
           </div>
         ) : (
-          companyUsers.map((u) => {
+          displayedUsers.map((u) => {
             const isAdmin = u.role === 'admin' || u.role === 'company_admin';
             const permsCount = u.permissions?.all
               ? SYSTEM_PERMISSIONS.length
@@ -651,7 +717,15 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {companyUsers.map((u) => {
+            {displayedUsers.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-8 text-slate-400">
+                  <p className="font-bold text-sm text-slate-700">لا يوجد مستخدمين مسجلين في {activeBranchObj?.name || 'هذا الفرع'}</p>
+                  <p className="text-xs text-slate-400 mt-1">انقر على &apos;إضافة مستخدم جديد&apos; لتعيين مستخدم لهذا الفرع</p>
+                </td>
+              </tr>
+            ) : (
+              displayedUsers.map((u) => {
               const isAdmin = u.role === 'admin' || u.role === 'company_admin';
               const permsCount = u.permissions?.all
                 ? SYSTEM_PERMISSIONS.length
@@ -747,7 +821,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
                   </td>
                 </tr>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>

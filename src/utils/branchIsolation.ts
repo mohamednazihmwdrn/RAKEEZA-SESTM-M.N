@@ -1,4 +1,4 @@
-import { AppData, Branch, Item, SaleInvoice, PurchaseInvoice, CashTransaction, CashBox } from '../types';
+import { AppData, Branch, Item, SaleInvoice, PurchaseInvoice, CashTransaction, CashBox, User } from '../types';
 
 /**
  * 🏢 Universal Branch Isolation Engine for RAKEEZA ERP
@@ -189,6 +189,29 @@ export function filterCashTransactionsByBranch(
 }
 
 /**
+ * Filters users by branch.
+ * Ensures users of "فرع الاخوة" and "فرع الموان" are completely isolated.
+ */
+export function getBranchUsers(
+  users?: User[],
+  branchId?: string,
+  mainBranchId?: string,
+  allowAll: boolean = false
+): User[] {
+  if (!users) return [];
+  if (!branchId || (allowAll && branchId === 'all')) return users;
+
+  const isMain = branchId === mainBranchId || branchId === 'br-main';
+
+  return users.filter((u) => {
+    if (u.branchId === branchId) return true;
+    // Default unassigned users to main branch
+    if (isMain && !u.branchId) return true;
+    return false;
+  });
+}
+
+/**
  * Calculates real-time liquid assets (drawer, vodafone, instapay, bank) for a specific branch.
  */
 export function calculateBranchCashBox(
@@ -286,6 +309,7 @@ export function getScopedAppDataForBranch(appData: AppData, branchId?: string): 
   const scopedPurchases = filterPurchaseInvoicesByBranch(appData.purchaseInvoices, targetBranchId, mainId, false);
   const scopedCashTxs = filterCashTransactionsByBranch(appData.cashTransactions, targetBranchId, mainId, false);
   const scopedCashBox = calculateBranchCashBox(appData, targetBranchId, mainId);
+  const scopedUsers = getBranchUsers(appData.users, targetBranchId, mainId, false);
 
   return {
     ...appData,
@@ -295,6 +319,7 @@ export function getScopedAppDataForBranch(appData: AppData, branchId?: string): 
     purchaseInvoices: scopedPurchases,
     cashTransactions: scopedCashTxs,
     cashBox: scopedCashBox,
+    users: scopedUsers,
   };
 }
 

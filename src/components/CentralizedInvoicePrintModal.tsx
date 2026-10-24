@@ -17,7 +17,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activePayload, setActivePayload] = useState<InvoicePrintPayload | null>(null);
-  const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+  const [paperSize, setPaperSize] = useState<PaperSize>('A5');
   const [previewScale, setPreviewScale] = useState<number>(1);
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -209,24 +209,26 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       document.head.appendChild(styleEl);
     }
 
-    let pageSizeRule = '@page { size: A4 portrait; margin: 4mm 5mm; }';
+    let pageSizeRule = '@page { size: A4 portrait; margin: 6mm 6mm; }';
     if (paperSize === 'A5') {
-      pageSizeRule = '@page { size: A5 portrait; margin: 3mm 4mm; }';
+      pageSizeRule = '@page { size: A5 portrait; margin: 4mm 4mm; }';
     } else if (paperSize === 'thermal') {
-      pageSizeRule = '@page { size: 80mm auto; margin: 1.5mm; }';
+      pageSizeRule = '@page { size: 80mm auto; margin: 0; }';
     } else if (paperSize === '58mm') {
-      pageSizeRule = '@page { size: 58mm auto; margin: 1mm; }';
+      pageSizeRule = '@page { size: 58mm auto; margin: 0; }';
     }
 
     styleEl.innerHTML = `
       ${pageSizeRule}
       @media print {
-        body {
+        html, body {
           background: #ffffff !important;
           margin: 0 !important;
           padding: 0 !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
+          width: 100% !important;
+          height: auto !important;
         }
         /* Hide everything except print invoice modal container */
         body > *:not(#centralized-print-modal-root) {
@@ -244,6 +246,9 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           margin: 0 !important;
           overflow: visible !important;
           display: block !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: auto !important;
         }
         #rakeeza-printable-invoice-container {
           box-shadow: none !important;
@@ -251,37 +256,38 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           transform: none !important;
           page-break-after: avoid !important;
           page-break-inside: avoid !important;
+          break-inside: avoid !important;
           box-sizing: border-box !important;
+          min-height: auto !important;
+          height: auto !important;
         }
         body[data-paper-size="A4"] #rakeeza-printable-invoice-container {
-          width: 100% !important;
-          max-width: 200mm !important;
-          min-height: 280mm !important;
-          padding: 6mm 8mm !important;
+          width: 196mm !important;
+          max-width: 196mm !important;
+          max-height: 282mm !important;
+          padding: 5mm 7mm !important;
           border: 1.5px solid #000 !important;
           font-size: 0.88rem !important;
         }
         body[data-paper-size="A5"] #rakeeza-printable-invoice-container {
-          width: 100% !important;
+          width: 140mm !important;
           max-width: 140mm !important;
-          min-height: 196mm !important;
-          padding: 4mm 5mm !important;
+          max-height: 198mm !important;
+          padding: 3.5mm 4.5mm !important;
           border: 1.5px solid #000 !important;
-          font-size: 0.78rem !important;
+          font-size: 0.77rem !important;
         }
         body[data-paper-size="thermal"] #rakeeza-printable-invoice-container {
           width: 72mm !important;
           max-width: 72mm !important;
-          min-height: auto !important;
-          padding: 2mm !important;
+          padding: 2mm 2.5mm !important;
           border: 1px dashed #000 !important;
           font-size: 0.72rem !important;
         }
         body[data-paper-size="58mm"] #rakeeza-printable-invoice-container {
           width: 48mm !important;
           max-width: 48mm !important;
-          min-height: auto !important;
-          padding: 1.5mm !important;
+          padding: 1.5mm 1mm !important;
           border: 1px dashed #000 !important;
           font-size: 0.65rem !important;
         }
@@ -310,12 +316,12 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     try {
       setIsExportingPdf(true);
       const filename = `${invoiceTypeTitle}_${invoiceNumber}.pdf`;
-      const format = paperSize === 'A5' ? 'a5' : paperSize === 'thermal' ? [80, 220] : paperSize === '58mm' ? [58, 200] : 'a4';
+      const pdfFormat = paperSize === 'A5' ? 'a5' : paperSize === 'thermal' ? 'thermal' : paperSize === '58mm' ? '58mm' : 'a4';
 
       await exportElementToPdf(invoiceContainerRef.current, filename, {
-        format: typeof format === 'string' ? format : 'a4',
+        format: pdfFormat,
         orientation: 'portrait',
-        margin: paperSize === 'thermal' || paperSize === '58mm' ? 2 : 4,
+        margin: paperSize === 'thermal' || paperSize === '58mm' ? 1.5 : 4,
         scale: 2,
       });
     } catch (err) {
@@ -547,11 +553,14 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             style={{
               fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
               border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '1.5px solid #000',
-              width: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              minWidth: paperSize === 'A4' ? '200mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              minHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '196mm' : 'auto',
-              padding: paperSize === 'A4' ? '7mm 8mm' : paperSize === 'A5' ? '4mm 5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
-              fontSize: paperSize === 'A5' ? '0.78rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
+              width: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              minWidth: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              maxWidth: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              maxHeight: paperSize === 'A4' ? '282mm' : paperSize === 'A5' ? '198mm' : 'none',
+              minHeight: 'auto',
+              height: 'auto',
+              padding: paperSize === 'A4' ? '6mm 7mm' : paperSize === 'A5' ? '3.5mm 4.5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
+              fontSize: paperSize === 'A5' ? '0.77rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
               boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
               boxSizing: 'border-box',
               transform: `scale(${previewScale})`,

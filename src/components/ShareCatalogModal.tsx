@@ -475,23 +475,6 @@ export const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({
                       {activeCompany.name}
                     </h4>
                   </div>
-
-                  {isOwner && companies.length > 1 && (
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs font-bold text-slate-600 whitespace-nowrap">عرض شركة أخرى:</label>
-                      <select
-                        value={selectedCompanyId}
-                        onChange={(e) => setSelectedCompanyId(e.target.value)}
-                        className="bg-white border border-blue-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden"
-                      >
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.code || c.id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-blue-200/60 flex items-start gap-2 text-xs text-blue-950">
