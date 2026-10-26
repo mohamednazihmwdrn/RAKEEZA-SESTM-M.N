@@ -112,11 +112,11 @@ export function initCloudDatabase(): CloudDatabaseSchema {
     companyId: 'COMP-000001',
     settings: {
       ...baseDefaultData.settings,
-      companyName: 'شركة ركيزة للمحاسبة والتجارة العامة (RAKEEZA)',
+      companyName: 'مؤسسة الموان للتجارة',
       phone1: '01029190615',
       taxNumber: '',
       commercialReg: 'CR-98765',
-      activityCode: '4651 - تجارة أجهزة وإلكترونيات',
+      activityCode: '4651 - تجارة عامة وتوزيع',
     },
     users: [
       {
@@ -125,7 +125,7 @@ export function initCloudDatabase(): CloudDatabaseSchema {
         companyId: 'COMP-000001',
         name: 'Mohamed Nazih (المدير العام)',
         username: 'admin',
-        password: 'admin123',
+        password: '123',
         role: 'company_admin',
         phone: '01029190615',
         status: 'active',

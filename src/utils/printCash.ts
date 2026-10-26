@@ -6,6 +6,7 @@ export interface UnifiedVoucherData {
   serialNo?: string | number;
   partyName?: string;
   partyId?: string;
+  partyPhone?: string;
   amount: number;
   paymentMethod?: string;
   amountText?: string;
@@ -18,7 +19,7 @@ export interface UnifiedVoucherData {
 }
 
 /**
- * Generates the HTML string for the Unified Financial Voucher (سند مالي موحد - قبض / صرف)
+ * 🖨️ Generates the HTML string for the Standard Unified Financial Voucher (A5 Clean Template)
  */
 export function generateCashVoucherPrintHtml(
   dataOrTrans: CashTransaction | UnifiedVoucherData,
@@ -26,8 +27,8 @@ export function generateCashVoucherPrintHtml(
 ): string {
   // Normalize settings
   const settings: Settings = (appDataOrSettings as AppData).settings || (appDataOrSettings as Settings) || {
-    companyName: 'منظومة RAKEEZA للمحاسبة',
-    address: 'القاهرة، مصر',
+    companyName: 'شركة ركيزة للحلول البرمجية',
+    address: 'القاهرة - مصر',
     phone1: '01029190615',
     phone2: '',
     phone3: '',
@@ -36,17 +37,19 @@ export function generateCashVoucherPrintHtml(
     notes: '',
     defaultTaxRate: 14,
     currencySymbol: 'ج.م',
-    paperSize: 'A4',
+    paperSize: 'A5',
     pageMargin: 5,
     showLogoInPrint: true,
   };
 
-  const companyName = settings.companyName || 'منظومة RAKEEZA للمحاسبة';
-  const companyAddress = settings.address || 'القاهرة، مصر';
+  const companyName = settings.companyName || 'شركة ركيزة للحلول البرمجية';
+  const companyAddress = settings.address || 'القاهرة - مصر';
   const logoUrl = settings.logo || settings.logoUrl || '';
-  const showLogo = settings.showLogoInPrint !== false && Boolean(logoUrl);
 
   const phones: string[] = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
+  if (phones.length === 0) {
+    phones.push('01029190615');
+  }
 
   // Normalize voucher data
   const isTrans = 'method' in dataOrTrans;
@@ -66,6 +69,7 @@ export function generateCashVoucherPrintHtml(
 
   let partyName = (dataOrTrans as any).partyName || '';
   let partyId = (dataOrTrans as any).partyId || '';
+  let partyPhone = (dataOrTrans as any).partyPhone || (dataOrTrans as any).phone || '-';
 
   if (isTrans) {
     const tx = dataOrTrans as CashTransaction;
@@ -116,550 +120,649 @@ export function generateCashVoucherPrintHtml(
     (dataOrTrans as any).time ||
     now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-  // Page formatting
-  const paperSize = settings.paperSize || 'A4';
-  const pageMargin = settings.pageMargin !== undefined ? settings.pageMargin : 5;
+  const voucherTitle = isReceive ? 'سند قبض نقدية معتمد' : 'سند صرف نقدية معتمد';
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${isReceive ? 'سند قبض مالي' : 'سند صرف مالي'} #${serialNo}</title>
-<style>
-  :root {
-    --page-size: ${paperSize === 'A5' ? 'A5 portrait' : paperSize === 'Letter' ? 'letter portrait' : 'A4 portrait'};
-    --page-margin: ${pageMargin}mm;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${voucherTitle} #${serialNo}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
 
-  @page { 
-    size: var(--page-size, auto); 
-    margin: var(--page-margin, 4mm); 
-  }
-  
-  * { 
-    box-sizing: border-box; 
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; 
-    margin: 0; padding: 0; color: #000;
-    width: 100%; height: 100%;
-    display: flex; flex-direction: column; align-items: center;
-  }
+        body {
+            background-color: #e2e8f0;
+            color: #000;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
 
-  .no-print-toolbar, .no-print-bar {
-    position: sticky;
-    top: 0;
-    z-index: 9999;
-    background: #0f172a;
-    color: #fff;
-    width: 100%;
-    padding: 8px 16px;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-  }
-  .toolbar-title-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .toolbar-title-box .title-text {
-    font-weight: bold;
-    font-size: 13.5px;
-    color: #fff;
-  }
-  .toolbar-title-box .doc-badge {
-    background: #334155;
-    color: #93c5fd;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-  .toolbar-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .toolbar-field {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-  }
-  .toolbar-field label {
-    color: #cbd5e1;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .toolbar-select {
-    padding: 5px 9px;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background: #1e293b;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .toolbar-select:focus {
-    border-color: #3b82f6;
-  }
-  .btn-print {
-    background: #16a34a;
-    color: #fff;
-    border: none;
-    padding: 6px 18px;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 13px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.25);
-    transition: all 0.15s;
-  }
-  .btn-print:hover {
-    background: #15803d;
-    transform: translateY(-1px);
-  }
-  .btn-close {
-    background: #475569;
-    color: #fff;
-    border: none;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn-close:hover {
-    background: #334155;
-  }
+        /* شريط التحكم بالمعاينة والطباعة (يظهر على الشاشة فقط ويختفي عند الطباعة) */
+        .no-print-toolbar {
+            width: 100%;
+            max-width: 148mm;
+            background: #0f172a;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
 
-  body.size-a5 { font-size: 0.75rem; }
-  body.size-a5 .voucher-container { padding: 3mm 4mm; min-height: calc(100vh - 12px); }
-  body.size-a5 .header-right h2 { font-size: 1rem; }
-  body.size-a5 .header-right p, body.size-a5 .phones-list { font-size: 0.65rem; }
-  body.size-a5 .logo-img { max-height: 38px; }
-  body.size-a5 .info-box { padding: 3px 6px; font-size: 0.72rem; }
-  body.size-a5 .voucher-body { padding: 8px; font-size: 0.78rem; line-height: 1.6; }
-  body.size-a5 .amount-highlight { font-size: 0.95rem; padding: 2px 8px; }
-  body.size-a5 .bottom-section { font-size: 0.72rem; margin: 3px 0; }
-  body.size-a5 .voucher-footer-note { font-size: 0.65rem; padding-top: 2px; }
-  body.size-a5 .copyright-outside { font-size: 0.65rem; padding: 1px 0; }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
 
-  body.orient-landscape .voucher-container { width: 100vw; height: auto; min-height: calc(100vh - 20px); }
+        .paper-btn {
+            background: #1e293b;
+            color: #fff;
+            border: 1px solid #475569;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
 
-  .voucher-wrapper {
-    width: 100%;
-    max-width: 850px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex-grow: 1;
-    height: 100%;
-  }
+        .paper-btn:hover { background: #334155; }
+        .paper-btn.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
 
-  .voucher-container, .report-container { 
-    background: #fff; 
-    width: 100vw;
-    height: 100vh;
-    min-height: 98vh;
-    max-width: 100%;
-    margin: 0 auto; 
-    padding: 5mm 7mm; 
-    border: 3px solid #000; 
-    box-sizing: border-box;
-    display: flex; 
-    flex-direction: column; 
-    justify-content: space-between;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-  }
+        .action-btn-print {
+            background: #16a34a;
+            color: #fff;
+            border: none;
+            padding: 5px 14px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .action-btn-print:hover { background: #15803d; }
 
-  /* 1. الترويسة الديناميكية */
-  .header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    border-bottom: 2px solid #000; 
-    padding-bottom: 5px; 
-    margin-bottom: 6px; 
-    width: 100%; 
-  }
-  .header.is-empty { display: none !important; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 900; color: #000; }
-  .header-right p { margin: 0; font-size: 0.78rem; color: #333; }
-  .header-center { display: flex; justify-content: center; align-items: center; min-width: 80px; }
-  .logo-img { max-width: 90px; max-height: 55px; object-fit: contain; }
-  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; }
-  .phones-list li { margin-bottom: 1px; font-weight: 700; color: #111; }
+        .action-btn-pdf {
+            background: #ea580c;
+            color: #fff;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .action-btn-pdf:hover { background: #c2410c; }
 
-  /* 2. صندوق البيانات العلوي */
-  .info-box { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center;
-    border: 1.5px solid #000; 
-    padding: 5px 10px; 
-    margin-bottom: 8px; 
-    font-size: 0.8rem; 
-    line-height: 1.4; 
-    width: 100%; 
-    background-color: #fafafa;
-  }
-  .info-item p { margin: 2px 0; }
+        .action-btn-close {
+            background: #475569;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+        }
 
-  /* 3. جسم السند المتمدد رأسياً */
-  .voucher-body {
-    border: 1.5px solid #000;
-    padding: 14px;
-    margin-bottom: 8px;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    font-size: 0.88rem;
-    line-height: 1.9;
-    background: #fff;
-  }
+        /* حاوية المستند بمقاس A5 الأصلي المظبوط والمستقر تماماً */
+        .invoice-container {
+            background: #fff;
+            width: 100%;
+            max-width: 148mm;
+            min-height: 210mm;
+            padding: 10mm;
+            border: 2px solid #000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            margin: 0 auto;
+            transform-origin: top center;
+            transition: max-width 0.2s, min-height 0.2s, padding 0.2s;
+        }
 
-  .amount-highlight {
-    border: 2px solid #000;
-    background: #ededed;
-    padding: 4px 14px;
-    font-size: 1.15rem;
-    font-weight: 900;
-    display: inline-block;
-    color: #000;
-  }
+        .invoice-main-content {
+            width: 100%;
+        }
 
-  .voucher-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-  .voucher-row strong { white-space: nowrap; font-weight: 800; }
-  .dots-line { flex-grow: 1; border-bottom: 1px dotted #000; font-weight: bold; padding: 0 6px; color: #111; }
+        /* 1. الترويسة العلوية الثلاثية */
+        .company-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2.5px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
 
-  /* 4. التوقيعات */
-  .bottom-section {
-    display: flex; 
-    justify-content: space-between; 
-    align-items: flex-end;
-    margin-top: 6px; 
-    margin-bottom: 6px; 
-    width: 100%; 
-    font-size: 0.8rem; 
-    font-weight: bold;
-    padding: 0 4px;
-  }
+        .header-right {
+            flex: 1.2;
+            text-align: right;
+        }
 
-  /* 5. التذييل الداخلي */
-  .voucher-footer-note {
-    border-top: 1.5px solid #000; 
-    padding-top: 4px; 
-    margin-top: auto; 
-    display: flex; 
-    justify-content: space-between; 
-    font-size: 0.72rem; 
-    font-weight: 600; 
-    width: 100%;
-    color: #333;
-  }
+        .header-right h2 {
+            font-size: 16px;
+            font-weight: 800;
+            color: #000;
+            margin-bottom: 2px;
+        }
 
-  /* حقوق الملكية خارج الإطار الخارجي */
-  .copyright-outside {
-    width: 100%; 
-    text-align: center; 
-    font-size: 0.72rem; 
-    font-weight: bold; 
-    color: #000; 
-    margin-top: auto;
-    padding: 3px 0; 
-    direction: rtl;
-  }
+        .header-right p {
+            font-size: 10px;
+            font-weight: 600;
+            color: #222;
+            line-height: 1.2;
+        }
 
-  @media print {
-    html, body { 
-      background: #fff !important; 
-      padding: 0 !important; 
-      margin: 0 !important; 
-      width: 100% !important;
-      height: 100% !important;
-      overflow: hidden !important;
-      display: flex !important;
-      flex-direction: column !important;
-    }
-    .no-print-bar { display: none !important; }
-    .voucher-wrapper { width: 100% !important; max-width: 100% !important; margin: 0 !important; height: 100% !important; }
-    .voucher-container, .report-container { 
-      border: 3px solid #000 !important; 
-      width: 100vw !important; 
-      height: calc(100vh - 20px) !important; 
-      min-height: calc(100vh - 20px) !important;
-      max-height: calc(100vh - 20px) !important;
-      padding: 4mm 6mm !important; 
-      box-shadow: none !important; 
-      box-sizing: border-box !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      page-break-after: avoid !important; 
-      page-break-inside: avoid !important;
-    }
-    .voucher-body {
-      flex-grow: 1 !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-around !important;
-    }
-    .copyright-outside {
-      display: block !important;
-      position: relative !important;
-      margin-top: auto !important;
-      padding-top: 2px !important;
-      font-size: 0.72rem !important;
-      font-weight: bold !important;
-      color: #000 !important;
-    }
-  }
-</style>
+        .header-center {
+            flex: 0 0 auto;
+            text-align: center;
+        }
+
+        .header-center img {
+            max-height: 40px;
+            max-width: 80px;
+            object-fit: contain;
+        }
+
+        .header-left {
+            flex: 1;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            color: #000;
+            line-height: 1.2;
+        }
+
+        .header-center:empty,
+        .header-left:empty {
+            display: none;
+        }
+
+        /* 2. مربع بيانات المستند */
+        .invoice-info-box {
+            border: 1.5px solid #000;
+            background-color: #fff;
+            padding: 6px 8px;
+            margin-bottom: 8px;
+            font-size: 10.5px;
+            font-weight: 600;
+        }
+
+        .info-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 5px;
+        }
+
+        .info-col-right {
+            flex: 1.3;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        .info-col-center {
+            flex: 1;
+            text-align: center;
+            line-height: 1.5;
+            border-right: 1px dashed #666;
+            border-left: 1px dashed #666;
+            padding: 0 4px;
+        }
+
+        .info-col-left {
+            flex: 1.1;
+            text-align: left;
+            line-height: 1.5;
+        }
+
+        /* 3. مستطيل البيان (يختفي تماماً إذا ترك فارغاً) */
+        .invoice-statement-box {
+            border: 1.5px solid #333;
+            padding: 6px 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            background-color: #fff;
+            line-height: 1.4;
+        }
+
+        .invoice-statement-box:empty {
+            display: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* 4. جدول بنود السند المالي */
+        .table-wrapper {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            table-layout: fixed;
+        }
+
+        table th, table td {
+            border: 1.5px solid #000;
+            padding: 6px 6px;
+            vertical-align: middle;
+            font-weight: 600;
+            word-wrap: break-word;
+        }
+
+        table th {
+            background-color: #e6e6e6;
+            color: #000;
+            font-weight: 800;
+            font-size: 11.5px;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        /* 5. قسم الإجماليات وتفاصيل الدفع */
+        .totals-section {
+            width: 100%;
+            border-top: 2.5px solid #000;
+            padding-top: 6px;
+            font-size: 11.5px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+        }
+
+        .payment-status-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            background: #e2e8f0;
+            color: #000;
+            border: 1px solid #000;
+            font-weight: 800;
+        }
+
+        /* 6. التزييل الداخلي */
+        .invoice-bottom-notes {
+            width: 100%;
+            font-size: 10px;
+            font-weight: 800;
+            color: #000;
+            border-top: 1.5px dashed #000;
+            padding-top: 6px;
+            margin-top: auto;
+        }
+
+        /* 7. حقوق الملكية الفكرية المعتمدة للمطور */
+        .copyright-footer {
+            text-align: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: #444;
+            margin-top: 6px;
+            width: 100%;
+        }
+
+        /* الأنماط الخاصة بالمقاسات المختلفة */
+        body[data-paper-size="A4"] .no-print-toolbar { max-width: 200mm; }
+        body[data-paper-size="A4"] .invoice-container {
+            max-width: 200mm;
+            min-height: 285mm;
+            padding: 12mm 14mm;
+            font-size: 12.5px;
+        }
+        body[data-paper-size="A4"] table { font-size: 12px; }
+
+        body[data-paper-size="thermal"] .no-print-toolbar { max-width: 72mm; }
+        body[data-paper-size="thermal"] .invoice-container {
+            max-width: 72mm;
+            min-height: auto;
+            padding: 3mm;
+            border: 1px dashed #000;
+            font-size: 10px;
+        }
+        body[data-paper-size="thermal"] .company-header { flex-direction: column; text-align: center; }
+        body[data-paper-size="thermal"] .header-right, 
+        body[data-paper-size="thermal"] .header-left { text-align: center; }
+        body[data-paper-size="thermal"] .info-grid { flex-direction: column; gap: 4px; text-align: center; }
+        body[data-paper-size="thermal"] .info-col-center { border: none; padding: 2px 0; }
+        body[data-paper-size="thermal"] .info-col-left { text-align: center; }
+
+        body[data-paper-size="58mm"] .no-print-toolbar { max-width: 48mm; }
+        body[data-paper-size="58mm"] .invoice-container {
+            max-width: 48mm;
+            min-height: auto;
+            padding: 2mm 1.5mm;
+            border: 1px dashed #000;
+            font-size: 8.5px;
+        }
+        body[data-paper-size="58mm"] .company-header { flex-direction: column; text-align: center; }
+        body[data-paper-size="58mm"] .header-right, 
+        body[data-paper-size="58mm"] .header-left { text-align: center; }
+        body[data-paper-size="58mm"] .info-grid { flex-direction: column; gap: 2px; text-align: center; }
+        body[data-paper-size="58mm"] .info-col-center { border: none; padding: 1px 0; }
+        body[data-paper-size="58mm"] .info-col-left { text-align: center; }
+
+        /* ========================================================= */
+        /* إعدادات الطباعة النظيفة لمقاس A5 الحقيقي (تمنع التقسيم لورقتين) */
+        /* ========================================================= */
+        @media print {
+            body {
+                background: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .no-print-toolbar,
+            .no-print {
+                display: none !important;
+            }
+
+            .invoice-container {
+                border: 1.5px solid #000 !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                margin: 0 auto !important;
+            }
+
+            body[data-paper-size="A5"] .invoice-container {
+                max-width: 100% !important;
+                height: 210mm !important;
+                padding: 6mm !important;
+            }
+
+            body[data-paper-size="A4"] .invoice-container {
+                max-width: 100% !important;
+                height: 297mm !important;
+                padding: 8mm 10mm !important;
+            }
+
+            body[data-paper-size="thermal"] .invoice-container {
+                width: 72mm !important;
+                max-width: 72mm !important;
+                height: auto !important;
+                padding: 2mm !important;
+                border: 1px dashed #000 !important;
+            }
+
+            body[data-paper-size="58mm"] .invoice-container {
+                width: 48mm !important;
+                max-width: 48mm !important;
+                height: auto !important;
+                padding: 1.5mm !important;
+                border: 1px dashed #000 !important;
+            }
+
+            .print-hide-time {
+                display: none !important;
+            }
+
+            .invoice-statement-box:empty {
+                display: none !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            tr, th, td {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            @page {
+                size: A5 portrait;
+                margin: 0;
+            }
+        }
+    </style>
+    <style id="dynamic-cash-print-style"></style>
 </head>
-<body>
+<body data-paper-size="A5">
 
-<div class="no-print-toolbar no-print-bar">
-  <div class="toolbar-title-box">
-    <span class="title-text">🖨️ معاينة وتخصيص الطباعة</span>
-    <span class="doc-badge">${isReceive ? 'سند قبض مالي' : 'سند صرف مالي'} #${serialNo}</span>
-  </div>
-  <div class="toolbar-controls">
-    <div class="toolbar-field">
-      <label for="selPaperSize">حجم الورق:</label>
-      <select id="selPaperSize" class="toolbar-select" onchange="updatePrintLayout()">
-        <option value="A4" ${paperSize === 'A4' ? 'selected' : ''}>A4 (قياسي)</option>
-        <option value="A5" ${paperSize === 'A5' ? 'selected' : ''}>A5 (مدمج)</option>
-        <option value="Letter" ${paperSize === 'Letter' ? 'selected' : ''}>Letter</option>
-      </select>
-    </div>
-    <div class="toolbar-field">
-      <label for="selOrientation">الاتجاه:</label>
-      <select id="selOrientation" class="toolbar-select" onchange="updatePrintLayout()">
-        <option value="portrait" selected>📄 رأسي / عمودي (Portrait)</option>
-        <option value="landscape">📑 أفقي (Landscape)</option>
-      </select>
-    </div>
-    <div class="toolbar-field">
-      <label for="selMargins">الهوامش:</label>
-      <select id="selMargins" class="toolbar-select" onchange="updatePrintLayout()">
-        <option value="compact">مضغوطة (3mm)</option>
-        <option value="normal" selected>قياسية (5mm)</option>
-        <option value="wide">عريضة (8mm)</option>
-      </select>
-    </div>
-    <button class="btn-print" onclick="triggerPrint()">
-      <span>🖨️</span>
-      <span>طباعة الآن (Print)</span>
-    </button>
-    <button class="btn-close" onclick="window.close()">✕ إغلاق</button>
-  </div>
-</div>
-
-<div class="voucher-wrapper">
-  <div class="voucher-container">
-    <div>
-      <!-- 1. الترويسة الديناميكية -->
-      <div class="header" id="invoiceHeader">
-        <div class="header-right">
-          <h2 id="settingCompanyName">${companyName}</h2>
-          <p id="settingCompanyAddress">📍 ${companyAddress}</p>
-        </div>
-        <div class="header-center">
-          <img id="settingCompanyLogo" class="logo-img" src="${logoUrl}" alt="شعار المؤسسة" style="${showLogo ? 'display:block;' : 'display:none;'}">
-        </div>
-        <div class="header-left">
-          <ul class="phones-list" id="settingPhonesList">
-            ${phones.map((p) => `<li>📞 ${p}</li>`).join('')}
-          </ul>
-        </div>
-      </div>
-
-      <!-- 2. صندوق البيانات الديناميكي -->
-      <div class="info-box">
-        <div class="info-item" style="text-align: right;">
-          <p><strong>${isReceive ? 'استلمنا من السيد / السادة:' : 'اصرفوا للسيد / السادة:'}</strong> <span>${partyName}</span></p>
-          <p><strong>${isReceive ? 'كود العميل / الحساب:' : 'جهة الصرف / الحساب:'}</strong> <span>${partyId || '-'}</span></p>
-        </div>
-        <div class="info-item" style="text-align: center;">
-          <p><strong style="font-size: 1.05rem; color: ${isReceive ? '#166534' : '#991b1b'};">${isReceive ? 'سنــــد قبـــض' : 'سنــــد صـــرف'}</strong></p>
-          <p><strong>رقم السند: #${serialNo}</strong></p>
-        </div>
-        <div class="info-item" style="text-align: left;">
-          <p><strong>التاريخ:</strong> <span>${dateStr}</span></p>
-          <p><strong>الوقت:</strong> <span>${timeStr}</span></p>
-        </div>
-      </div>
-
-      <!-- 3. محتوى السند التفصيلي -->
-      <div class="voucher-body">
-        <div class="voucher-row" style="justify-content: space-between;">
-          <div>
-            <strong>${isReceive ? 'المبلغ المقبوض:' : 'المبلغ المنصرف:'} </strong>
-            <span class="amount-highlight"><span>${(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> ${currency}</span>
-          </div>
-          <div>
-            <strong>وسيلة الدفع: </strong>
-            <span style="font-weight: bold; border: 1.5px solid #000; padding: 3px 10px; background: #fafafa;">${paymentMethod}</span>
-          </div>
+    <!-- شريط التحكم بالطباعة وتغيير المقاسات -->
+    <div class="no-print-toolbar no-print">
+        <div class="toolbar-group">
+            <span style="font-weight: 800; font-size: 12px;">🖨️ ${voucherTitle}</span>
+            <span style="background: #2563eb; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 800; font-size: 11px;">#${serialNo}</span>
         </div>
 
-        <div class="voucher-row">
-          <strong>مبلغا وقدره (تفقيط):</strong>
-          <div class="dots-line">${amountText}</div>
+        <div class="toolbar-group">
+            <button type="button" class="paper-btn active" id="btn-size-a5" onclick="setPaperSize('A5')">A5 (الأساسي)</button>
+            <button type="button" class="paper-btn" id="btn-size-a4" onclick="setPaperSize('A4')">A4</button>
+            <button type="button" class="paper-btn" id="btn-size-thermal" onclick="setPaperSize('thermal')">حراري 80mm</button>
+            <button type="button" class="paper-btn" id="btn-size-58mm" onclick="setPaperSize('58mm')">حراري 58mm</button>
         </div>
 
-        <div class="voucher-row">
-          <strong>وذلك قيمة / مقابل:</strong>
-          <div class="dots-line">${reason}</div>
+        <div class="toolbar-group">
+            <button type="button" class="action-btn-print" onclick="window.print()">
+                <span>🖨️ طباعة</span>
+            </button>
+            <button type="button" class="action-btn-pdf" onclick="saveAsPdf()">
+                <span>💾 حفظ PDF</span>
+            </button>
+            <button type="button" class="action-btn-close" onclick="window.close()">✕</button>
         </div>
-
-        <div class="voucher-row">
-          <strong>${isReceive ? 'الخزينة / الحساب المحول إليه:' : 'خصماً من خزينة / حساب:'}</strong>
-          <div class="dots-line">${accountName}</div>
-        </div>
-      </div>
-
-      <!-- 4. التوقيعات الديناميكية -->
-      <div class="bottom-section">
-        <div>${isReceive ? 'توقيع القابض (العميل): ....................' : 'توقيع المستلم (المستفيد): ....................'}</div>
-        <div>أمين الخزينة / الصراف: ....................</div>
-        <div>اعتماد الحسابات / الإدارة: ....................</div>
-      </div>
     </div>
 
-    <div>
-      <div class="voucher-footer-note">
-        <div>${isReceive ? 'يعتبر هذا السند إشعاراً رسمياً بالتحصيل ولا يحتاج لختم إضافي إلا في الحالات الخاصة' : 'تم صرف المبلغ بناءً على الدورة المستندية والاعتمادات المالية المقررة'}</div>
-        <div>صفحة رقم: 1/1</div>
-      </div>
+    <!-- حاوية المستند النظيفة بمقاس A5 -->
+    <div class="invoice-container">
+        <div class="invoice-main-content">
+            
+            <!-- 1. الترويسة العلوية الثلاثية -->
+            <div class="company-header">
+                <div class="header-right">
+                    <h2>${companyName}</h2>
+                    <p>${companyAddress}</p>
+                </div>
+                <div class="header-center">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="شعار الشركة" onerror="this.style.display='none'">` : ''}
+                </div>
+                <div class="header-left">
+                    ${phones.map((ph, idx) => `<div><strong>هاتف ${idx + 1}:</strong> ${ph}</div>`).join('')}
+                </div>
+            </div>
+
+            <!-- 2. مربع بيانات المستند -->
+            <div class="invoice-info-box">
+                <div class="info-grid">
+                    <div class="info-col-right">
+                        <strong>${isReceive ? 'استلمنا من السيد:' : 'صرفنا إلى السيد:'}</strong> <span>${partyName}</span><br>
+                        <strong>كود الطرف/الحساب:</strong> <span>${partyId || '-'}</span><br>
+                        ${partyPhone !== '-' ? `<strong>الهاتف:</strong> <span>${partyPhone}</span>` : ''}
+                    </div>
+                    <div class="info-col-center">
+                        <strong style="color: ${isReceive ? '#166534' : '#991b1b'};">${voucherTitle}</strong><br>
+                        <span style="font-size: 13px; font-weight: 800;">رقم: <span>${serialNo}</span></span>
+                    </div>
+                    <div class="info-col-left">
+                        <strong>التاريخ:</strong> <span>${dateStr}</span><br>
+                        <span class="print-hide-time"><strong>الوقت:</strong> <span>${timeStr}</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. مستطيل البيان (يختفي تماماً إذا ترك فارغاً) -->
+            <div class="invoice-statement-box">
+                <strong>البيان والسبب:</strong> ${reason}
+            </div>
+
+            <!-- 4. جدول بنود السند المالي المنسق -->
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 30%;">البند المالي</th>
+                            <th style="width: 70%; text-align: right; padding-right: 8px;">التفاصيل والبيان</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="font-weight: 800; background: #f8fafc; text-align: center;">المبلغ بالأرقام</td>
+                            <td style="font-weight: 900; font-size: 13px; color: ${isReceive ? '#166534' : '#991b1b'}; font-family: monospace;">
+                                ${(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: 800; background: #f8fafc; text-align: center;">المبلغ كتابةً وتفقيطاً</td>
+                            <td style="font-weight: 700; color: #1e293b;">${amountText}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: 800; background: #f8fafc; text-align: center;">طريقة وسيلة السداد</td>
+                            <td><span class="payment-status-badge">${paymentMethod}</span></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: 800; background: #f8fafc; text-align: center;">${isReceive ? 'الخزينة المحول إليها' : 'خصماً من الخزينة/الحساب'}</td>
+                            <td style="font-weight: 600;">${accountName}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 5. قسم الإجماليات وتفاصيل الدفع -->
+            <div class="totals-section">
+                <div class="total-row">
+                    <span>إجمالي قيمة السند المالي:</span>
+                    <span style="color: ${isReceive ? '#166534' : '#991b1b'};">${(amount || 0).toFixed(2)} ${currency}</span>
+                </div>
+                <div class="total-row" style="border-top: 1px dashed #666; padding-top: 4px; margin-top: 3px;">
+                    <span>حالة المعاملة:</span>
+                    <span class="payment-status-badge">معتمد ومقيد دفترياً</span>
+                </div>
+            </div>
+
+            <!-- التوقيعات المعتمدة -->
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #000; font-size: 10px; font-weight: 800;">
+                <div>${isReceive ? 'توقيع المستلم (العميل): ....................' : 'توقيع المستلم (المستفيد): ....................'}</div>
+                <div>أمين الخزينة: ....................</div>
+                <div>اعتماد الإدارة: ....................</div>
+            </div>
+
+        </div>
+
+        <!-- 6. التزييل الداخلي -->
+        <div class="invoice-bottom-notes" style="text-align: center; margin-top: 10px;">
+            <p>${isReceive ? 'يعتبر هذا السند إشعاراً رسمياً بالتحصيل ولا يحتاج لختم إضافي إلا في الحالات الخاصة' : 'تم صرف المبلغ بناءً على الدورة المستندية والاعتمادات المالية المقررة'}</p>
+        </div>
     </div>
-  </div>
 
-  <!-- حقوق الملكية خارج الإطار الخارجي -->
-  <div class="copyright-outside">
-    حقوق الملكية محفوظة Mohamed Nazih 01029190615
-  </div>
-</div>
+    <!-- 7. حقوق الملكية الفكرية المعتمدة للمطور -->
+    <div class="copyright-footer">
+        حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+    </div>
 
-<script>
-  function setCompanyHeader(companyData) {
-    if (!companyData) return;
-    const header = document.getElementById('invoiceHeader');
-    if (!header) return;
-    let hasData = false;
-    if (companyData.name || companyData.address || companyData.companyName) {
-      const nameEl = document.getElementById('settingCompanyName');
-      const addrEl = document.getElementById('settingCompanyAddress');
-      if (nameEl) nameEl.innerText = companyData.companyName || companyData.name || '';
-      if (addrEl) addrEl.innerText = companyData.address ? '📍 ' + companyData.address : '';
-      hasData = true;
-    }
-    const logoEl = document.getElementById('settingCompanyLogo');
-    const logoSrc = companyData.logoUrl || companyData.logo || '';
-    if (logoEl && logoSrc && companyData.showLogoInPrint !== false) {
-      logoEl.src = logoSrc;
-      logoEl.style.display = 'block';
-      hasData = true;
-    } else if (logoEl) {
-      logoEl.style.display = 'none';
-    }
+    <script>
+        function setPaperSize(size) {
+            document.body.setAttribute('data-paper-size', size);
+            
+            var btnA5 = document.getElementById('btn-size-a5');
+            var btnA4 = document.getElementById('btn-size-a4');
+            var btnThermal = document.getElementById('btn-size-thermal');
+            var btn58mm = document.getElementById('btn-size-58mm');
+            if (btnA5) btnA5.classList.toggle('active', size === 'A5');
+            if (btnA4) btnA4.classList.toggle('active', size === 'A4');
+            if (btnThermal) btnThermal.classList.toggle('active', size === 'thermal');
+            if (btn58mm) btn58mm.classList.toggle('active', size === '58mm');
 
-    const phonesList = document.getElementById('settingPhonesList');
-    if (phonesList) {
-      const phoneArr = companyData.phones || [companyData.phone1, companyData.phone2, companyData.phone3].filter(Boolean);
-      phonesList.innerHTML = '';
-      if (phoneArr && phoneArr.length > 0) {
-        phoneArr.slice(0, 3).forEach((phone) => {
-          if (phone) {
-            const li = document.createElement('li');
-            li.innerText = '📞 ' + phone;
-            phonesList.appendChild(li);
-          }
+            var styleEl = document.getElementById('dynamic-cash-print-style');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'dynamic-cash-print-style';
+                document.head.appendChild(styleEl);
+            }
+
+            if (size === 'A5') {
+                styleEl.innerHTML = '@media print { @page { size: A5 portrait; margin: 0; } }';
+            } else if (size === 'A4') {
+                styleEl.innerHTML = '@media print { @page { size: A4 portrait; margin: 0; } }';
+            } else if (size === 'thermal') {
+                styleEl.innerHTML = '@media print { @page { size: 80mm auto; margin: 0; } }';
+            } else if (size === '58mm') {
+                styleEl.innerHTML = '@media print { @page { size: 58mm auto; margin: 0; } }';
+            }
+
+            try {
+                localStorage.setItem('sys_print_pref_size', size);
+            } catch(e) {}
+        }
+
+        function saveAsPdf() {
+            var container = document.querySelector('.invoice-container');
+            var size = document.body.getAttribute('data-paper-size') || 'A5';
+            var filename = '${voucherTitle}_${serialNo}.pdf';
+
+            if (window.html2pdf) {
+                var opt = {
+                    margin: size === 'thermal' || size === '58mm' ? [2, 1, 2, 1] : [4, 4, 4, 4],
+                    filename: filename,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, logging: false },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: size === 'A5' ? 'a5' : size === '58mm' ? [58, 200] : size === 'thermal' ? [80, 220] : 'a4',
+                        orientation: 'portrait'
+                    }
+                };
+                html2pdf().set(opt).from(container).save();
+            } else {
+                window.print();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            var saved = null;
+            try {
+                saved = localStorage.getItem('sys_print_pref_size');
+            } catch(e) {}
+            if (saved && (saved === 'A5' || saved === 'A4' || saved === 'thermal' || saved === '58mm')) {
+                setPaperSize(saved);
+            } else {
+                setPaperSize('A5');
+            }
         });
-        hasData = true;
-      }
-    }
-  }
-
-  function updatePrintLayout() {
-    const sizeEl = document.getElementById('selPaperSize');
-    const orientEl = document.getElementById('selOrientation');
-    const marginEl = document.getElementById('selMargins');
-
-    const size = sizeEl ? sizeEl.value : 'A4';
-    const orient = orientEl ? orientEl.value : 'portrait';
-    const marginType = marginEl ? marginEl.value : 'normal';
-
-    let marginVal = '5mm 7mm';
-    if (marginType === 'compact') marginVal = '3mm 4mm';
-    if (marginType === 'wide') marginVal = '7mm 9mm';
-
-    let styleEl = document.getElementById('dynamicPageStyle');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'dynamicPageStyle';
-      document.head.appendChild(styleEl);
-    }
-
-    styleEl.innerHTML = '@page { size: ' + size + ' ' + orient + '; margin: ' + marginVal + '; }';
-
-    document.body.classList.remove('size-a4', 'size-a5', 'size-letter', 'orient-portrait', 'orient-landscape');
-    document.body.classList.add('size-' + size.toLowerCase(), 'orient-' + orient);
-
-    try {
-      localStorage.setItem('sys_print_pref_size', size);
-      localStorage.setItem('sys_print_pref_orient', orient);
-      localStorage.setItem('sys_print_pref_margin', marginType);
-    } catch(e) {}
-  }
-
-  function triggerPrint() {
-    updatePrintLayout();
-    window.print();
-  }
-
-  window.addEventListener('DOMContentLoaded', () => {
-    try {
-      const savedSize = localStorage.getItem('sys_print_pref_size');
-      const savedOrient = localStorage.getItem('sys_print_pref_orient');
-      const savedMargin = localStorage.getItem('sys_print_pref_margin');
-      if (savedSize && document.getElementById('selPaperSize')) {
-        document.getElementById('selPaperSize').value = savedSize;
-      }
-      if (savedOrient && document.getElementById('selOrientation')) {
-        document.getElementById('selOrientation').value = savedOrient;
-      }
-      if (savedMargin && document.getElementById('selMargins')) {
-        document.getElementById('selMargins').value = savedMargin;
-      }
-    } catch(e) {}
-    updatePrintLayout();
-  });
-</script>
+    </script>
 </body>
 </html>`;
 }
 
+/**
+ * Open Print Window for Cash Vouchers
+ */
 export function printCashVoucherWindow(
   trans: CashTransaction | UnifiedVoucherData,
   appDataOrSettings: AppData | Settings,
@@ -669,8 +772,6 @@ export function printCashVoucherWindow(
   if (!printWin) {
     if (showToast) {
       showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    } else {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
     }
     return;
   }

@@ -19,8 +19,11 @@ import {
   Plus,
   MoreVertical,
   Share2,
+  Download,
+  Database,
 } from 'lucide-react';
 import { loginOwnerApi } from '../services/cloudApi';
+import { downloadBackupJsonFile } from '../utils/autoBackup';
 
 export function getCleanPageName(page?: string): string {
   if (!page) return 'الرئيسية';
@@ -465,16 +468,19 @@ export const Header: React.FC<HeaderProps> = ({
           {/* ========================================================= */}
           {/* 📱 وضع الهاتف: زر ثلاث نقاط رأسي يجمع كل الأزرار التفاعلية */}
           {/* ========================================================= */}
-          <div className="relative md:hidden" ref={mobileMenuRef}>
+          {/* ========================================================= */}
+          {/* 📱💻 زر الثلاث نقاط أعلى الشمال: قائمة منظمة وواضحة وليست طولية */}
+          {/* ========================================================= */}
+          <div className="relative" ref={mobileMenuRef}>
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className={`p-2 rounded-xl transition cursor-pointer flex items-center justify-center relative shadow-2xs ${
+              className={`p-2 rounded-xl transition cursor-pointer flex items-center justify-center relative shadow-sm ${
                 isMobileMenuOpen
                   ? 'bg-blue-600 text-white ring-2 ring-blue-300'
                   : 'bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 border border-slate-200'
               }`}
-              title="خيارات وإجراءات المنظومة"
+              title="خيارات وإجراءات المنظومة (المزامنة والنسخ الاحتياطي والمتجر)"
               aria-label="خيارات وإجراءات المنظومة"
             >
               <MoreVertical className="w-5 h-5 shrink-0" />
@@ -487,7 +493,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* القائمة المنسدلة للثلاث نقاط على الهاتف */}
+            {/* القائمة المنظمة للثلاث نقاط (مرتبة ومنظمة بدون أي كسور) */}
             {isMobileMenuOpen && (
               <>
                 {/* طبقة خلفية خفيفة للنقر في أي مكان والإغلاق */}
@@ -497,190 +503,237 @@ export const Header: React.FC<HeaderProps> = ({
                 />
 
                 <div
-                  className="absolute left-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-16px)] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden text-right text-slate-900 animate-in fade-in zoom-in-95 duration-150"
+                  className="absolute left-0 top-full mt-2 w-[320px] sm:w-[380px] max-w-[calc(100vw-24px)] bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden text-right text-slate-900 animate-in fade-in zoom-in-95 duration-150"
                   dir="rtl"
                 >
-                  {/* رأس القائمة: بطاقة المستخدم الحالية */}
-                  <div className="p-3 bg-gradient-to-br from-slate-50 to-blue-50/50 border-b border-slate-200 flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0">
-                      {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-5 h-5" />}
-                    </div>
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
+                  {/* رأس القائمة: بطاقة المستخدم والفرع */}
+                  <div className="p-3 bg-gradient-to-br from-slate-50 to-blue-50/60 border-b border-slate-200 flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0">
+                        {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                      </div>
+                      <div className="flex flex-col min-w-0">
                         <span className="text-xs font-black text-slate-900 truncate">
                           {currentUser?.name || 'مدير النظام'}
                         </span>
-                        <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                          {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
-                            ? 'مدير عام'
-                            : currentUser?.role === 'cashier'
-                            ? 'كاشير'
-                            : currentUser?.role === 'accountant'
-                            ? 'محاسب'
-                            : currentUser?.role === 'warehouse_keeper'
-                            ? 'أمين مخزن'
-                            : currentUser?.role === 'sales_rep'
-                            ? 'مندوب مبيعات'
-                            : currentUser?.role || 'مستخدم'}
+                        <span className="text-[10px] text-slate-500 font-medium truncate">
+                          🏢 {currentActiveBranch?.name || 'الفرع الرئيسي'}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
-                        🏢 {currentActiveBranch?.name || 'الفرع الرئيسي'}
-                      </span>
                     </div>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full shrink-0">
+                      {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
+                        ? 'مدير عام'
+                        : currentUser?.role === 'cashier'
+                        ? 'كاشير'
+                        : currentUser?.role === 'accountant'
+                        ? 'محاسب'
+                        : currentUser?.role === 'warehouse_keeper'
+                        ? 'أمين مخزن'
+                        : currentUser?.role === 'sales_rep'
+                        ? 'مندوب مبيعات'
+                        : currentUser?.role || 'مستخدم'}
+                    </span>
                   </div>
 
-                  {/* قائمة الإجراءات التفاعلية المجمعة */}
-                  <div className="p-1.5 max-h-[calc(75vh-120px)] overflow-y-auto space-y-1">
-                    {/* النسخ السحابي وقاعدة البيانات */}
-                    {onNavigateBackup && (
+                  {/* شبكة الإجراءات المنظمة (شبكة متوازنة وواضحة بدون كسور أو تداخل) */}
+                  <div className="p-2.5 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* 1. النسخ السحابي وقاعدة البيانات */}
+                      {onNavigateBackup && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            onNavigateBackup();
+                          }}
+                          className="text-right p-3 rounded-xl bg-slate-50/90 hover:bg-emerald-50/40 active:bg-emerald-100/40 border border-slate-200 hover:border-emerald-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                              <Cloud className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              متصل
+                            </span>
+                          </div>
+                          <div className="w-full">
+                            <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors leading-tight">
+                              النسخ السحابي
+                            </div>
+                            <span className="text-[10px] text-slate-500 block truncate mt-0.5">
+                              قاعدة البيانات المتزامنة
+                            </span>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* 2. صحة النظام والبيانات (10M+) */}
+                      {onOpenDiagnostics && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            onOpenDiagnostics();
+                          }}
+                          className="text-right p-3 rounded-xl bg-slate-50/90 hover:bg-indigo-50/40 active:bg-indigo-100/40 border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                              <Activity className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">
+                              فحص
+                            </span>
+                          </div>
+                          <div className="w-full">
+                            <div className="text-xs font-bold text-slate-900 group-hover:text-indigo-700 transition-colors leading-tight">
+                              صحة النظام (10M+)
+                            </div>
+                            <span className="text-[10px] text-slate-500 block truncate mt-0.5">
+                              فحص الفهارس والنزاهة
+                            </span>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* 3. سحب نسخة احتياطية فورية (كل 12 ساعة تلقائياً + سحب يدوي) */}
                       <button
                         type="button"
                         onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          onNavigateBackup();
+                          if (appData) {
+                            downloadBackupJsonFile(
+                              appData,
+                              `الموان_نسخة_احتياطية_${new Date().toISOString().split('T')[0]}.json`
+                            );
+                            showToast?.('💾 تم سحب وتنزيل النسخة الاحتياطية بنجاح! يتم أخذ نسخة تلقائياً كل 12 ساعة.', 'success');
+                            setIsMobileMenuOpen(false);
+                          } else if (onNavigateBackup) {
+                            onNavigateBackup();
+                            setIsMobileMenuOpen(false);
+                          }
                         }}
-                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                        className="text-right p-3 rounded-xl bg-blue-50/80 hover:bg-blue-100/80 active:bg-blue-200/80 border border-blue-200 hover:border-blue-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
+                        title="سحب نسخة احتياطية فورية الآن لجهازك"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
-                            <Cloud className="w-4 h-4" />
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                            <Download className="w-3.5 h-3.5" />
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              <span>النسخ السحابي وقاعدة البيانات</span>
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          <span className="text-[10px] font-bold text-blue-800 bg-white border border-blue-300 px-2 py-0.5 rounded-full shrink-0">
+                            كل 12 ساعة
+                          </span>
+                        </div>
+                        <div className="w-full">
+                          <div className="text-xs font-black text-blue-950 flex items-center gap-1 leading-tight">
+                            <span>سحب نسخة احتياطية</span>
+                          </div>
+                          <span className="text-[10px] text-blue-700 block truncate mt-0.5">
+                            سحب فوري يدوي JSON
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* 4. طلبات المتجر الإلكتروني */}
+                      {onNavigateWebOrders && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            onNavigateWebOrders();
+                          }}
+                          className="text-right p-3 rounded-xl bg-slate-50/90 hover:bg-amber-50/40 active:bg-amber-100/40 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                            </div>
+                            {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) ? (
+                              <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded-full animate-bounce shrink-0">
+                                {pendingWebOrdersCount} جديدة
                               </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full shrink-0">
+                                0 طلبات
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-full">
+                            <div className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors leading-tight">
+                              طلبات المتجر
                             </div>
-                            <span className="text-[10px] text-slate-500">
-                              {autoBackupActive ? 'النسخ السحابي نشط وتلقائي' : 'إدارة النسخ الاحتياطي'}
+                            <span className="text-[10px] text-slate-500 block truncate mt-0.5">
+                              متابعة الطلبيات الواردة
                             </span>
                           </div>
-                        </div>
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                          متصل
-                        </span>
-                      </button>
-                    )}
+                        </button>
+                      )}
 
-                    {/* فحص النزاهة وصحة البيانات الضخمة (10M+) */}
-                    {onOpenDiagnostics && (
+                      {/* 5. مشاركة الكتالوج والمتجر الإلكتروني */}
+                      {onShareCatalog && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            onShareCatalog();
+                          }}
+                          className="text-right p-3 rounded-xl bg-slate-50/90 hover:bg-teal-50/40 active:bg-teal-100/40 border border-slate-200 hover:border-teal-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+                              <Share2 className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0">
+                              واتساب
+                            </span>
+                          </div>
+                          <div className="w-full">
+                            <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700 transition-colors leading-tight">
+                              مشاركة المتجر
+                            </div>
+                            <span className="text-[10px] text-slate-500 block truncate mt-0.5">
+                              إرسال الكتالوج للعملاء
+                            </span>
+                          </div>
+                        </button>
+                      )}
+
+                      {/* 6. لوحة مالك المنظومة */}
                       <button
                         type="button"
                         onClick={() => {
                           setIsMobileMenuOpen(false);
-                          onOpenDiagnostics();
+                          setIsSecretModalOpen(true);
+                          setSecretPassword('');
+                          setSecretError('');
                         }}
-                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
+                        className="text-right p-3 rounded-xl bg-slate-50/90 hover:bg-amber-50/40 active:bg-amber-100/40 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer flex flex-col justify-between min-h-[92px] shadow-sm hover:shadow group"
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
-                            <Activity className="w-4 h-4" />
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                            <Crown className="w-3.5 h-3.5 text-amber-600" />
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">
-                              صحة النظام والبيانات (10M+)
-                            </div>
-                            <span className="text-[10px] text-slate-500">
-                              فحص الفهارس والنزاهة المحاسبية
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
-                          فحص
-                        </span>
-                      </button>
-                    )}
-
-                    {/* طلبات المتجر الإلكتروني */}
-                    {onNavigateWebOrders && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          onNavigateWebOrders();
-                        }}
-                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
-                            <ShoppingBag className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">
-                              طلبات المتجر الإلكتروني
-                            </div>
-                            <span className="text-[10px] text-slate-500">
-                              متابعة الطلبات الواردة أونلاين
-                            </span>
-                          </div>
-                        </div>
-                        {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) ? (
-                          <span className="text-[10px] font-black text-white bg-rose-600 px-2 py-0.5 rounded-full animate-bounce">
-                            {pendingWebOrdersCount} جديدة
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                            0
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    {/* مشاركة الكتالوج والمتجر الإلكتروني */}
-                    {onShareCatalog && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          onShareCatalog();
-                        }}
-                        className="w-full text-right p-2.5 rounded-xl hover:bg-slate-50 active:bg-slate-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-slate-200"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 border border-teal-200 flex items-center justify-center shrink-0">
-                            <Share2 className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-900">
-                              مشاركة رابط المتجر والكتالوج
-                            </div>
-                            <span className="text-[10px] text-slate-500">
-                              إرسال الرابط للعملاء عبر واتساب
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-
-                    {/* لوحة مالك المنظومة */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        setIsSecretModalOpen(true);
-                        setSecretPassword('');
-                        setSecretError('');
-                      }}
-                      className="w-full text-right p-2.5 rounded-xl hover:bg-amber-50 active:bg-amber-100 flex items-center justify-between transition cursor-pointer border border-transparent hover:border-amber-200"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center shrink-0">
-                          <Crown className="w-4 h-4 text-amber-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                            <span>لوحة مالك المنظومة</span>
-                            <span className="text-[10px] text-amber-600">👑</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500">
-                            تسجيل دخول المالك والاشتراكات
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                            المالك
                           </span>
                         </div>
-                      </div>
-                    </button>
+                        <div className="w-full">
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors leading-tight">
+                            لوحة المالك 👑
+                          </div>
+                          <span className="text-[10px] text-slate-500 block truncate mt-0.5">
+                            إدارة التراخيص والاشتراك
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* تنويه الجدولة التلقائية كل 12 ساعة */}
+                    <div className="mt-2.5 p-2 rounded-xl bg-slate-100/80 border border-slate-200 text-[10px] text-slate-600 flex items-center gap-1.5">
+                      <span className="text-blue-600 font-bold">ℹ️ النسخ الاحتياطي:</span>
+                      <span>يتم أخذ وحفظ نسخة تلقائية كل 12 ساعة ويمكن السحب يدوياً في أي وقت.</span>
+                    </div>
                   </div>
 
                   {/* تذييل القائمة: زر تسجيل الخروج الآمن */}
@@ -692,7 +745,7 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                           onLogout();
                         }}
-                        className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs"
+                        className="w-full py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
                       >
                         <LogOut className="w-4 h-4 text-rose-600 shrink-0" />
                         <span>تسجيل الخروج الآمن</span>

@@ -570,27 +570,29 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           <div>
             {/* الترويسة الديناميكية المعتمدة */}
             <div
-              className="header"
+              className="company-header"
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1.5px solid #000',
-                paddingBottom: '6px',
+                borderBottom: '2.5px solid #000',
+                paddingBottom: '8px',
                 marginBottom: '8px',
                 width: '100%',
+                gap: '8px',
               }}
             >
-              <div style={{ textAlign: 'right', flex: 1.2 }}>
-                <h2 style={{ margin: '0 0 2px 0', fontSize: '1.1rem', fontWeight: 'bold' }}>
+              <div className="header-right" style={{ textAlign: 'right', flex: 1.2 }}>
+                <h2 style={{ margin: '0 0 2px 0', fontSize: '1rem', fontWeight: 800 }}>
                   {companyName}
                 </h2>
-                <p style={{ margin: 0, fontSize: '0.73rem', color: '#333' }}>
+                <p style={{ margin: 0, fontSize: '0.73rem', fontWeight: 600, color: '#222' }}>
                   {companyAddress}
                 </p>
               </div>
 
               <div
+                className="header-center"
                 style={{
                   display: 'flex',
                   justifyContent: 'center',
@@ -603,12 +605,13 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                   <img
                     src={logoUrl}
                     alt="الشعار"
-                    style={{ maxWidth: '80px', maxHeight: '45px', objectFit: 'contain' }}
+                    style={{ maxWidth: '80px', maxHeight: '40px', objectFit: 'contain' }}
+                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                   />
                 )}
               </div>
 
-              <div style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
+              <div className="header-left" style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
                 <ul
                   style={{
                     listStyle: 'none',
@@ -621,7 +624,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 >
                   {companyPhones.map((phone, idx) => (
                     <li key={idx} style={{ marginBottom: '1px', fontWeight: 600 }}>
-                      {phone}
+                      Tel {idx + 1}: {phone}
                     </li>
                   ))}
                 </ul>
@@ -630,49 +633,71 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
             {/* صندوق معلومات العميل والفاتورة الأصلي */}
             <div
+              className="invoice-info-box"
               style={{
                 display: 'flex',
                 flexDirection: isThermalMode ? 'column' : 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 border: isThermalMode ? '1px dashed #000' : '1.5px solid #000',
-                padding: isThermalMode ? '4px 6px' : paperSize === 'A5' ? '4px 8px' : '5px 10px',
+                padding: isThermalMode ? '4px 6px' : '6px 8px',
                 marginBottom: '8px',
-                fontSize: paperSize === '58mm' ? '0.68rem' : isThermalMode ? '0.74rem' : paperSize === 'A5' ? '0.78rem' : '0.82rem',
-                lineHeight: 1.4,
+                fontSize: paperSize === '58mm' ? '0.68rem' : isThermalMode ? '0.74rem' : '0.78rem',
+                lineHeight: 1.5,
                 width: '100%',
-                backgroundColor: '#fafafa',
+                backgroundColor: '#ffffff',
                 gap: isThermalMode ? '4px' : '0px',
+                fontWeight: 600,
               }}
             >
-              <div style={{ textAlign: isThermalMode ? 'center' : 'right' }}>
+              <div style={{ textAlign: isThermalMode ? 'center' : 'right', flex: 1.3 }}>
+                <p style={{ margin: '1px 0' }}>
+                  <strong>{partyIdLabel}:</strong> <span>{partyPhone}</span>
+                </p>
                 <p style={{ margin: '1px 0' }}>
                   <strong>{partyLabel}:</strong> <span>{partyName}</span>
                 </p>
                 <p style={{ margin: '1px 0' }}>
-                  <strong>{partyIdLabel}:</strong> <span>{partyPhone}</span>
+                  <strong>الهاتف:</strong> <span>{invoice.phone || '-'}</span>
                 </p>
               </div>
 
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', flex: 1 }}>
                 <p style={{ margin: '1px 0' }}>
-                  <strong>{invoiceTypeTitle}</strong> -{' '}
-                  <strong style={{ fontSize: isThermalMode ? '0.88rem' : '1rem' }}>#{invoiceNumber}</strong>
+                  <strong>{invoiceTypeTitle}</strong>
                 </p>
                 <p style={{ margin: '1px 0' }}>
-                  <strong>وسيلة الدفع:</strong> <span>{paymentMethodType}</span>
+                  <span style={{ fontSize: isThermalMode ? '0.88rem' : '0.95rem', fontWeight: 800 }}>رقم: #{invoiceNumber}</span>
                 </p>
               </div>
 
-              <div style={{ textAlign: isThermalMode ? 'center' : 'left' }}>
+              <div style={{ textAlign: isThermalMode ? 'center' : 'left', flex: 1.1 }}>
                 <p style={{ margin: '1px 0' }}>
                   <strong>التاريخ:</strong> <span>{invoiceDate}</span>
                 </p>
-                <p style={{ margin: '1px 0' }}>
+                <p style={{ margin: '1px 0' }} className="print-hide-time">
                   <strong>الوقت:</strong> <span>{invoiceTime}</span>
                 </p>
               </div>
             </div>
+
+            {/* مستطيل البيان (يختفي تماماً إذا ترك فارغاً) */}
+            {Boolean(invoice.notes || (invoice as any).note || (invoice as any).description) && (
+              <div
+                className="invoice-statement-box"
+                style={{
+                  border: '1.5px solid #333',
+                  padding: '5px 8px',
+                  marginBottom: '8px',
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                  backgroundColor: '#fff',
+                }}
+              >
+                <strong>البيان: </strong>
+                <span>{invoice.notes || (invoice as any).note || (invoice as any).description}</span>
+              </div>
+            )}
 
             {/* جدول الأصناف الأصلي المعتمد */}
             <div style={{ width: '100%', flexGrow: 1 }}>
@@ -681,71 +706,66 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                   width: '100%',
                   borderCollapse: 'collapse',
                   marginBottom: '8px',
+                  tableLayout: 'fixed',
+                  fontSize: paperSize === '58mm' ? '0.62rem' : isThermalMode ? '0.7rem' : '0.76rem',
                 }}
               >
                 <thead>
-                  <tr>
+                  <tr style={{ backgroundColor: '#e6e6e6' }}>
                     <th
                       style={{
-                        width: '38%',
-                        border: '1px solid #000',
+                        width: '34%',
+                        border: '1.5px solid #000',
                         padding: '4px 6px',
-                        textAlign: 'center',
-                        backgroundColor: '#ededed',
-                        fontWeight: 'bold',
-                        fontSize: '0.78rem',
+                        textAlign: 'right',
+                        fontWeight: 800,
                       }}
                     >
                       اسم الصنف
                     </th>
                     <th
                       style={{
-                        width: '30%',
-                        border: '1px solid #000',
-                        padding: '4px 6px',
+                        width: '22%',
+                        border: '1.5px solid #000',
+                        padding: '4px 4px',
                         textAlign: 'center',
-                        backgroundColor: '#ededed',
-                        fontWeight: 'bold',
-                        fontSize: '0.78rem',
+                        fontWeight: 800,
                       }}
                     >
-                      الوصف
+                      البيان
                     </th>
                     <th
                       style={{
                         width: '10%',
-                        border: '1px solid #000',
-                        padding: '4px 6px',
+                        border: '1.5px solid #000',
+                        padding: '4px 4px',
                         textAlign: 'center',
-                        backgroundColor: '#ededed',
-                        fontWeight: 'bold',
-                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       العدد
                     </th>
                     <th
                       style={{
-                        width: '10%',
-                        border: '1px solid #000',
-                        padding: '4px 6px',
+                        width: '16%',
+                        border: '1.5px solid #000',
+                        padding: '4px 4px',
                         textAlign: 'center',
-                        backgroundColor: '#ededed',
-                        fontWeight: 'bold',
-                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       السعر
                     </th>
                     <th
                       style={{
-                        width: '12%',
-                        border: '1px solid #000',
-                        padding: '4px 6px',
+                        width: '18%',
+                        border: '1.5px solid #000',
+                        padding: '4px 4px',
                         textAlign: 'center',
-                        backgroundColor: '#ededed',
-                        fontWeight: 'bold',
-                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       الإجمالي
@@ -758,7 +778,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                       <td
                         colSpan={5}
                         style={{
-                          border: '1px solid #000',
+                          border: '1.5px solid #000',
                           padding: '10px',
                           textAlign: 'center',
                           color: '#777',
@@ -779,57 +799,58 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                         <tr key={idx}>
                           <td
                             style={{
-                              border: '1px solid #000',
+                              border: '1.5px solid #000',
                               padding: '4px 6px',
                               textAlign: 'right',
-                              fontWeight: 'bold',
-                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              wordWrap: 'break-word',
                             }}
                           >
                             {it.name}
                           </td>
                           <td
                             style={{
-                              border: '1px solid #000',
-                              padding: '4px 6px',
-                              textAlign: 'right',
-                              color: '#444',
-                              fontSize: '0.8rem',
+                              border: '1.5px solid #000',
+                              padding: '4px 4px',
+                              textAlign: 'center',
+                              color: '#333',
+                              fontSize: '0.72rem',
+                              wordWrap: 'break-word',
                             }}
                           >
                             {desc}
                           </td>
                           <td
                             style={{
-                              border: '1px solid #000',
-                              padding: '4px 6px',
+                              border: '1.5px solid #000',
+                              padding: '4px 4px',
                               textAlign: 'center',
                               fontFamily: 'monospace',
-                              fontWeight: 'bold',
-                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {qty}
                           </td>
                           <td
                             style={{
-                              border: '1px solid #000',
-                              padding: '4px 6px',
+                              border: '1.5px solid #000',
+                              padding: '4px 4px',
                               textAlign: 'center',
                               fontFamily: 'monospace',
-                              fontSize: '0.8rem',
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {price.toFixed(2)}
                           </td>
                           <td
                             style={{
-                              border: '1px solid #000',
-                              padding: '4px 6px',
+                              border: '1.5px solid #000',
+                              padding: '4px 4px',
                               textAlign: 'center',
                               fontFamily: 'monospace',
-                              fontWeight: 'bold',
-                              fontSize: '0.8rem',
+                              fontWeight: 800,
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {itemTotal.toFixed(2)}
@@ -842,122 +863,93 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               </table>
             </div>
 
-            {/* المجموع والملخص السفلي الأصلي */}
+            {/* قسم الإجماليات وتفاصيل الدفع */}
             <div
+              className="totals-section"
               style={{
-                display: 'flex',
-                justifyContent: isThermalMode ? 'center' : 'flex-end',
-                marginTop: '6px',
-                marginBottom: '8px',
                 width: '100%',
+                borderTop: '2.5px solid #000',
+                paddingTop: '6px',
+                fontSize: paperSize === '58mm' ? '0.7rem' : isThermalMode ? '0.76rem' : '0.8rem',
+                fontWeight: 800,
+                marginBottom: '8px',
               }}
             >
               <div
                 style={{
-                  width: isThermalMode ? '100%' : paperSize === 'A5' ? '190px' : '240px',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                  fontSize: paperSize === '58mm' ? '0.7rem' : isThermalMode ? '0.76rem' : paperSize === 'A5' ? '0.78rem' : '0.82rem',
-                  fontWeight: 'bold',
+                  justifyContent: 'space-between',
+                  padding: '2px 0',
                 }}
               >
-                {feesVal > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '1px 0',
-                    }}
-                  >
-                    <span>{feesName}:</span>
-                    <span>{feesVal.toFixed(2)}</span>
-                  </div>
-                )}
+                <span>إجمالي الفاتورة:</span>
+                <span>{grandTotal.toFixed(2)} ج.م</span>
+              </div>
 
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  borderTop: '1px dashed #666',
+                  paddingTop: '3px',
+                  marginTop: '2px',
+                }}
+              >
+                <span>طريقة الدفع: <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: '3px', background: '#e2e8f0', border: '1px solid #000', fontSize: '0.7rem' }}>{paymentMethodType}</span></span>
+                <span>المدفوع: <strong>{paidVal.toFixed(2)} ج.م</strong></span>
+              </div>
+
+              {remainingVal > 0 && (
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderTop: '1.5px solid #000',
-                    marginTop: '3px',
-                    paddingTop: '3px',
-                    fontSize: '0.95rem',
-                    fontWeight: 'bold',
+                    color: '#b91c1c',
+                    padding: '2px 0',
                   }}
                 >
-                  <span>صافي القيمة / الإجمالي:</span>
-                  <span>{grandTotal.toFixed(2)}</span>
+                  <span>المبلغ المتبقي (الآجل):</span>
+                  <strong>{remainingVal.toFixed(2)} ج.م</strong>
                 </div>
-
-                {paidVal > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '1px 0',
-                    }}
-                  >
-                    <span>المبلغ المدفوع:</span>
-                    <span>{paidVal.toFixed(2)}</span>
-                  </div>
-                )}
-
-                {remainingVal > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '1px 0',
-                    }}
-                  >
-                    <span>المبلغ المتبقي:</span>
-                    <span>{remainingVal.toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
-          {/* التذييل وحقوق الملكية */}
+          {/* التزييل الداخلي وحقوق الملكية */}
           <div>
             <div
+              className="invoice-bottom-notes"
               style={{
-                borderTop: '1.5px solid #000',
+                width: '100%',
+                textAlign: 'center',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                color: '#000',
+                borderTop: '1.5px dashed #000',
                 paddingTop: '5px',
                 marginTop: 'auto',
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '0.73rem',
-                fontWeight: 600,
-                width: '100%',
               }}
             >
-              <div>{footerTermsNote}</div>
-              <div>صفحة رقم: 1/1</div>
+              <p>{footerTermsNote}</p>
             </div>
           </div>
         </div>
       </div>
 
-        {/* حقوق الملكية خارج الفاتورة */}
+        {/* حقوق الملكية الفكرية المعتمدة للمطور */}
         <div
-          className="copyright-outside"
+          className="copyright-footer"
           style={{
             width: '100%',
             textAlign: 'center',
             fontSize: '0.68rem',
-            fontWeight: 'bold',
+            fontWeight: 600,
             color: '#cbd5e1',
-            padding: '10px 0',
-            direction: 'ltr',
+            padding: '8px 0',
+            direction: 'rtl',
           }}
         >
-          حقوق الملكية محفوظة Mohamed Nazih 01029190615
+          حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
         </div>
       </div>
     </div>

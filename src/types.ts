@@ -1218,6 +1218,7 @@ export interface TenantCompany {
   ecommerceStatus?: 'active' | 'inactive' | 'pending';
   isMarketplacePublished?: boolean;
   catalogConfig?: CatalogConfig;
+  branches?: Branch[];
   users?: User[];
 }
 

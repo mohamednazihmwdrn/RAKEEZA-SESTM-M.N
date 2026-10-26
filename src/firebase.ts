@@ -13,11 +13,12 @@ export const auth = getAuth(app);
 // Connection test on boot as mandated by firebase-skill
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase notice: operating in offline fallback mode.');
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('rakeeza_firestore_quota_exhausted')) {
+      return;
     }
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch {
+    // Handled silently to avoid quota backoff loops
   }
 }
 

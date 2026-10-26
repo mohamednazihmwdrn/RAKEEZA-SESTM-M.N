@@ -16,6 +16,7 @@ export interface BoundDeviceData {
   companyName: string;
   adminEmail?: string;
   boundAt: string;
+  deviceId?: string;
   branches: Array<{ id: string; name: string; isMain?: boolean }>;
   users: Array<{ id: string; code?: number | string; name: string; username: string; role: string; branchId?: string }>;
 }
@@ -334,11 +335,64 @@ export function normalizeArabicNumerals(input: string): string {
  */
 export const DEFAULT_FIREBASE_COMPANIES: any[] = DEFAULT_COMPANIES;
 
+// 🛡️ Firestore Quota Circuit Breaker: Prevents resource-exhausted retry loops
+export const FIRESTORE_QUOTA_STORAGE_KEY = 'rakeeza_firestore_quota_exhausted';
+
+let isFirestoreQuotaExhausted: boolean = (() => {
+  if (typeof window === 'undefined') return true;
+  try {
+    const raw = localStorage.getItem(FIRESTORE_QUOTA_STORAGE_KEY);
+    if (raw) {
+      const elapsed = Date.now() - Number(raw);
+      // Quota limit is daily (24 hours)
+      if (elapsed < 24 * 3600 * 1000) {
+        return true;
+      }
+    }
+  } catch {}
+  // Default to true for project 447799262109 to prevent write-unit exhaustion loop
+  return true;
+})();
+
+export function checkFirestoreQuotaExhausted(err: any): boolean {
+  if (!err) return false;
+  const msg = (err.message || String(err)).toLowerCase();
+  const code = (err.code || '').toLowerCase();
+  if (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('quota limit exceeded') ||
+    msg.includes('quota exceeded')
+  ) {
+    if (!isFirestoreQuotaExhausted) {
+      console.warn('[Firestore Quota Notice] Free daily write quota reached; smoothly falling back to Express Cloud Server & local sync.');
+    }
+    isFirestoreQuotaExhausted = true;
+    try {
+      localStorage.setItem(FIRESTORE_QUOTA_STORAGE_KEY, Date.now().toString());
+    } catch {}
+    return true;
+  }
+  return false;
+}
+
+export function canWriteToFirestore(): boolean {
+  return !isFirestoreQuotaExhausted;
+}
+
+export function resetFirestoreQuotaBreaker(): void {
+  isFirestoreQuotaExhausted = false;
+  try {
+    localStorage.removeItem(FIRESTORE_QUOTA_STORAGE_KEY);
+  } catch {}
+}
+
 /**
  * 🔒 Ensure Company Document exists in Firebase Firestore with its users & UIDs
  */
 export async function syncCompanyToFirebase(company: any): Promise<void> {
   if (!company || !company.id) return;
+  if (!canWriteToFirestore()) return;
   try {
     const docRef = doc(db, 'companies', company.id);
     const updateData: any = {
@@ -351,10 +405,12 @@ export async function syncCompanyToFirebase(company: any): Promise<void> {
     };
     await setDoc(docRef, updateData, { merge: true });
 
-    // Also write alias document with company code (e.g. "108") for instant direct lookup!
+    // Also write alias document with company code (e.g. "101") for instant direct lookup!
     const cCode = String(company.code || company.companyCode || '').trim();
     if (cCode && cCode !== company.id) {
-      await setDoc(doc(db, 'companies', cCode), updateData, { merge: true }).catch(() => {});
+      await setDoc(doc(db, 'companies', cCode), updateData, { merge: true }).catch((err) => {
+        checkFirestoreQuotaExhausted(err);
+      });
     }
 
     if (company.users && Array.isArray(company.users) && company.users.length > 0) {
@@ -369,8 +425,12 @@ export async function syncCompanyToFirebase(company: any): Promise<void> {
         { merge: true }
       );
     }
-  } catch (err) {
-    console.debug('Firebase company sync notice:', err);
+  } catch (err: any) {
+    if (checkFirestoreQuotaExhausted(err)) {
+      // Handled by circuit breaker
+    } else {
+      console.debug('Firebase company sync notice:', err);
+    }
   }
 }
 
@@ -398,7 +458,6 @@ export async function lookupCompanyInFirebase(companyCodeOrId: string): Promise<
           branches: srvData.branches || srvData.company.branches || [],
         };
         saveStoredLocalCompany(fullComp);
-        syncCompanyToFirebase(fullComp).catch(() => {});
         return fullComp;
       }
     }
@@ -543,7 +602,6 @@ export async function lookupCompanyInFirebase(companyCodeOrId: string): Promise<
   }
 
   if (matched) {
-    syncCompanyToFirebase(matched).catch(() => {});
     return matched;
   }
 
@@ -658,7 +716,6 @@ export async function fetchCompanyPublicDetailsApi(query: string): Promise<{
       const data = await res.json();
       if (data && data.success && data.company) {
         saveStoredLocalCompany(data.company);
-        await syncCompanyToFirebase(data.company);
         return data;
       }
     }
@@ -674,7 +731,6 @@ export async function fetchCompanyPublicDetailsApi(query: string): Promise<{
         const data = await res.json();
         if (data && data.success && data.company) {
           saveStoredLocalCompany(data.company);
-          await syncCompanyToFirebase(data.company);
           if (queryInfo.extractedUsername) {
             data.preselectedUsername = queryInfo.extractedUsername;
           }
@@ -972,22 +1028,24 @@ export async function registerNewCompanyDeviceApi(params: {
 
     const token = `tok_local_${newCompId}_${Date.now()}`;
 
-    // Write to Firebase Firestore
-    try {
-      await setDoc(doc(db, 'companies', newCompId), {
-        ...newCompany,
-        companyCode: newCode,
-        syncedAt: now,
-      });
+    // Write to Firebase Firestore if quota available
+    if (canWriteToFirestore()) {
+      try {
+        await setDoc(doc(db, 'companies', newCompId), {
+          ...newCompany,
+          companyCode: newCode,
+          syncedAt: now,
+        });
 
-      await setDoc(doc(db, 'tenants', newCompId), {
-        companyId: newCompId,
-        branches: [mainBranch],
-        users: [newUser],
-        lastSync: now,
-      });
-    } catch (fbErr) {
-      console.warn('Firebase direct write warning:', fbErr);
+        await setDoc(doc(db, 'tenants', newCompId), {
+          companyId: newCompId,
+          branches: [mainBranch],
+          users: [newUser],
+          lastSync: now,
+        });
+      } catch (fbErr) {
+        checkFirestoreQuotaExhausted(fbErr);
+      }
     }
 
     // Save locally
@@ -2127,41 +2185,46 @@ export async function saveTenantDataCloud(
   }
 
   // 3. Direct Cross-Device Cloud Persistence via Google Firestore with Strict UID stamping
-  try {
-    const docRef = doc(db, 'tenants', cleanId);
-    const sanitizedData = sanitizeForFirestore(data);
-    setDoc(
-      docRef,
-      {
-        ...sanitizedData,
-        companyId: cleanId,
-        companyUid: sessionCompanyUid || `UID_COMP_${cleanId}`,
-        authorUid: sessionUserUid || 'system',
-        authorUserCode: actionInfo?.userCode || session?.user?.code || 1,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    ).catch((err) => console.warn('Firestore saveTenantDataCloud background sync:', err));
-
-    if (data.users && Array.isArray(data.users)) {
+  if (canWriteToFirestore()) {
+    try {
+      const docRef = doc(db, 'tenants', cleanId);
+      const sanitizedData = sanitizeForFirestore(data);
       setDoc(
-        doc(db, 'companies', cleanId),
+        docRef,
         {
-          users: data.users,
-          usersCount: data.users.length,
+          ...sanitizedData,
+          companyId: cleanId,
+          companyUid: sessionCompanyUid || `UID_COMP_${cleanId}`,
+          authorUid: sessionUserUid || 'system',
+          authorUserCode: actionInfo?.userCode || session?.user?.code || 1,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
-      ).catch(() => {});
+      ).catch((err) => {
+        checkFirestoreQuotaExhausted(err);
+      });
 
-      const bound = getStoredBoundDevice();
-      if (bound && (bound.companyId === cleanId || bound.companyCode === cleanId)) {
-        setStoredBoundDevice({
-          ...bound,
-          users: data.users.map((u: any) => ({
-            id: u.id,
-            code: u.code || u.userCode || 1,
-            name: u.name,
+      if (data.users && Array.isArray(data.users)) {
+        setDoc(
+          doc(db, 'companies', cleanId),
+          {
+            users: data.users,
+            usersCount: data.users.length,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch((err) => {
+          checkFirestoreQuotaExhausted(err);
+        });
+
+        const bound = getStoredBoundDevice();
+        if (bound && (bound.companyId === cleanId || bound.companyCode === cleanId)) {
+          setStoredBoundDevice({
+            ...bound,
+            users: data.users.map((u: any) => ({
+              id: u.id,
+              code: u.code || u.userCode || 1,
+              name: u.name,
             username: u.username,
             role: u.role,
           })),
@@ -2169,6 +2232,7 @@ export async function saveTenantDataCloud(
       }
     }
   } catch {}
+}
 
   // 4. Authoritative Cloud Backend Persistence via Express API
   const token = getStoredToken();

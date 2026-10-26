@@ -454,9 +454,10 @@ export const BackupView: React.FC<BackupViewProps> = ({ appData, onUpdateData, s
                 >
                   <option value={15}>كل 15 دقيقة (للمتاجر فائقة النشاط)</option>
                   <option value={30}>كل 30 دقيقة (موصى به لنقاط البيع POS)</option>
-                  <option value={60}>كل 1 ساعة (افتراضي)</option>
+                  <option value={60}>كل 1 ساعة</option>
                   <option value={120}>كل ساعتين</option>
                   <option value={360}>كل 6 ساعات</option>
+                  <option value={720}>كل 12 ساعة (المحدد لمؤسسة الموان للتجارة)</option>
                   <option value={1440}>مرة واحدة يومياً (Daily Backup)</option>
                 </select>
                 <p className="text-[11px] text-slate-500">

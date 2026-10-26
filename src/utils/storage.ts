@@ -59,15 +59,15 @@ export function getDefaultData(companyId?: string): AppData {
   return {
     companyId: targetCompanyId,
     settings: {
-      companyName: 'منظومة RAKEEZA للمحاسبة',
-      address: 'القاهرة، مصر',
+      companyName: 'مؤسسة الموان للتجارة',
+      address: 'المقر الرئيسي - مؤسسة الموان',
       phone1: '01029190615',
       phone2: '01100000000',
       phone3: '01200000000',
       taxNumber: '',
       commercialReg: '',
-      activityCode: '4651 - تجارة أجهزة وإلكترونيات',
-      notes: 'شكراً لتعاملكم مع منظومة RAKEEZA للمحاسبة',
+      activityCode: '4651 - تجارة عامة وتوزيع',
+      notes: 'شكراً لتعاملكم مع مؤسسة الموان للتجارة',
       defaultTaxRate: 0,
       withholdingTaxRate: 0,
       currencySymbol: 'ج.م',
@@ -231,10 +231,10 @@ export function getDefaultData(companyId?: string): AppData {
     // 6. Approval Requests
     approvalRequests: [],
 
-    // 7. Auto Backup & Protection
+    // 7. Auto Backup & Protection (كل 12 ساعة تلقائياً + سحب يدوي)
     autoBackupConfig: {
       enabled: true,
-      intervalMinutes: 60, // Every 1 hour
+      intervalMinutes: 720, // كل 12 ساعة (720 دقيقة)
       autoDownloadFile: false,
       maxSnapshotsToKeep: 15,
       lastBackupTimestamp: new Date().toISOString(),
@@ -242,13 +242,13 @@ export function getDefaultData(companyId?: string): AppData {
       notifyOnBackup: true,
     },
 
-    // 8. Multi-Tenant Enterprise Architecture
+    // 8. Multi-Tenant Enterprise Architecture (مؤسسة الموان)
     companies: DEFAULT_COMPANIES,
     companyCatalogConfigs: {
       'COMP-000001': {
         enabled: true,
-        storeName: 'شركة ركيزة للمحاسبة والتجارة RAKEEZA',
-        storeDescription: 'الكتالوج الإلكتروني لأجهزة الكمبيوتر والشاشات والشبكات مع الطلب الفوري',
+        storeName: 'مؤسسة الموان للتجارة',
+        storeDescription: 'الكتالوج الإلكتروني لمؤسسة الموان للتجارة والتوزيع',
         contactPhone: '01029190615',
         whatsappNumber: '01029190615',
         allowOnlineOrders: true,

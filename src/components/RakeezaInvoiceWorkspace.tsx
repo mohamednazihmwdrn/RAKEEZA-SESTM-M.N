@@ -270,7 +270,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   // 🏢 Integrated Items Database (مستقل ومحصور حصرياً بأصناف وأسعار ومخزون الفرع النشط)
   const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
   const mainBranchId = getMainBranchId(appData.branches);
-  const scopedBranchItems = getBranchItems(appData.items, activeBranchId, mainBranchId);
+  const scopedBranchItems = useMemo(() => {
+    return getBranchItems(appData.items, activeBranchId, mainBranchId);
+  }, [appData.items, activeBranchId, mainBranchId]);
 
   // Map raw Item array into Workspace DB format
   const mapRawItemsToDb = (itemsList: Item[]) => {
@@ -302,18 +304,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return PDF_CATALOG_ITEMS_1001;
   }, [scopedBranchItems, appData.items]);
 
-  const [localItemsDatabase, setLocalItemsDatabase] = useState<any[]>(() => {
-    return mapRawItemsToDb(rawAvailableItems);
-  });
+  // ⚡ Stable items database state synced with memoized rawAvailableItems
+  const [localItemsDatabase, setLocalItemsDatabase] = useState(() => mapRawItemsToDb(rawAvailableItems));
 
-  // Reactive sync when appData.items or active branch updates
   useEffect(() => {
     setLocalItemsDatabase(mapRawItemsToDb(rawAvailableItems));
   }, [rawAvailableItems]);
 
-  // Auto-healing: If appData.items was wiped or empty, instantly restore the 1,001 items
+  // Auto-healing guard: run at most once if items was completely missing
+  const hasRestoredItemsRef = useRef(false);
   useEffect(() => {
-    if (!appData.items || appData.items.length === 0) {
+    if ((!appData.items || appData.items.length === 0) && !hasRestoredItemsRef.current) {
+      hasRestoredItemsRef.current = true;
       const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
         ...it,
         companyId: appData.companyId || 'COMP-000001',
@@ -432,7 +434,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             localItemsDatabase.find(
               (i) =>
                 (i.code && invItem.code && i.code.trim().toLowerCase() === invItem.code.trim().toLowerCase()) ||
-                (invItem.itemId && (String(i.itemId) === String(invItem.itemId) || String(i.id) === String(invItem.itemId))) ||
+                (invItem.itemId && (String(i.itemId) === String(invItem.itemId) || String((i as any).id) === String(invItem.itemId))) ||
                 (i.name && invItem.name && i.name.trim().toLowerCase() === invItem.name.trim().toLowerCase())
             ) ||
             appData.items?.find(

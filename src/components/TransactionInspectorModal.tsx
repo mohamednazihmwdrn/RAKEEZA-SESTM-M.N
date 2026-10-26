@@ -427,120 +427,251 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 md:p-6 overflow-y-auto flex-1 text-sm">
+        {/* Modal Body */}
+        <div className="p-3 sm:p-5 md:p-6 overflow-y-auto flex-1 bg-slate-200/80">
           {activeTab === 'view' && (
-            <div className="space-y-5">
-              {/* Key Meta Badges */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <span className="text-slate-500 block">الطرف المعني:</span>
-                  <strong className="text-slate-800 text-sm">
-                    {data.customerName || data.supplierName || data.employeeName || data.drawerName || data.beneficiaryName || 'عام'}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">طريقة السداد / الخزينة:</span>
-                  <strong className="text-slate-800">
-                    {data.paymentMethod === 'drawer' ? 'الخزينة النقدية' : data.paymentMethod === 'bank' ? 'البنك' : data.paymentMethod || data.method || 'آجل'}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">المسؤول / المدخل:</span>
-                  <strong className="text-slate-800">{data.createdBy || 'مدير النظام'}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">الحالة:</span>
-                  <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
-                    {data.status || 'معتمد'}
-                  </span>
-                </div>
-              </div>
+            <div className="w-full flex justify-center py-2">
+              {/* حاوية المستند بمقاس A5 الأصلي المظبوط والمستقر تماماً بخلفية بيضاء */}
+              <div
+                className="bg-white text-black w-full max-w-[148mm] min-h-[210mm] p-4 sm:p-6 border-2 border-black shadow-xl flex flex-col justify-between text-xs mx-auto"
+                style={{ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}
+              >
+                <div className="w-full">
+                  {/* 1. الترويسة العلوية الثلاثية */}
+                  <div className="flex justify-between items-center border-b-[2.5px] border-black pb-2 mb-2 gap-2">
+                    <div className="flex-[1.2] text-right">
+                      <h2 className="text-base font-black text-black m-0 leading-tight">
+                        {appData.settings?.companyName || 'شركة ركيزة للحلول البرمجية'}
+                      </h2>
+                      <p className="text-[10px] font-semibold text-slate-700 m-0 leading-tight mt-0.5">
+                        {appData.settings?.address || 'القاهرة - مصر'}
+                      </p>
+                    </div>
 
-              {/* Items List if exists */}
-              {data.items && data.items.length > 0 && (
-                <div>
-                  <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-1.5">
-                    <span>📦 بنود وأصناف العملية ({data.items.length})</span>
-                  </h4>
-                  {/* Mobile Items Cards (< md) */}
-                  <div className="block md:hidden space-y-2">
-                    {data.items.map((it: any, idx: number) => (
-                      <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="font-bold text-slate-800 break-words">{it.name}</span>
-                          <span className="font-black text-slate-900 font-mono text-sm shrink-0">
-                            {Number(it.total).toLocaleString()} {currency}
+                    <div className="shrink-0 text-center">
+                      {(appData.settings as any)?.logo || (appData.settings as any)?.logoUrl ? (
+                        <img
+                          src={(appData.settings as any)?.logo || (appData.settings as any)?.logoUrl}
+                          alt="الشعار"
+                          className="max-h-10 max-w-[80px] object-contain"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      ) : null}
+                    </div>
+
+                    <div className="flex-1 text-left text-[10px] font-semibold text-black leading-tight" dir="ltr">
+                      {[appData.settings?.phone1, appData.settings?.phone2, appData.settings?.phone3]
+                        .filter(Boolean)
+                        .concat(['01029190615'])
+                        .slice(0, 2)
+                        .map((ph, idx) => (
+                          <div key={idx}><strong>Tel {idx + 1}:</strong> {ph}</div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* 2. مربع بيانات المستند */}
+                  <div className="border-[1.5px] border-black bg-white p-2 mb-2 text-[10.5px] font-semibold">
+                    <div className="flex justify-between items-center flex-nowrap gap-1">
+                      <div className="flex-[1.3] text-right leading-relaxed">
+                        <div>
+                          <strong>الطرف: </strong>
+                          <span>
+                            {data.customerName || data.supplierName || data.employeeName || data.name || data.title || 'عام'}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-slate-500 text-[11px] pt-1 border-t border-slate-200">
-                          <span>الكمية: <strong className="text-slate-800 font-mono">{it.qty}</strong></span>
-                          <span>السعر: <strong className="text-slate-800 font-mono">{Number(it.price).toLocaleString()}</strong></span>
-                          {it.discount > 0 && (
-                            <span className="text-rose-600 font-bold">خصم: {it.discount}</span>
-                          )}
+                        {(data.customerId || data.supplierId || data.code) && (
+                          <div>
+                            <strong>الكود: </strong>
+                            <span>{data.customerId || data.supplierId || data.code}</span>
+                          </div>
+                        )}
+                        {(data.phone || data.customerPhone || data.supplierPhone) && (
+                          <div>
+                            <strong>الهاتف: </strong>
+                            <span>{data.phone || data.customerPhone || data.supplierPhone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 text-center leading-relaxed border-r border-l border-dashed border-slate-500 px-1">
+                        <strong className="text-black">{getTypeTitle()}</strong>
+                        <div className="text-xs font-black">
+                          رقم: #{data.id || data.code || data.orderNumber || data.chequeNumber || '1'}
                         </div>
                       </div>
-                    ))}
+
+                      <div className="flex-[1.1] text-left leading-relaxed">
+                        <div>
+                          <strong>التاريخ: </strong>
+                          <span>{data.date || data.createdAt?.substring(0, 10) || '-'}</span>
+                        </div>
+                        {data.time && (
+                          <div>
+                            <strong>الوقت: </strong>
+                            <span>{data.time}</span>
+                          </div>
+                        )}
+                        {data.paymentMethod && (
+                          <div>
+                            <strong>السداد: </strong>
+                            <span>{data.paymentMethod === 'drawer' ? 'كاش (الخزينة)' : data.paymentMethod === 'bank' ? 'بنكي' : data.paymentMethod}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Desktop Items Table (>= md) */}
-                  <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
-                    <table className="w-full text-right text-xs">
-                      <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                          <th className="p-2.5 text-center">#</th>
-                          <th className="p-2.5">اسم الصنف / البيان</th>
-                          <th className="p-2.5 text-center">الكمية</th>
-                          <th className="p-2.5 text-left">السعر</th>
-                          {data.items.some((x: any) => x.discount > 0) && <th className="p-2.5 text-left">الخصم</th>}
-                          <th className="p-2.5 text-left">الإجمالي</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {data.items.map((it: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="p-2.5 text-center text-slate-400">{idx + 1}</td>
-                            <td className="p-2.5 font-bold text-slate-800">{it.name}</td>
-                            <td className="p-2.5 text-center font-bold">{it.qty}</td>
-                            <td className="p-2.5 text-left">{Number(it.price).toLocaleString()} {currency}</td>
-                            {data.items.some((x: any) => x.discount > 0) && (
-                              <td className="p-2.5 text-left text-rose-600">{it.discount || 0}</td>
-                            )}
-                            <td className="p-2.5 text-left font-black text-slate-900">{Number(it.total).toLocaleString()} {currency}</td>
+                  {/* 3. مستطيل البيان (يختفي تماماً إذا ترك فارغاً) */}
+                  {(data.notes || data.note || data.description) && (
+                    <div className="border-[1.5px] border-slate-700 p-1.5 px-2 mb-2 text-[10.5px] font-semibold bg-white text-slate-900">
+                      <strong>📝 البيان: </strong> {data.notes || data.note || data.description}
+                    </div>
+                  )}
+
+                  {/* 4. جدول المحتوى المتناسق بدقة */}
+                  {data.items && data.items.length > 0 ? (
+                    <div className="w-full mb-2">
+                      <table className="w-full border-collapse border-[1.5px] border-black text-[11px] table-fixed">
+                        <thead>
+                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[11.5px]">
+                            <th className="border-[1.5px] border-black p-1.5 text-right pr-2 w-[34%]">اسم الصنف</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[22%]">البيان</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[10%]">العدد</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[16%]">السعر</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[18%]">الإجمالي</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+                        </thead>
+                        <tbody>
+                          {data.items.map((it: any, idx: number) => {
+                            const qty = parseFloat(String(it.qty)) || 0;
+                            const price = parseFloat(String(it.price)) || 0;
+                            const itemTotal = Number(it.total !== undefined ? it.total : qty * price);
+                            const desc = it.spec || it.notes || it.desc || it.description || '-';
 
-              {/* Financial Totals Box */}
-              {(data.total !== undefined || data.amount !== undefined || data.netSalary !== undefined) && (
-                <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-wrap justify-between items-center gap-4">
-                  <div className="text-xs text-slate-600 space-y-1">
-                    {data.subtotal !== undefined && <div>المجموع قبل الضريبة: <strong>{Number(data.subtotal).toLocaleString()} {currency}</strong></div>}
-                    {data.tax > 0 && <div>ضريبة القيمة المضافة: <strong className="text-emerald-700">{Number(data.tax).toLocaleString()} {currency}</strong></div>}
-                    {data.discount > 0 && <div>الخصم التجاري: <strong className="text-rose-600">-{Number(data.discount).toLocaleString()} {currency}</strong></div>}
-                    {data.paidAmount !== undefined && <div>المدفوع: <strong>{Number(data.paidAmount).toLocaleString()} {currency}</strong></div>}
-                    {data.remainingAmount > 0 && <div>المتبقي الآجل: <strong className="text-amber-700">{Number(data.remainingAmount).toLocaleString()} {currency}</strong></div>}
-                  </div>
+                            return (
+                              <tr key={idx} className="border-b border-black">
+                                <td className="border-[1.5px] border-black p-1 text-right pr-2 font-bold break-words">
+                                  {it.name}
+                                </td>
+                                <td className="border-[1.5px] border-black p-1 text-center text-[10px] text-slate-700 break-words">
+                                  {desc}
+                                </td>
+                                <td className="border-[1.5px] border-black p-1 text-center font-bold">
+                                  {qty}
+                                </td>
+                                <td className="border-[1.5px] border-black p-1 text-center">
+                                  {price.toFixed(2)}
+                                </td>
+                                <td className="border-[1.5px] border-black p-1 text-center font-extrabold">
+                                  {itemTotal.toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : type === 'cash' ? (
+                    <div className="w-full mb-2">
+                      <table className="w-full border-collapse border-[1.5px] border-black text-[11px] table-fixed">
+                        <thead>
+                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[11.5px]">
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[30%]">البند المالي</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-right pr-2 w-[70%]">التفاصيل والبيان</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-black">
+                            <td className="border-[1.5px] border-black p-1.5 text-center font-bold bg-slate-50">المبلغ بالأرقام</td>
+                            <td className="border-[1.5px] border-black p-1.5 text-right pr-2 font-black text-sm text-[#0d47a1]">
+                              {Number(data.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currency}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-black">
+                            <td className="border-[1.5px] border-black p-1.5 text-center font-bold bg-slate-50">طريقة السداد</td>
+                            <td className="border-[1.5px] border-black p-1.5 text-right pr-2 font-bold">
+                              {data.method === 'drawer' ? 'نقدي (الخزينة الرئيسية)' : data.method === 'bank' ? 'تحويل بنكي' : data.method}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-black">
+                            <td className="border-[1.5px] border-black p-1.5 text-center font-bold bg-slate-50">البيان والسبب</td>
+                            <td className="border-[1.5px] border-black p-1.5 text-right pr-2 font-semibold text-slate-800">
+                              {data.note || data.reason || 'تسوية وحركة مالية رسمية'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : type === 'journal' && data.lines && data.lines.length > 0 ? (
+                    <div className="w-full mb-2">
+                      <table className="w-full border-collapse border-[1.5px] border-black text-[11px] table-fixed">
+                        <thead>
+                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[11.5px]">
+                            <th className="border-[1.5px] border-black p-1.5 text-right pr-2 w-[35%]">اسم الحساب</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[25%]">البيان</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[20%]">مدين</th>
+                            <th className="border-[1.5px] border-black p-1.5 text-center w-[20%]">دائن</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.lines.map((l: any, idx: number) => (
+                            <tr key={idx} className="border-b border-black">
+                              <td className="border-[1.5px] border-black p-1 text-right pr-2 font-bold">{l.accountName || 'حساب'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center text-[10px] text-slate-700">{l.notes || l.description || '-'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center font-bold">{l.debit > 0 ? Number(l.debit).toLocaleString() : '-'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center font-bold">{l.credit > 0 ? Number(l.credit).toLocaleString() : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
 
-                  <div className="text-left bg-white p-3.5 rounded-xl border border-blue-200 shadow-xs">
-                    <span className="text-[11px] text-slate-500 font-bold block">الصافي الإجمالي النهائي</span>
-                    <strong className="text-xl md:text-2xl font-black text-[#0d47a1]">
-                      {Number(data.total ?? data.amount ?? data.netSalary ?? 0).toLocaleString()} {currency}
-                    </strong>
-                  </div>
-                </div>
-              )}
+                  {/* 5. قسم الإجماليات وتفاصيل الدفع */}
+                  {(data.total !== undefined || data.amount !== undefined || data.netSalary !== undefined) && (
+                    <div className="border-t-[2.5px] border-black pt-1.5 text-[11.5px] font-extrabold mb-2">
+                      <div className="flex justify-between py-0.5">
+                        <span>إجمالي القيمة:</span>
+                        <span>{Number(data.total ?? data.amount ?? data.netSalary ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currency}</span>
+                      </div>
 
-              {/* Notes / Description */}
-              {(data.notes || data.note || data.description) && (
-                <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-xl text-xs text-amber-900">
-                  <strong>📝 البيان والملاحظات:</strong> {data.notes || data.note || data.description}
+                      {data.paidAmount !== undefined && (
+                        <div className="flex justify-between py-0.5 border-t border-dashed border-slate-500 pt-1 mt-1">
+                          <span>طريقة الدفع: <span className="inline-block px-1.5 py-0.5 rounded border border-black bg-slate-100 text-[10px]">{data.paymentMethod === 'drawer' ? 'كاش' : data.paymentMethod || 'نقداً'}</span></span>
+                          <span>المدفوع: <strong>{Number(data.paidAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currency}</strong></span>
+                        </div>
+                      )}
+
+                      {data.remainingAmount > 0 && (
+                        <div className="flex justify-between py-0.5 text-rose-700 font-black">
+                          <span>المبلغ المتبقي (الآجل):</span>
+                          <strong>{Number(data.remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} {currency}</strong>
+                        </div>
+                      )}
+
+                      {data.tax > 0 && (
+                        <div className="flex justify-between py-0.5 text-slate-600 text-[10.5px]">
+                          <span>الضريبة:</span>
+                          <span>{Number(data.tax).toFixed(2)} {currency}</span>
+                        </div>
+                      )}
+
+                      {data.discount > 0 && (
+                        <div className="flex justify-between py-0.5 text-slate-600 text-[10.5px]">
+                          <span>الخصم:</span>
+                          <span>-{Number(data.discount).toFixed(2)} {currency}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* 6. التزييل الداخلي */}
+                <div className="text-center text-[10px] font-extrabold text-black border-t-[1.5px] border-dashed border-black pt-1.5 mt-auto">
+                  <p>{appData.settings?.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً للشروط والأحكام'}</p>
+                </div>
+              </div>
             </div>
           )}
 

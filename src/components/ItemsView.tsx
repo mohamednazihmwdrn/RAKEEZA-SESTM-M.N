@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppData, Item } from '../types';
 import { Modal } from './Modal';
 import { exportToExcel } from '../utils/excelExport';
@@ -161,9 +161,11 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setCurrentPage(1);
   }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter, activeBranchId]);
 
-  // 🛡️ Auto-recovery: If appData.items is empty for any reason, restore all 1,001 items immediately
+  // 🛡️ Auto-recovery: If appData.items is empty for any reason, restore all 1,001 items safely once
+  const hasRestoredPdfItemsRef = useRef(false);
   useEffect(() => {
-    if (!appData.items || appData.items.length === 0) {
+    if ((!appData.items || appData.items.length === 0) && !hasRestoredPdfItemsRef.current) {
+      hasRestoredPdfItemsRef.current = true;
       const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
         ...it,
         companyId: appData.companyId || 'COMP-000001',

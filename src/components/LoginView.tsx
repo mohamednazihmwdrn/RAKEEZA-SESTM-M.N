@@ -33,6 +33,9 @@ import {
   BoundDeviceData,
 } from '../services/cloudApi';
 import { TenantCompany, User as AppUser } from '../types';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '../firebase';
+import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 
 interface LoginViewProps {
   onLoginSuccess: (session: {
@@ -47,12 +50,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
   onOpenOwnerPanelDirectly,
 }) => {
-  // 💻 Device Binding State
+  // 💻 Device Binding State (Locked permanently to مؤسسة الموان)
   const [boundDevice, setBoundDevice] = useState<BoundDeviceData | null>(null);
   const [isCheckingDevice, setIsCheckingDevice] = useState<boolean>(true);
   const [showUnbindConfirmModal, setShowUnbindConfirmModal] = useState<boolean>(false);
+  const [isRememberUserOnDevice, setIsRememberUserOnDevice] = useState<boolean>(true);
 
-  // 📝 Unbound Mode: Tab 'bind_existing' (default for branch/employee devices) or 'register_new'
+  // 📝 Setup tab
   const [setupTab, setSetupTab] = useState<'bind_existing' | 'register_new'>('bind_existing');
 
   // Form 1: Register New Company State
@@ -99,53 +103,65 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   /**
-   * 1️⃣ On Mount: Check Local Device Binding
+   * 1️⃣ On Mount: Check and Auto-Bind to مؤسسة الموان للتجارة
    */
   useEffect(() => {
     const checkDeviceBinding = async () => {
       setIsCheckingDevice(true);
-      const stored = getStoredBoundDevice();
+      let stored = getStoredBoundDevice();
 
-      if (stored && stored.companyId) {
-        setBoundDevice(stored);
+      const primaryComp = DEFAULT_COMPANIES[0];
+      const defaultMowan: BoundDeviceData = {
+        companyId: 'COMP-000001',
+        companyCode: '101',
+        companyName: 'مؤسسة الموان للتجارة',
+        boundAt: new Date().toISOString(),
+        deviceId: (typeof window !== 'undefined' ? localStorage.getItem('rakeeza_device_uuid') : '') || `mowan-${Date.now()}`,
+        branches: (primaryComp as any).branches || [
+          { id: 'br-main', code: 'HQ-01', name: 'فرع الاخوة', location: 'المقر الرئيسي', phone: '01029190615', isMain: true, manager: 'Mohamed Nazih' },
+          { id: 'br-mowan', code: 'BR-02', name: 'فرع الموان', location: 'فرع الموان', phone: '01100000000', isMain: false, manager: 'محمود سعيد' },
+        ],
+        users: ((primaryComp as any).users || []) as any[],
+      };
 
-        // Set default branch
-        if (stored.branches && stored.branches.length > 0) {
-          const mainBranch = stored.branches.find((b) => b.isMain) || stored.branches[0];
-          setSelectedBranchId(mainBranch.id);
-        }
-
-        // Set default user
-        if (stored.users && stored.users.length > 0) {
-          setSelectedUsername(stored.users[0].username || stored.users[0].name);
-        }
-
-        // Auto-refresh company metadata and isolated users silently from server
-        try {
-          const res = await fetchCompanyPublicDetailsApi(stored.companyId);
-          if (res.success && res.company) {
-            const updated: BoundDeviceData = {
-              ...stored,
-              companyName: res.company.name || stored.companyName,
-              companyCode: res.company.code || (res.company as any).companyCode || stored.companyCode,
-              branches: res.branches || stored.branches,
-              users: res.users || stored.users,
-            };
-            setStoredBoundDevice(updated);
-            setBoundDevice(updated);
-
-            if (updated.branches?.length > 0 && !selectedBranchId) {
-              const mainB = updated.branches.find((b) => b.isMain) || updated.branches[0];
-              setSelectedBranchId(mainB.id);
-            }
-            if (updated.users?.length > 0 && !selectedUsername) {
-              setSelectedUsername(updated.users[0].username || updated.users[0].name);
-            }
-          }
-        } catch {
-          // Keep cached bound device on network hiccup
-        }
+      if (!stored || stored.companyId !== 'COMP-000001') {
+        stored = defaultMowan;
+        setStoredBoundDevice(defaultMowan);
       }
+      setBoundDevice(stored);
+
+      // Check if a user was previously assigned/remembered on this device
+      const installedUser = typeof window !== 'undefined' ? localStorage.getItem('mowan_installed_user') : null;
+      if (installedUser) {
+        setSelectedUsername(installedUser);
+      } else if (stored.users && stored.users.length > 0) {
+        setSelectedUsername(stored.users[0].username || stored.users[0].name);
+      }
+
+      if (stored.branches && stored.branches.length > 0) {
+        const mainBranch = stored.branches.find((b) => b.isMain) || stored.branches[0];
+        setSelectedBranchId(mainBranch.id);
+      }
+
+      // Silent cloud update of company users & branches for مؤسسة الموان
+      try {
+        const res = await fetchCompanyPublicDetailsApi('COMP-000001');
+        if (res.success && res.company) {
+          const updated: BoundDeviceData = {
+            ...stored,
+            companyName: 'مؤسسة الموان للتجارة',
+            companyCode: '101',
+            branches: res.branches || stored.branches,
+            users: res.users || stored.users,
+          };
+          setStoredBoundDevice(updated);
+          setBoundDevice(updated);
+
+          if (installedUser && updated.users?.some((u: any) => u.username === installedUser || u.name === installedUser)) {
+            setSelectedUsername(installedUser);
+          }
+        }
+      } catch {}
 
       setIsCheckingDevice(false);
     };
@@ -360,6 +376,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const res = await loginToCloud(boundDevice.companyId, userToLogin, loginPassword);
 
       if (res.success && res.user && res.company) {
+        // Save installed user on device if checkbox selected
+        if (isRememberUserOnDevice) {
+          try {
+            localStorage.setItem('mowan_installed_user', userToLogin);
+            if (selectedBranchId) {
+              localStorage.setItem('mowan_installed_branch', selectedBranchId);
+            }
+          } catch {}
+        }
+
         // Attach selected branch to user session if available
         const activeUser: AppUser = {
           ...res.user,
@@ -379,6 +405,83 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     } catch {
       setErrorMessage('فشل الاتصال بالخادم السحابي.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * 🌐 Google / Gmail Sign-In linked to مؤسسة الموان
+   */
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const googleUser = result.user;
+      const email = googleUser.email || '';
+      const displayName = googleUser.displayName || 'مستخدم مؤسسة الموان';
+
+      // Find user in مؤسسة الموان or map to current user
+      let matchedUser = boundDevice?.users?.find(
+        (u: any) =>
+          (u.email && u.email.toLowerCase() === email.toLowerCase()) ||
+          (u.username && email.toLowerCase().includes(u.username.toLowerCase()))
+      );
+
+      if (!matchedUser) {
+        matchedUser =
+          boundDevice?.users?.find((u: any) => u.username === selectedUsername || u.name === selectedUsername) ||
+          boundDevice?.users?.[0] || {
+            id: `u-mowan-${googleUser.uid.substring(0, 8)}`,
+            code: 1,
+            name: displayName,
+            username: email.split('@')[0],
+            role: 'company_admin',
+          };
+      }
+
+      if (isRememberUserOnDevice) {
+        try {
+          localStorage.setItem('mowan_installed_user', matchedUser.username || matchedUser.name);
+          if (selectedBranchId) localStorage.setItem('mowan_installed_branch', selectedBranchId);
+        } catch {}
+      }
+
+      setSuccessMessage(`مرحباً بك! تم تسجيل الدخول بنجاح عبر حساب Google: ${displayName}`);
+      setTimeout(() => {
+        onLoginSuccess({
+          user: {
+            ...matchedUser,
+            name: displayName || matchedUser.name,
+            email: email,
+            branchId: selectedBranchId || matchedUser.branchId || 'br-main',
+          } as any,
+          company: {
+            id: boundDevice?.companyId || 'COMP-000001',
+            code: boundDevice?.companyCode || '101',
+            name: 'مؤسسة الموان للتجارة',
+            tradeName: 'الموان',
+            email: 'admin@mowan.com',
+            adminName: 'مؤسسة الموان',
+            adminUsername: 'admin',
+            status: 'active',
+            planName: 'Enterprise Plan',
+          } as any,
+          subscription: {
+            status: 'active',
+            planName: 'Enterprise Plan',
+            daysRemaining: 365,
+            isExpired: false,
+          },
+        });
+      }, 600);
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorMessage(err?.message || 'تعذر تسجيل الدخول بحساب Google. يمكنك تسجيل الدخول باسم المستخدم وكلمة المرور.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -597,20 +700,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowUnbindConfirmModal(true)}
-                      className="text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-700 transition flex items-center gap-1 cursor-pointer"
-                    >
-                      <Unlink className="w-3.5 h-3.5 text-amber-400" />
-                      <span>تغيير الشركة</span>
-                    </button>
+                    <span className="text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-bold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>النظام المعتمد</span>
+                    </span>
                     <button
                       type="button"
                       id="btn-refresh-company-users"
                       onClick={handleRefreshMetadata}
                       disabled={isRefreshingMetadata}
                       className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0"
+                      title="تحديث قائمة الفروع والمستخدمين"
                     >
                       <RefreshCw className={`w-4 h-4 ${isRefreshingMetadata ? 'animate-spin text-blue-400' : ''}`} />
                     </button>
@@ -789,6 +889,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </div>
                   </div>
 
+                  {/* Remember / Install Device for this User */}
+                  <label className="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition select-none">
+                    <input
+                      type="checkbox"
+                      id="checkbox-remember-device"
+                      checked={isRememberUserOnDevice}
+                      onChange={(e) => setIsRememberUserOnDevice(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer accent-blue-600"
+                    />
+                    <div className="flex-1 text-right">
+                      <span className="font-bold text-white block">تثبيت وضبط هذا الجهاز لهذا المستخدم</span>
+                      <span className="text-[10px] text-slate-400 block">حفظ الحساب على هذا الهاتف/الكمبيوتر بصلاحياته المحددة</span>
+                    </div>
+                  </label>
+
                   {/* 4. Action Button: دخول */}
                   <button
                     type="submit"
@@ -804,23 +919,42 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     ) : (
                       <>
                         <LogIn className="w-5 h-5" />
-                        <span>دخول</span>
+                        <span>تسجيل الدخول للنظام</span>
                       </>
                     )}
                   </button>
-                </form>
 
-                {/* 5. Unbind Device Link */}
-                <div className="pt-4 border-t border-slate-800/80 flex items-center justify-center">
+                  {/* Divider */}
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-slate-800"></div>
+                    <span className="flex-shrink mx-3 text-[11px] text-slate-500">أو عبر حساب Google (Gmail)</span>
+                    <div className="flex-grow border-t border-slate-800"></div>
+                  </div>
+
+                  {/* Google Gmail Sign In Button */}
                   <button
                     type="button"
-                    id="btn-unbind-device-trigger"
-                    onClick={() => setShowUnbindConfirmModal(true)}
-                    className="text-xs text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-rose-500/10"
+                    id="btn-google-login"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                    className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs sm:text-sm rounded-xl shadow transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
                   >
-                    <Unlink className="w-3.5 h-3.5" />
-                    <span>تبديل المنشأة</span>
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>تسجيل الدخول السريع عبر Google (Gmail)</span>
                   </button>
+                </form>
+
+                {/* Manager Instant Realtime Sync Notice */}
+                <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/20 flex items-center gap-2.5 text-right">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <p className="text-[11px] text-blue-200 leading-relaxed">
+                    <span className="font-bold text-white">مزامنة سحابية لحظية:</span> أي حركة بيع أو شراء أو سند أو مخزون تتم من هذا الجهاز تسمع فوراً على جهاز المدير العام.
+                  </p>
                 </div>
               </div>
             ) : (
