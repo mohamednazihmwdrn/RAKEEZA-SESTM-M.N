@@ -209,14 +209,16 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       document.head.appendChild(styleEl);
     }
 
-    let pageSizeRule = '@page { size: A4 portrait; margin: 6mm 6mm; }';
+    let pageSizeRule = '@page { size: A4 portrait; margin: 6mm 8mm; }';
     if (paperSize === 'A5') {
-      pageSizeRule = '@page { size: A5 portrait; margin: 4mm 4mm; }';
+      pageSizeRule = '@page { size: A5 portrait; margin: 4mm 5mm; }';
     } else if (paperSize === 'thermal') {
       pageSizeRule = '@page { size: 80mm auto; margin: 0; }';
     } else if (paperSize === '58mm') {
       pageSizeRule = '@page { size: 58mm auto; margin: 0; }';
     }
+
+    const isThermal = paperSize === 'thermal' || paperSize === '58mm';
 
     styleEl.innerHTML = `
       ${pageSizeRule}
@@ -228,14 +230,21 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           width: 100% !important;
-          height: auto !important;
+          height: ${isThermal ? 'auto' : '100%'} !important;
+          max-height: ${isThermal ? 'none' : '100%'} !important;
+          overflow: ${isThermal ? 'visible' : 'hidden'} !important;
         }
-        /* Hide everything except print invoice modal container */
+        /* Hide all UI elements, toolbars, buttons, outside modals */
         body > *:not(#centralized-print-modal-root) {
           display: none !important;
         }
-        #centralized-print-modal-root .no-print-toolbar,
-        #centralized-print-modal-root .no-print-backdrop {
+        .no-print,
+        .no-print-toolbar,
+        .no-print-backdrop,
+        button,
+        input,
+        select,
+        textarea {
           display: none !important;
         }
         #centralized-print-modal-root,
@@ -244,50 +253,63 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           background: transparent !important;
           padding: 0 !important;
           margin: 0 !important;
-          overflow: visible !important;
+          overflow: ${isThermal ? 'visible' : 'hidden'} !important;
           display: block !important;
           width: 100% !important;
-          height: auto !important;
+          height: ${isThermal ? 'auto' : '100%'} !important;
+          max-height: ${isThermal ? 'none' : '100%'} !important;
           min-height: auto !important;
+        }
+        .print-stage-scaler-box {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+          transform: none !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
         }
         #rakeeza-printable-invoice-container {
           box-shadow: none !important;
           margin: 0 auto !important;
           transform: none !important;
           page-break-after: avoid !important;
+          page-break-before: avoid !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          break-after: avoid !important;
           box-sizing: border-box !important;
-          min-height: auto !important;
-          height: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+          height: ${isThermal ? 'auto' : 'auto'} !important;
         }
         body[data-paper-size="A4"] #rakeeza-printable-invoice-container {
-          width: 196mm !important;
-          max-width: 196mm !important;
-          max-height: 282mm !important;
-          padding: 5mm 7mm !important;
-          border: 1.5px solid #000 !important;
+          width: 194mm !important;
+          max-width: 194mm !important;
+          max-height: 280mm !important;
+          padding: 5mm 6mm !important;
+          border: 2px solid #000 !important;
           font-size: 0.88rem !important;
         }
         body[data-paper-size="A5"] #rakeeza-printable-invoice-container {
-          width: 140mm !important;
-          max-width: 140mm !important;
+          width: 138mm !important;
+          max-width: 138mm !important;
           max-height: 198mm !important;
-          padding: 3.5mm 4.5mm !important;
-          border: 1.5px solid #000 !important;
-          font-size: 0.77rem !important;
+          padding: 3mm 4mm !important;
+          border: 2px solid #000 !important;
+          font-size: 0.75rem !important;
         }
         body[data-paper-size="thermal"] #rakeeza-printable-invoice-container {
-          width: 72mm !important;
-          max-width: 72mm !important;
-          padding: 2mm 2.5mm !important;
+          width: 76mm !important;
+          max-width: 76mm !important;
+          padding: 2mm !important;
           border: 1px dashed #000 !important;
           font-size: 0.72rem !important;
         }
         body[data-paper-size="58mm"] #rakeeza-printable-invoice-container {
-          width: 48mm !important;
-          max-width: 48mm !important;
-          padding: 1.5mm 1mm !important;
+          width: 52mm !important;
+          max-width: 52mm !important;
+          padding: 1.5mm !important;
           border: 1px dashed #000 !important;
           font-size: 0.65rem !important;
         }
@@ -538,6 +560,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       >
         {/* Responsive proportional viewport scaler for phone screens without clipping */}
         <div
+          className="print-stage-scaler-box"
           style={{
             width: `${Math.round((paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72) * 3.78 * previewScale)}px`,
             maxWidth: '100%',
@@ -552,15 +575,16 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             className="bg-white text-black flex flex-col justify-between transition-all duration-200"
             style={{
               fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
-              border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '1.5px solid #000',
-              width: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              minWidth: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              maxWidth: paperSize === 'A4' ? '196mm' : paperSize === 'A5' ? '140mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              maxHeight: paperSize === 'A4' ? '282mm' : paperSize === 'A5' ? '198mm' : 'none',
+              border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '2px solid #000',
+              borderRadius: paperSize === 'thermal' || paperSize === '58mm' ? '0px' : '4px',
+              width: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              minWidth: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              maxWidth: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
+              maxHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '198mm' : 'none',
               minHeight: 'auto',
               height: 'auto',
-              padding: paperSize === 'A4' ? '6mm 7mm' : paperSize === 'A5' ? '3.5mm 4.5mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2.5mm 2mm',
-              fontSize: paperSize === 'A5' ? '0.77rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
+              padding: paperSize === 'A4' ? '5mm 6mm' : paperSize === 'A5' ? '3mm 4mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2mm 2mm',
+              fontSize: paperSize === 'A5' ? '0.75rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
               boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
               boxSizing: 'border-box',
               transform: `scale(${previewScale})`,
@@ -915,8 +939,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             </div>
           </div>
 
-          {/* التزييل الداخلي وحقوق الملكية */}
-          <div>
+          {/* التزييل الداخلي وحقوق الملكية للمطور داخل إطار المستند */}
+          <div style={{ marginTop: 'auto', paddingTop: '4px', width: '100%' }}>
             <div
               className="invoice-bottom-notes"
               style={{
@@ -926,31 +950,30 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 fontWeight: 800,
                 color: '#000',
                 borderTop: '1.5px dashed #000',
-                paddingTop: '5px',
-                marginTop: 'auto',
+                paddingTop: '4px',
+                marginBottom: '3px',
               }}
             >
               <p>{footerTermsNote}</p>
             </div>
+
+            <div
+              className="copyright-inside-frame"
+              style={{
+                width: '100%',
+                textAlign: 'center',
+                fontSize: '0.67rem',
+                fontWeight: 700,
+                color: '#1e293b',
+                paddingTop: '2px',
+                direction: 'rtl',
+              }}
+            >
+              حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+            </div>
           </div>
         </div>
       </div>
-
-        {/* حقوق الملكية الفكرية المعتمدة للمطور */}
-        <div
-          className="copyright-footer"
-          style={{
-            width: '100%',
-            textAlign: 'center',
-            fontSize: '0.68rem',
-            fontWeight: 600,
-            color: '#cbd5e1',
-            padding: '8px 0',
-            direction: 'rtl',
-          }}
-        >
-          حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
-        </div>
       </div>
     </div>
   );

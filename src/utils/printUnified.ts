@@ -534,56 +534,91 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
         body[data-paper-size="58mm"] table { font-size: 8px; }
 
         /* ========================================================= */
-        /* إعدادات الطباعة النظيفة لمقاس A5 الحقيقي (تمنع التقسيم لورقتين) */
+        /* إعدادات الطباعة النظيفة الموحدة (تمنع التقسيم لورقتين نهائياً) */
         /* ========================================================= */
         @media print {
-            body {
-                background: none !important;
+            html, body {
+                background: #ffffff !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                width: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body[data-paper-size="A5"],
+            body[data-paper-size="A4"] {
+                height: 100% !important;
+                max-height: 100% !important;
+                overflow: hidden !important;
+            }
+
+            body[data-paper-size="thermal"],
+            body[data-paper-size="58mm"] {
+                height: auto !important;
+                overflow: visible !important;
             }
 
             .no-print-toolbar,
-            .no-print {
+            .no-print,
+            button,
+            input,
+            select {
                 display: none !important;
             }
 
             .invoice-container {
-                border: 1.5px solid #000 !important;
+                border: 2px solid #000 !important;
+                border-radius: 4px !important;
                 box-shadow: none !important;
-                width: 100% !important;
                 page-break-after: avoid !important;
                 page-break-inside: avoid !important;
+                page-break-before: avoid !important;
                 break-inside: avoid !important;
+                break-after: avoid !important;
+                box-sizing: border-box !important;
                 margin: 0 auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
             }
 
             body[data-paper-size="A5"] .invoice-container {
-                max-width: 100% !important;
-                height: 210mm !important;
-                padding: 6mm !important;
+                width: 100% !important;
+                max-width: 138mm !important;
+                max-height: 198mm !important;
+                padding: 3mm 4mm !important;
+                border: 2px solid #000 !important;
+                font-size: 10px !important;
             }
 
             body[data-paper-size="A4"] .invoice-container {
-                max-width: 100% !important;
-                height: 297mm !important;
-                padding: 8mm 10mm !important;
+                width: 100% !important;
+                max-width: 194mm !important;
+                max-height: 280mm !important;
+                padding: 5mm 6mm !important;
+                border: 2px solid #000 !important;
+                font-size: 11.5px !important;
             }
 
             body[data-paper-size="thermal"] .invoice-container {
-                width: 72mm !important;
-                max-width: 72mm !important;
+                width: 76mm !important;
+                max-width: 76mm !important;
                 height: auto !important;
                 padding: 2mm !important;
                 border: 1px dashed #000 !important;
+                border-radius: 0 !important;
+                font-size: 9.5px !important;
             }
 
             body[data-paper-size="58mm"] .invoice-container {
-                width: 48mm !important;
-                max-width: 48mm !important;
+                width: 52mm !important;
+                max-width: 52mm !important;
                 height: auto !important;
                 padding: 1.5mm !important;
                 border: 1px dashed #000 !important;
+                border-radius: 0 !important;
+                font-size: 8px !important;
             }
 
             .print-hide-time {
@@ -608,7 +643,7 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
 
             @page {
                 size: A5 portrait;
-                margin: 0;
+                margin: 4mm 5mm;
             }
         }
     </style>
@@ -703,15 +738,15 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
 
         </div>
 
-        <!-- 6. التزييل الداخلي -->
-        <div class="invoice-bottom-notes">
-            <p>${footerNoteText}</p>
+        <!-- 6. التزييل الداخلي وحقوق الملكية للمطور داخل إطار المستند -->
+        <div style="margin-top: auto; padding-top: 4px; width: 100%;">
+            <div class="invoice-bottom-notes">
+                <p>${footerNoteText}</p>
+            </div>
+            <div class="copyright-inside-frame" style="text-align: center; font-size: 8.5px; font-weight: 700; color: #1e293b; padding-top: 3px; direction: rtl;">
+                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+            </div>
         </div>
-    </div>
-
-    <!-- 7. حقوق الملكية الفكرية المعتمدة للمطور -->
-    <div class="copyright-footer">
-        حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
     </div>
 
     <script>
@@ -735,9 +770,9 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
             }
 
             if (size === 'A5') {
-                styleEl.innerHTML = '@media print { @page { size: A5 portrait; margin: 0; } }';
+                styleEl.innerHTML = '@media print { @page { size: A5 portrait; margin: 4mm 5mm; } }';
             } else if (size === 'A4') {
-                styleEl.innerHTML = '@media print { @page { size: A4 portrait; margin: 0; } }';
+                styleEl.innerHTML = '@media print { @page { size: A4 portrait; margin: 6mm 8mm; } }';
             } else if (size === 'thermal') {
                 styleEl.innerHTML = '@media print { @page { size: 80mm auto; margin: 0; } }';
             } else if (size === '58mm') {

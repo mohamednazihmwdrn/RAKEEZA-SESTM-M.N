@@ -76,6 +76,8 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
   const [selectedItemObj, setSelectedItemObj] = useState<Item | null>(null);
   const [draftQty, setDraftQty] = useState<string>('1');
   const [draftPrice, setDraftPrice] = useState<string>('0');
+  const [draftTotal, setDraftTotal] = useState<string>('0');
+  const [draftLastEdited, setDraftLastEdited] = useState<'price' | 'total'>('price');
   const [draftItemNote, setDraftItemNote] = useState('');
   const [draftItemDiscount, setDraftItemDiscount] = useState('0');
   const [showItemDropdown, setShowItemDropdown] = useState(false);
@@ -175,14 +177,66 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
       unitPrice = itm.purchasePrice || 0;
     }
     setDraftPrice(unitPrice.toString());
+    const q = parseFloat(draftQty) || 1;
+    setDraftTotal((unitPrice * q).toFixed(2));
+    setDraftLastEdited('price');
+  };
+
+  const handleDraftPriceChange = (val: string) => {
+    setDraftPrice(val);
+    setDraftLastEdited('price');
+    const p = parseFloat(val);
+    const q = parseFloat(draftQty) || 0;
+    if (!isNaN(p) && q > 0) {
+      setDraftTotal((p * q).toFixed(2));
+    } else if (val.trim() === '') {
+      setDraftTotal('');
+    }
+  };
+
+  const handleDraftQtyChange = (val: string) => {
+    setDraftQty(val);
+    const q = parseFloat(val) || 0;
+    if (draftLastEdited === 'total') {
+      const tot = parseFloat(draftTotal) || 0;
+      if (tot > 0 && q > 0) {
+        const unitP = tot / q;
+        const cleanP = Number(unitP.toFixed(4));
+        setDraftPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+      }
+    } else {
+      const p = parseFloat(draftPrice) || 0;
+      if (p > 0 && q > 0) {
+        setDraftTotal((p * q).toFixed(2));
+      }
+    }
+  };
+
+  const handleDraftTotalChange = (val: string) => {
+    setDraftTotal(val);
+    setDraftLastEdited('total');
+    const tot = parseFloat(val);
+    const q = parseFloat(draftQty) || 0;
+    if (!isNaN(tot) && tot >= 0 && q > 0) {
+      const unitP = tot / q;
+      const cleanP = Number(unitP.toFixed(4));
+      setDraftPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+    } else if (val.trim() === '') {
+      setDraftPrice('');
+    }
   };
 
   // Add Item to Document List
   const handleAddItemToDoc = () => {
     const name = itemSearchQuery.trim();
     const qty = parseFloat(draftQty) || 0;
-    const price = parseFloat(draftPrice) || 0;
+    let price = parseFloat(draftPrice) || 0;
     const itemDisc = parseFloat(draftItemDiscount) || 0;
+    const totVal = parseFloat(draftTotal);
+
+    if ((price <= 0 || isNaN(price)) && !isNaN(totVal) && totVal > 0 && qty > 0) {
+      price = Number((totVal / qty).toFixed(4));
+    }
 
     if (!name) {
       showToast('يرجى اختيار أو كتابة اسم الصنف', 'warning');
@@ -197,7 +251,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
       return;
     }
 
-    const lineSubtotal = qty * price;
+    const lineSubtotal = draftLastEdited === 'total' && !isNaN(totVal) && totVal > 0 ? totVal : qty * price;
     const lineDiscount = itemDisc > 0 ? (lineSubtotal * itemDisc) / 100 : 0;
     const lineTotal = Math.max(0, lineSubtotal - lineDiscount);
 
@@ -217,6 +271,8 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
     setSelectedItemObj(null);
     setDraftQty('1');
     setDraftPrice('0');
+    setDraftTotal('0');
+    setDraftLastEdited('price');
     setDraftItemNote('');
     setDraftItemDiscount('0');
     setShowItemDropdown(false);
@@ -249,6 +305,23 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
           ...it,
           price: validPrice,
           total: it.qty * validPrice,
+        };
+      })
+    );
+  };
+
+  // Direct In-Table Row Total Change with reverse calculation to price
+  const handleUpdateItemTotal = (index: number, newTotalStr: string) => {
+    const newTotal = parseFloat(newTotalStr) || 0;
+    setItems((prev) =>
+      prev.map((it, idx) => {
+        if (idx !== index) return it;
+        const validTotal = Math.max(0, newTotal);
+        const unitP = it.qty > 0 ? validTotal / it.qty : validTotal;
+        return {
+          ...it,
+          price: Number(unitP.toFixed(4)),
+          total: validTotal,
         };
       })
     );
@@ -1791,7 +1864,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
               {/* Item Autocomplete Search */}
-              <div className="sm:col-span-5 relative">
+              <div className="sm:col-span-4 relative">
                 <label className="block font-bold text-slate-700 mb-1 text-xs">الصنف أو الباركود</label>
                 <input
                   type="text"
@@ -1845,7 +1918,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                 <div className="flex items-center">
                   <button
                     type="button"
-                    onClick={() => setDraftQty((prev) => Math.max(1, (parseFloat(prev) || 1) - 1).toString())}
+                    onClick={() => handleDraftQtyChange(Math.max(1, (parseFloat(draftQty) || 1) - 1).toString())}
                     className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 py-2 rounded-r-lg font-bold text-xs"
                   >
                     -
@@ -1854,7 +1927,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                     type="number"
                     min="1"
                     value={draftQty}
-                    onChange={(e) => setDraftQty(e.target.value)}
+                    onChange={(e) => handleDraftQtyChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -1865,7 +1938,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => setDraftQty((prev) => ((parseFloat(prev) || 0) + 1).toString())}
+                    onClick={() => handleDraftQtyChange(((parseFloat(draftQty) || 0) + 1).toString())}
                     className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 py-2 rounded-l-lg font-bold text-xs"
                   >
                     +
@@ -1879,8 +1952,9 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   value={draftPrice}
-                  onChange={(e) => setDraftPrice(e.target.value)}
+                  onChange={(e) => handleDraftPriceChange(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -1888,12 +1962,34 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                     }
                   }}
                   className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold text-center text-xs bg-white"
+                  placeholder="سعر الوحدة..."
+                />
+              </div>
+
+              {/* Total Price (Reverse Calculation) */}
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-emerald-700 mb-1 text-xs">الإجمالي (حساب عكسي)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={draftTotal}
+                  onChange={(e) => handleDraftTotalChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddItemToDoc();
+                    }
+                  }}
+                  className="w-full p-2 border-2 border-emerald-500 bg-emerald-50 text-emerald-900 rounded-xl font-mono font-bold text-center text-xs"
+                  placeholder="اكتب الإجمالي..."
+                  title="أدخل الإجمالي هنا ليتم تقسيم السعر على الكمية تلقائياً"
                 />
               </div>
 
               {/* Item Notes / Specs */}
-              <div className="sm:col-span-2">
-                <label className="block font-bold text-slate-700 mb-1 text-xs">مواصفات / بيان</label>
+              <div className="sm:col-span-1">
+                <label className="block font-bold text-slate-700 mb-1 text-xs">بيان</label>
                 <input
                   type="text"
                   value={draftItemNote}
@@ -1904,7 +2000,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                       handleAddItemToDoc();
                     }
                   }}
-                  placeholder="اختياري..."
+                  placeholder="ملاحظات..."
                   className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white"
                 />
               </div>
@@ -1917,9 +2013,15 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                   className="w-full bg-[#1a237e] hover:bg-[#0d47a1] text-white p-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
                   title="إضافة الصنف للمستند (Enter)"
                 >
-                  ➕
+                  ➕ إضافة
                 </button>
               </div>
+            </div>
+
+            {/* Reverse calculation info helper banner */}
+            <div className="bg-emerald-50/70 border border-dashed border-emerald-300 rounded-xl p-2 text-[11px] text-emerald-800 font-bold flex items-center justify-between">
+              <span>⚡ ميزة الحساب العكسي التلقائي:</span>
+              <span>يمكنك كتابة الإجمالي ليتم ترتيب سعر الوحدة تلقائياً (السعر = الإجمالي ÷ الكمية)، والعكس صحيح.</span>
             </div>
           </div>
 
@@ -1963,16 +2065,23 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                       <input
                         type="number"
                         min="0"
+                        step="any"
                         value={it.price}
                         onChange={(e) => handleUpdateItemPrice(idx, e.target.value)}
                         className="w-full p-1.5 border border-slate-300 rounded-lg text-center font-mono font-bold text-indigo-900"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-500 block mb-0.5 font-bold">الإجمالي</label>
-                      <div className="p-1.5 bg-white border border-slate-200 rounded-lg text-center font-mono font-bold text-emerald-700">
-                        {(it.total || it.qty * it.price).toFixed(2)}
-                      </div>
+                      <label className="text-[10px] text-emerald-700 block mb-0.5 font-bold">الإجمالي (عكسي)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={it.total || Number((it.qty * it.price).toFixed(2))}
+                        onChange={(e) => handleUpdateItemTotal(idx, e.target.value)}
+                        className="w-full p-1.5 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-lg text-center font-mono font-bold"
+                        title="تعديل الإجمالي يعيد احتساب سعر الوحدة تلقائياً"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1989,7 +2098,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                   <th className="p-3">الصنف والمواصفات</th>
                   <th className="p-3 text-center" style={{ width: '110px' }}>الكمية</th>
                   <th className="p-3 text-center" style={{ width: '130px' }}>السعر (ج.م)</th>
-                  <th className="p-3 text-center">الإجمالي</th>
+                  <th className="p-3 text-center" style={{ width: '130px' }}>الإجمالي (عكسي)</th>
                   <th className="p-3 text-center">حذف</th>
                 </tr>
               </thead>
@@ -2021,13 +2130,22 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                         <input
                           type="number"
                           min="0"
+                          step="any"
                           value={it.price}
                           onChange={(e) => handleUpdateItemPrice(idx, e.target.value)}
                           className="w-24 p-1 border border-slate-300 rounded-lg text-center font-mono font-bold text-xs text-indigo-900"
                         />
                       </td>
-                      <td className="p-3 text-center font-mono font-bold text-emerald-700">
-                        {(it.total || it.qty * it.price).toFixed(2)}
+                      <td className="p-2 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={it.total || Number((it.qty * it.price).toFixed(2))}
+                          onChange={(e) => handleUpdateItemTotal(idx, e.target.value)}
+                          className="w-24 p-1 border-2 border-emerald-400 bg-emerald-50 text-emerald-900 rounded-lg text-center font-mono font-bold text-xs"
+                          title="تعديل الإجمالي يعيد احتساب سعر الوحدة تلقائياً"
+                        />
                       </td>
                       <td className="p-3 text-center">
                         <button

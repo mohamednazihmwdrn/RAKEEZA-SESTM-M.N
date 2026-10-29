@@ -28,6 +28,7 @@ export const InvoiceItemModal: React.FC<InvoiceItemModalProps> = ({
   const [qty, setQty] = useState<string>('');
   const [price, setPrice] = useState<string>('');
   const [costPrice, setCostPrice] = useState<number | undefined>(undefined);
+  const [totalInput, setTotalInput] = useState<string>('');
 
   // Discount configuration
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('fixed');
@@ -52,6 +53,7 @@ export const InvoiceItemModal: React.FC<InvoiceItemModalProps> = ({
       setQty(initialItem.qty ? String(initialItem.qty) : '');
       setPrice(initialItem.price !== undefined ? String(initialItem.price) : '');
       setCostPrice(initialItem.costPrice);
+      setTotalInput(initialItem.total !== undefined ? String(initialItem.total) : '');
 
       const mappedDiscType: 'percent' | 'fixed' =
         initialItem.discType === 'val' || initialItem.discountType === 'fixed'
@@ -87,6 +89,7 @@ export const InvoiceItemModal: React.FC<InvoiceItemModalProps> = ({
       setQty('');
       setPrice('');
       setCostPrice(undefined);
+      setTotalInput('');
       setDiscountType('fixed');
       setDiscountValue('');
       setTaxType('percent');
@@ -136,6 +139,67 @@ export const InvoiceItemModal: React.FC<InvoiceItemModalProps> = ({
 
   // Final Item Total
   const finalItemTotal = Math.max(0, afterDiscount + calculatedTax);
+
+  const handlePriceChange = (newPriceStr: string) => {
+    setPrice(newPriceStr);
+    const p = parseFloat(newPriceStr);
+    const q = parseFloat(qty) || 0;
+    if (!isNaN(p) && q > 0) {
+      const sub = q * p;
+      const d = discountType === 'percent' ? (sub * (parseFloat(discountValue) || 0)) / 100 : (parseFloat(discountValue) || 0);
+      const afterD = Math.max(0, sub - d);
+      const t = taxType === 'percent' ? (afterD * (parseFloat(taxValue) || 0)) / 100 : (parseFloat(taxValue) || 0);
+      const tot = Math.max(0, afterD + t);
+      const cleanTot = Number(tot.toFixed(2));
+      setTotalInput(cleanTot > 0 ? (cleanTot % 1 === 0 ? cleanTot.toString() : cleanTot.toFixed(2)) : '0');
+    } else if (newPriceStr.trim() === '') {
+      setTotalInput('');
+    }
+  };
+
+  const handleQtyChange = (newQtyStr: string) => {
+    setQty(newQtyStr);
+    const q = parseFloat(newQtyStr) || 0;
+    const p = parseFloat(price) || 0;
+    if (p > 0 && q > 0) {
+      const sub = q * p;
+      const d = discountType === 'percent' ? (sub * (parseFloat(discountValue) || 0)) / 100 : (parseFloat(discountValue) || 0);
+      const afterD = Math.max(0, sub - d);
+      const t = taxType === 'percent' ? (afterD * (parseFloat(taxValue) || 0)) / 100 : (parseFloat(taxValue) || 0);
+      const tot = Math.max(0, afterD + t);
+      const cleanTot = Number(tot.toFixed(2));
+      setTotalInput(cleanTot > 0 ? (cleanTot % 1 === 0 ? cleanTot.toString() : cleanTot.toFixed(2)) : '0');
+    } else if (q > 0 && parseFloat(totalInput) > 0) {
+      const tot = parseFloat(totalInput) || 0;
+      const unitP = tot / q;
+      const cleanP = Number(unitP.toFixed(2));
+      setPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+    }
+  };
+
+  const handleTotalChange = (newTotalStr: string) => {
+    setTotalInput(newTotalStr);
+    const tot = parseFloat(newTotalStr);
+    const q = parseFloat(qty) || 0;
+    if (!isNaN(tot) && tot >= 0 && q > 0) {
+      const dVal = parseFloat(discountValue) || 0;
+      const tVal = parseFloat(taxValue) || 0;
+      let unitPrice = 0;
+      if (discountType === 'percent' && taxType === 'percent') {
+        const factor = (1 - (dVal / 100)) * (1 + (tVal / 100));
+        unitPrice = factor > 0 ? tot / (q * factor) : tot / q;
+      } else {
+        const afterDisc = taxType === 'percent' ? (tot / (1 + (tVal / 100))) : Math.max(0, tot - tVal);
+        const subtotal = discountType === 'percent' ? (afterDisc / Math.max(0.01, 1 - (dVal / 100))) : (afterDisc + dVal);
+        unitPrice = Math.max(0, subtotal / q);
+      }
+      const cleanPrice = Number(unitPrice.toFixed(4));
+      const formattedPrice = cleanPrice % 1 === 0 ? cleanPrice.toString() : cleanPrice.toFixed(2);
+      setPrice(formattedPrice);
+    } else if (newTotalStr.trim() === '') {
+      setPrice('');
+    }
+  };
 
   const handleSelectCatalogItem = (item: Item) => {
     setSelectedItemId(item.id);
@@ -373,49 +437,103 @@ export const InvoiceItemModal: React.FC<InvoiceItemModalProps> = ({
             );
           })()}
 
-          {/* 3. Quantity & Price Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* Quantity */}
-            <div>
-              <label className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-1.5">
-                <span>العدد (الكمية)</span>
-                <span className="text-rose-500 font-bold">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  ref={qtyInputRef}
-                  id="input-item-qty"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  placeholder="أدخل العدد..."
-                  className="w-full h-11 px-3.5 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl text-slate-900 text-base font-black shadow-sm focus:outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
-                />
+          {/* 3. Quantity, Unit Price & Total Grid (ربط حسابي ثنائي ذكي) */}
+          <div className="bg-blue-50/60 p-3.5 rounded-2xl border-2 border-blue-200 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-1.5">
+              <span className="text-xs font-black text-blue-950 flex items-center gap-1.5">
+                <Calculator className="w-4 h-4 text-blue-700" />
+                <span>الكمية والسعر والإجمالي (ربط حسابي لحظي ثنائي الاتجاه):</span>
+              </span>
+              <span className="text-[11px] text-blue-800 font-bold bg-white border border-blue-300 px-2.5 py-0.5 rounded-full shadow-2xs">
+                ⚡ اكتب في سعر الوحدة أو الإجمالي وسيتم التعديل تلقائياً
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* 1. Quantity */}
+              <div>
+                <label className="text-xs font-black text-slate-800 flex items-center gap-1 mb-1.5">
+                  <span>العدد (الكمية)</span>
+                  <span className="text-rose-500 font-bold">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    ref={qtyInputRef}
+                    id="input-item-qty"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={qty}
+                    onChange={(e) => handleQtyChange(e.target.value)}
+                    placeholder="مثال: 10"
+                    className="w-full h-11 px-3 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl text-slate-900 text-base font-black shadow-xs focus:outline-none transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Unit Price */}
+              <div>
+                <label className="text-xs font-black text-slate-800 flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1">
+                    <span>سعر الوحدة</span>
+                    <span className="text-rose-500 font-bold">*</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold">للقطعة</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-item-price"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={price}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    placeholder="مثال: 100"
+                    className="w-full h-11 px-3 pl-8 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl text-slate-900 text-base font-black shadow-xs focus:outline-none transition-all placeholder:text-slate-400"
+                  />
+                  <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">ج.م</span>
+                </div>
+              </div>
+
+              {/* 3. Total (Editable! Divide total by qty to set price) */}
+              <div>
+                <label className="text-xs font-black text-emerald-950 flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1">
+                    <span>إجمالي الصنف (المبلغ)</span>
+                    <span className="text-emerald-600 font-bold">✨</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-bold">يُقسم على الكمية</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-item-total"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={totalInput}
+                    onChange={(e) => handleTotalChange(e.target.value)}
+                    placeholder="مثال: 1000"
+                    className="w-full h-11 px-3 pl-8 bg-emerald-50/70 border-2 border-emerald-400 focus:border-emerald-600 rounded-xl text-emerald-950 text-base font-black shadow-xs focus:outline-none transition-all placeholder:text-emerald-700/50"
+                  />
+                  <span className="absolute left-2.5 top-2.5 text-xs font-bold text-emerald-700">ج.م</span>
+                </div>
               </div>
             </div>
 
-            {/* Price */}
-            <div>
-              <label className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-1.5">
-                <span>السعر (سعر الوحدة)</span>
-                <span className="text-rose-500 font-bold">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="input-item-price"
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="أدخل السعر..."
-                  className="w-full h-11 px-3.5 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl text-slate-900 text-base font-black shadow-sm focus:outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
-                />
-                <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">ج.م</span>
+            {/* Explanation formula banner */}
+            {numQty > 0 && (numPrice > 0 || parseFloat(totalInput) > 0) && (
+              <div className="text-[11px] text-blue-950 bg-white/95 p-2 rounded-xl border border-blue-200 flex items-center justify-between flex-wrap gap-2 font-bold shadow-2xs">
+                <span className="flex items-center gap-1.5">
+                  <span>📐</span>
+                  <span>المعادلة: <strong>{numQty}</strong> كمية × <strong>{numPrice.toFixed(2)}</strong> ج.م = <strong>{(numQty * numPrice).toFixed(2)}</strong> ج.م</span>
+                </span>
+                {parseFloat(totalInput) > 0 && numQty > 0 && (
+                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                    💡 سعر الوحدة = {parseFloat(totalInput)} ÷ {numQty} = <strong>{(parseFloat(totalInput) / numQty).toFixed(2)}</strong> ج.م
+                  </span>
+                )}
               </div>
-            </div>
+            )}
           </div>
 
           {/* 4. Discount & Tax Grid (Percentage vs Fixed Controls) */}

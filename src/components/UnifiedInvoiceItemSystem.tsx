@@ -206,6 +206,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
   const [priceTier, setPriceTier] = useState<'cash' | 'wholesale' | 'buy' | 'custom'>('cash');
   const [editPrice, setEditPrice] = useState<string>('0.00');
   const [editQty, setEditQty] = useState<string>('1');
+  const [editTotal, setEditTotal] = useState<string>('0.00');
   const [editDiscValue, setEditDiscValue] = useState<string>('0.00');
   const [editDiscType, setEditDiscType] = useState<'val' | 'percent'>('val');
   const [editTaxValue, setEditTaxValue] = useState<string>('0.00');
@@ -214,6 +215,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
 
   const lookupSearchInputRef = useRef<HTMLInputElement>(null);
   const editPriceInputRef = useRef<HTMLInputElement>(null);
+  const editTotalInputRef = useRef<HTMLInputElement>(null);
   const editQtyInputRef = useRef<HTMLInputElement>(null);
   const editDiscValueInputRef = useRef<HTMLInputElement>(null);
   const editTaxValueInputRef = useRef<HTMLInputElement>(null);
@@ -222,18 +224,28 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
   const handlePriceTierChange = (tier: 'cash' | 'wholesale' | 'buy' | 'custom') => {
     setPriceTier(tier);
     if (!tempSelectedItem) return;
+    let newP = tempSelectedItem.cashPrice;
     if (tier === 'cash') {
-      setEditPrice(tempSelectedItem.cashPrice.toFixed(2));
+      newP = tempSelectedItem.cashPrice;
     } else if (tier === 'wholesale') {
-      setEditPrice(tempSelectedItem.wholesalePrice.toFixed(2));
+      newP = tempSelectedItem.wholesalePrice;
     } else if (tier === 'buy') {
-      setEditPrice(tempSelectedItem.buyPrice.toFixed(2));
+      newP = tempSelectedItem.buyPrice;
     }
+    setEditPrice(newP.toFixed(2));
+    const q = parseFloat(editQty) || 0;
+    setEditTotal((newP * q).toFixed(2));
   };
 
   const handleManualPriceChange = (val: string) => {
     setEditPrice(val);
     const num = parseFloat(val);
+    const q = parseFloat(editQty) || 0;
+    if (!isNaN(num) && q > 0) {
+      setEditTotal((num * q).toFixed(2));
+    } else if (val.trim() === '') {
+      setEditTotal('');
+    }
     if (!tempSelectedItem || isNaN(num)) {
       setPriceTier('custom');
       return;
@@ -249,15 +261,60 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
     }
   };
 
+  const handleManualQtyChange = (val: string) => {
+    setEditQty(val);
+    const q = parseFloat(val) || 0;
+    const p = parseFloat(editPrice) || 0;
+    if (p > 0 && q > 0) {
+      setEditTotal((p * q).toFixed(2));
+    } else if (q > 0 && parseFloat(editTotal) > 0) {
+      const tot = parseFloat(editTotal) || 0;
+      const unitP = tot / q;
+      const cleanP = Number(unitP.toFixed(2));
+      setEditPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+    }
+  };
+
+  const handleManualTotalChange = (val: string) => {
+    setEditTotal(val);
+    const tot = parseFloat(val);
+    const q = parseFloat(editQty) || 0;
+    if (!isNaN(tot) && tot >= 0 && q > 0) {
+      const discVal = parseFloat(editDiscValue) || 0;
+      const taxVal = parseFloat(editTaxValue) || 0;
+      let unitPrice = 0;
+      if (editDiscType === 'percent' && editTaxType === 'percent') {
+        const factor = (1 - (discVal / 100)) * (1 + (taxVal / 100));
+        unitPrice = factor > 0 ? tot / (q * factor) : tot / q;
+      } else {
+        const afterDisc = editTaxType === 'percent' ? (tot / (1 + (taxVal / 100))) : Math.max(0, tot - taxVal);
+        const subtotal = editDiscType === 'percent' ? (afterDisc / Math.max(0.01, 1 - (discVal / 100))) : (afterDisc + discVal);
+        unitPrice = Math.max(0, subtotal / q);
+      }
+      const cleanPrice = Number(unitPrice.toFixed(4));
+      const formattedPrice = cleanPrice % 1 === 0 ? cleanPrice.toString() : cleanPrice.toFixed(2);
+      setEditPrice(formattedPrice);
+      setPriceTier('custom');
+    } else if (val.trim() === '') {
+      setEditPrice('');
+    }
+  };
+
   const incrementQty = () => {
     const cur = parseFloat(editQty) || 0;
-    setEditQty(String(cur + 1));
+    const newQty = cur + 1;
+    setEditQty(String(newQty));
+    const p = parseFloat(editPrice) || 0;
+    setEditTotal((p * newQty).toFixed(2));
   };
 
   const decrementQty = () => {
     const cur = parseFloat(editQty) || 0;
     if (cur > 1) {
-      setEditQty(String(cur - 1));
+      const newQty = cur - 1;
+      setEditQty(String(newQty));
+      const p = parseFloat(editPrice) || 0;
+      setEditTotal((p * newQty).toFixed(2));
     }
   };
 
@@ -340,6 +397,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
       setEditTaxValue(String(cur.taxVal));
       setEditTaxType(cur.taxType);
       setEditSpec(cur.spec || '');
+      setEditTotal(cur.total ? cur.total.toFixed(2) : (cur.price * cur.qty).toFixed(2));
       if (Math.abs(cur.price - item.cashPrice) < 0.001) {
         setPriceTier('cash');
       } else if (Math.abs(cur.price - item.wholesalePrice) < 0.001) {
@@ -369,6 +427,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
       setEditTaxValue('0.00');
       setEditTaxType('percent');
       setEditSpec('');
+      setEditTotal(Number(defaultP * 1).toFixed(2));
     }
 
     setTimeout(() => {
@@ -510,6 +569,57 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
 
     onItemsChange(updated);
     closeEditModal();
+  };
+
+  const updateTableItemQty = (index: number, val: string) => {
+    const q = parseFloat(val) || 0;
+    const updated = [...currentInvoiceItems];
+    if (updated[index]) {
+      const cur = updated[index];
+      const actualDisc = cur.discType === 'percent' ? (cur.price * q) * (cur.discVal / 100) : (cur.discVal * q);
+      const baseAfterDisc = (cur.price * q) - actualDisc;
+      const actualTax = cur.taxType === 'percent' ? baseAfterDisc * (cur.taxVal / 100) : (cur.taxVal * q);
+      const total = baseAfterDisc + actualTax;
+      updated[index] = { ...cur, qty: q, actualDisc, actualTax, total };
+      onItemsChange(updated);
+    }
+  };
+
+  const updateTableItemPrice = (index: number, val: string) => {
+    const p = parseFloat(val) || 0;
+    const updated = [...currentInvoiceItems];
+    if (updated[index]) {
+      const cur = updated[index];
+      const actualDisc = cur.discType === 'percent' ? (p * cur.qty) * (cur.discVal / 100) : (cur.discVal * cur.qty);
+      const baseAfterDisc = (p * cur.qty) - actualDisc;
+      const actualTax = cur.taxType === 'percent' ? baseAfterDisc * (cur.taxVal / 100) : (cur.taxVal * cur.qty);
+      const total = baseAfterDisc + actualTax;
+      updated[index] = { ...cur, price: p, actualDisc, actualTax, total };
+      onItemsChange(updated);
+    }
+  };
+
+  const updateTableItemTotal = (index: number, val: string) => {
+    const tot = parseFloat(val) || 0;
+    const updated = [...currentInvoiceItems];
+    if (updated[index]) {
+      const cur = updated[index];
+      const q = cur.qty || 1;
+      let unitPrice = 0;
+      if (cur.discType === 'percent' && cur.taxType === 'percent') {
+        const factor = (1 - (cur.discVal / 100)) * (1 + (cur.taxVal / 100));
+        unitPrice = factor > 0 ? tot / (q * factor) : tot / q;
+      } else {
+        const afterDisc = cur.taxType === 'percent' ? (tot / (1 + (cur.taxVal / 100))) : Math.max(0, tot - cur.taxVal);
+        const subtotal = cur.discType === 'percent' ? (afterDisc / Math.max(0.01, 1 - (cur.discVal / 100))) : (afterDisc + cur.discVal);
+        unitPrice = Math.max(0, subtotal / q);
+      }
+      const actualDisc = cur.discType === 'percent' ? (unitPrice * q) * (cur.discVal / 100) : (cur.discVal * q);
+      const baseAfterDisc = (unitPrice * q) - actualDisc;
+      const actualTax = cur.taxType === 'percent' ? baseAfterDisc * (cur.taxVal / 100) : (cur.taxVal * q);
+      updated[index] = { ...cur, price: Number(unitPrice.toFixed(4)), actualDisc, actualTax, total: tot };
+      onItemsChange(updated);
+    }
   };
 
   // Remove Item
@@ -676,9 +786,24 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                     return (
                       <tr key={index} className="bg-white hover:bg-slate-100 transition-colors border-b border-slate-200">
                         <td className="py-2.5 px-3 text-right font-black text-black border border-slate-300 text-xs sm:text-sm">{item.name}</td>
-                        <td className="py-2.5 px-2 font-mono font-black text-black border border-slate-300 text-xs sm:text-sm">{item.qty}</td>
-                        <td className="py-2.5 px-2 font-mono font-black text-black border border-slate-300 text-xs sm:text-sm">
-                          {item.price.toFixed(2)}
+                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                          <input
+                            type="number"
+                            min="0.001"
+                            step="any"
+                            value={item.qty}
+                            onChange={(e) => updateTableItemQty(index, e.target.value)}
+                            className="w-14 h-8 text-center font-mono font-black text-black border border-slate-300 rounded focus:border-blue-700 bg-white"
+                          />
+                        </td>
+                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.price}
+                            onChange={(e) => updateTableItemPrice(index, e.target.value)}
+                            className="w-20 h-8 text-center font-mono font-black text-black border border-slate-300 rounded focus:border-blue-700 bg-white"
+                          />
                         </td>
                         <td className="py-2.5 px-2 font-mono text-black font-black border border-slate-300">
                           {item.discVal > 0 ? `${item.discVal}${item.discType === 'percent' ? '%' : ' ج'}` : '-'}
@@ -689,8 +814,15 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                         <td className="py-2.5 px-3 text-right text-black font-bold border border-slate-300 truncate max-w-[160px]">
                           {item.spec || '-'}
                         </td>
-                        <td className="py-2.5 px-3 font-mono font-black text-black border border-slate-300 text-xs sm:text-sm">
-                          {item.total.toFixed(2)} ج.م
+                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.total}
+                            onChange={(e) => updateTableItemTotal(index, e.target.value)}
+                            title="تعديل الإجمالي يقسم تلقائياً على العدد ويضبط سعر الوحدة فوراً"
+                            className="w-24 h-8 text-center font-mono font-black text-emerald-950 border-2 border-emerald-500 rounded focus:border-emerald-700 bg-emerald-50/70"
+                          />
                         </td>
                         <td className="py-2.5 px-2 border border-slate-300">
                           <div className="flex items-center justify-center gap-1.5">
@@ -748,17 +880,40 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                         )}
                       </div>
                       <div className="text-left shrink-0">
-                        <div className="text-sm font-black text-black font-mono">
-                          {item.total.toFixed(2)} ج.م
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.total}
+                            onChange={(e) => updateTableItemTotal(index, e.target.value)}
+                            title="تعديل الإجمالي يقسم تلقائياً على العدد ويضبط سعر الوحدة"
+                            className="w-24 h-8 text-center font-mono font-black text-emerald-950 border-2 border-emerald-500 rounded bg-emerald-50/80 text-xs"
+                          />
+                          <span className="text-[10px] font-black text-emerald-800">ج.م</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-black bg-slate-50 p-2.5 rounded-lg border border-slate-300 font-bold">
-                      <div className="flex items-center gap-2">
-                        <span>الكمية: <strong className="font-mono text-black font-black">{item.qty}</strong></span>
+                    <div className="flex items-center justify-between text-xs text-black bg-slate-50 p-2 rounded-lg border border-slate-300 font-bold gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-600">العدد:</span>
+                        <input
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value={item.qty}
+                          onChange={(e) => updateTableItemQty(index, e.target.value)}
+                          className="w-14 h-7 text-center font-mono font-black text-black border border-slate-300 rounded bg-white text-xs"
+                        />
                         <span>×</span>
-                        <span className="font-mono font-black">{item.price.toFixed(2)}</span>
+                        <span className="text-[11px] text-slate-600">السعر:</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.price}
+                          onChange={(e) => updateTableItemPrice(index, e.target.value)}
+                          className="w-20 h-7 text-center font-mono font-black text-black border border-slate-300 rounded bg-white text-xs"
+                        />
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         {item.discVal > 0 && (
@@ -1497,62 +1652,107 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   </div>
                 </div>
 
-                {/* 2. Price Input & Quantity Stepper */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Unit Price */}
-                  <div className="flex flex-col gap-1.5 bg-slate-50 p-2.5 rounded-xl border-2 border-slate-300">
-                    <label className="text-xs font-black text-black flex items-center justify-between">
-                      <span>السعر للوحدة</span>
-                      <span className="text-[10px] text-slate-500 font-normal">بالجنيه المصري</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        ref={editPriceInputRef}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={editPrice}
-                        onChange={(e) => handleManualPriceChange(e.target.value)}
-                        onKeyDown={(e) => handleEnterKey(e, 'editQty')}
-                        className="w-full h-11 px-3 pl-10 bg-white border-2 border-slate-400 focus:border-blue-700 rounded-xl text-sm font-black font-mono text-black focus:outline-none shadow-xs"
-                      />
-                      <span className="absolute left-3 top-2.5 text-xs font-black text-slate-600">ج.م</span>
+                {/* 2. Price, Quantity & Total Linked Section (ربط حسابي ثنائي لحظي) */}
+                <div className="bg-blue-50/50 p-3 rounded-xl border-2 border-blue-200 space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <span className="text-xs font-black text-blue-950 flex items-center gap-1.5">
+                      <Calculator className="w-4 h-4 text-blue-700" />
+                      <span>بيانات السعر والكمية والإجمالي (ربط حسابي لحظي ثنائي):</span>
+                    </span>
+                    <span className="text-[10px] text-blue-800 font-bold bg-white border border-blue-300 px-2 py-0.5 rounded-full shadow-2xs">
+                      ⚡ اكتب في سعر الوحدة أو الإجمالي وسيتم التعديل تلقائياً
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Quantity Stepper */}
+                    <div className="flex flex-col gap-1 bg-white p-2 rounded-xl border-2 border-slate-300 shadow-2xs">
+                      <label className="text-xs font-black text-black flex items-center justify-between">
+                        <span>الكمية المطلوبة</span>
+                        <span className="text-[10px] text-blue-700 font-bold">+/-</span>
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={decrementQty}
+                          className="w-8 h-10 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-300 text-black font-black rounded-lg flex items-center justify-center cursor-pointer shadow-xs touch-manipulation"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <input
+                          ref={editQtyInputRef}
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          value={editQty}
+                          onChange={(e) => handleManualQtyChange(e.target.value)}
+                          onKeyDown={(e) => handleEnterKey(e, 'editDiscValue')}
+                          className="flex-1 h-10 px-1 text-center bg-white border border-slate-300 focus:border-blue-700 rounded-lg text-sm sm:text-base font-black font-mono text-black focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={incrementQty}
+                          className="w-8 h-10 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black rounded-lg flex items-center justify-center cursor-pointer shadow-xs touch-manipulation"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Unit Price */}
+                    <div className="flex flex-col gap-1 bg-white p-2 rounded-xl border-2 border-slate-300 shadow-2xs">
+                      <label className="text-xs font-black text-black flex items-center justify-between">
+                        <span>سعر الوحدة</span>
+                        <span className="text-[10px] text-slate-500 font-bold">للقطعة</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          ref={editPriceInputRef}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={editPrice}
+                          onChange={(e) => handleManualPriceChange(e.target.value)}
+                          onKeyDown={(e) => handleEnterKey(e, 'editQty')}
+                          className="w-full h-10 px-2 pl-8 bg-white border border-slate-300 focus:border-blue-700 rounded-lg text-sm font-black font-mono text-black focus:outline-none"
+                        />
+                        <span className="absolute left-2 top-2.5 text-xs font-black text-slate-500">ج.م</span>
+                      </div>
+                    </div>
+
+                    {/* Total (Editable! Dividing total by qty sets unit price) */}
+                    <div className="flex flex-col gap-1 bg-emerald-50/60 p-2 rounded-xl border-2 border-emerald-400 shadow-2xs">
+                      <label className="text-xs font-black text-emerald-950 flex items-center justify-between">
+                        <span>إجمالي الصنف (المبلغ)</span>
+                        <span className="text-[10px] text-emerald-700 font-bold">يُقسم ع الكمية</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          ref={editTotalInputRef}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={editTotal}
+                          onChange={(e) => handleManualTotalChange(e.target.value)}
+                          placeholder="مثال: 1000"
+                          className="w-full h-10 px-2 pl-8 bg-white border border-emerald-500 focus:border-emerald-700 rounded-lg text-sm font-black font-mono text-emerald-950 focus:outline-none shadow-xs"
+                        />
+                        <span className="absolute left-2 top-2.5 text-xs font-black text-emerald-700">ج.م</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Quantity Stepper */}
-                  <div className="flex flex-col gap-1.5 bg-slate-50 p-2.5 rounded-xl border-2 border-slate-300">
-                    <label className="text-xs font-black text-black flex items-center justify-between">
-                      <span>الكمية المطلوبة</span>
-                      <span className="text-[10px] text-blue-700 font-bold">أزرار سريعة +/-</span>
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={decrementQty}
-                        className="w-10 h-11 bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-400 text-black font-black text-lg rounded-xl flex items-center justify-center cursor-pointer shadow-xs touch-manipulation"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <input
-                        ref={editQtyInputRef}
-                        type="number"
-                        min="0.001"
-                        step="any"
-                        value={editQty}
-                        onChange={(e) => setEditQty(e.target.value)}
-                        onKeyDown={(e) => handleEnterKey(e, 'editDiscValue')}
-                        className="flex-1 h-11 px-2 text-center bg-white border-2 border-slate-400 focus:border-blue-700 rounded-xl text-sm sm:text-base font-black font-mono text-black focus:outline-none shadow-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={incrementQty}
-                        className="w-10 h-11 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-lg rounded-xl flex items-center justify-center cursor-pointer shadow-xs touch-manipulation"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                  {/* Formula banner */}
+                  {parseFloat(editQty) > 0 && (parseFloat(editPrice) > 0 || parseFloat(editTotal) > 0) && (
+                    <div className="text-[11px] bg-white p-2 rounded-lg border border-blue-200 flex items-center justify-between flex-wrap gap-2 font-bold text-slate-800 shadow-2xs">
+                      <span>📐 المعادلة: <strong>{editQty}</strong> كمية × <strong>{parseFloat(editPrice || '0').toFixed(2)}</strong> ج.م = <strong>{(parseFloat(editQty || '0') * parseFloat(editPrice || '0')).toFixed(2)}</strong> ج.م</span>
+                      {parseFloat(editTotal) > 0 && parseFloat(editQty) > 0 && (
+                        <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          💡 سعر الوحدة المحسوب = {parseFloat(editTotal)} ÷ {editQty} = <strong>{(parseFloat(editTotal) / parseFloat(editQty)).toFixed(2)}</strong> ج.م
+                        </span>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* 3. Reorganized Discount & Tax Sections (مبلغ ثابت أو نسبة مئوية) */}

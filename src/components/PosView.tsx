@@ -41,6 +41,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [posMobileTab, setPosMobileTab] = useState<'products' | 'cart'>('products');
   const [posViewMode, setPosViewMode] = useState<'visual' | 'compact'>('visual');
+  const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
 
   // 🏢 Active Branch Isolation for POS
   const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
@@ -210,8 +211,38 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     });
   };
 
+  const handleUpdatePrice = (index: number, newPrice: number) => {
+    setCart((prev) => {
+      const copy = [...prev];
+      if (!copy[index]) return prev;
+      const validP = Math.max(0, newPrice);
+      copy[index] = {
+        ...copy[index],
+        price: validP,
+        total: Number((copy[index].qty * validP).toFixed(2)),
+      };
+      return copy;
+    });
+  };
+
+  const handleUpdateTotal = (index: number, newTotal: number) => {
+    setCart((prev) => {
+      const copy = [...prev];
+      if (!copy[index]) return prev;
+      const validT = Math.max(0, newTotal);
+      const unitP = copy[index].qty > 0 ? validT / copy[index].qty : validT;
+      copy[index] = {
+        ...copy[index],
+        price: Number(unitP.toFixed(4)),
+        total: validT,
+      };
+      return copy;
+    });
+  };
+
   const handleRemoveItem = (index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
+    if (editingCartIndex === index) setEditingCartIndex(null);
   };
 
   const handleHoldOrder = () => {
@@ -1131,47 +1162,116 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
                 🛒 السلة فارغة. اختر أصنافاً من الشبكة للإضافة
               </div>
             ) : (
-              cart.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
-                  <div className="flex-1 pr-1 truncate">
-                    <div className="font-bold text-slate-900 truncate flex items-center gap-1">
-                      <span>{item.name}</span>
-                      <span
-                        className={`text-[9px] px-1 rounded font-bold ${
-                          item.priceType === 'wholesale' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {item.priceType === 'wholesale' ? 'جملة' : 'نقدي'}
-                      </span>
+              cart.map((item, idx) => {
+                const isEditing = editingCartIndex === idx;
+                return (
+                  <div key={idx} className="bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs space-y-1.5 transition">
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1 pr-1 truncate">
+                        <div className="font-bold text-slate-900 truncate flex items-center gap-1">
+                          <span>{item.name}</span>
+                          <span
+                            className={`text-[9px] px-1 rounded font-bold ${
+                              item.priceType === 'wholesale' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {item.priceType === 'wholesale' ? 'جملة' : 'نقدي'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingCartIndex(isEditing ? null : idx)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition ${
+                            isEditing ? 'bg-emerald-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                          }`}
+                          title="تعديل السعر أو الإجمالي بالحساب العكسي"
+                        >
+                          {isEditing ? '✓ تم' : '✏️ تعديل'}
+                        </button>
+                        <button
+                          onClick={() => handleRemoveItem(idx)}
+                          className="text-rose-600 hover:text-rose-800 font-bold px-1 text-sm cursor-pointer mr-0.5"
+                          title="حذف"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      {item.price.toFixed(2)} × {item.qty} = <strong className="text-indigo-900">{item.total.toFixed(2)}</strong> ج.م
-                    </div>
+
+                    {isEditing ? (
+                      /* Inline Reverse Calculation Editor */
+                      <div className="bg-white p-2 rounded-lg border border-indigo-200 space-y-1.5">
+                        <div className="grid grid-cols-3 gap-1.5 items-center">
+                          <div>
+                            <label className="text-[9px] text-slate-500 font-bold block mb-0.5">الكمية</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.qty}
+                              onChange={(e) => handleUpdateQty(idx, parseFloat(e.target.value) || 1)}
+                              className="w-full p-1 border border-slate-300 rounded text-center font-mono font-bold text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-slate-500 font-bold block mb-0.5">سعر الوحدة</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={item.price}
+                              onChange={(e) => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
+                              className="w-full p-1 border border-slate-300 rounded text-center font-mono font-bold text-xs text-indigo-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-emerald-700 font-bold block mb-0.5">الإجمالي (عكسي)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={item.total}
+                              onChange={(e) => handleUpdateTotal(idx, parseFloat(e.target.value) || 0)}
+                              className="w-full p-1 border-2 border-emerald-400 bg-emerald-50 text-emerald-900 rounded text-center font-mono font-bold text-xs"
+                              title="أدخل الإجمالي ليتم ترتيب سعر الوحدة تلقائياً"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-[9px] text-emerald-700 bg-emerald-50 p-1 rounded font-bold text-center">
+                          ⚡ اكتب الإجمالي ليتم تقسيم سعر الوحدة على الكمية تلقائياً
+                        </div>
+                      </div>
+                    ) : (
+                      /* Standard Row Display */
+                      <div className="flex justify-between items-center pt-0.5">
+                        <div
+                          onClick={() => setEditingCartIndex(idx)}
+                          className="text-[10px] text-slate-600 font-mono cursor-pointer hover:text-indigo-600"
+                          title="انقر لتعديل السعر أو الإجمالي"
+                        >
+                          {item.price.toFixed(2)} × {item.qty} = <strong className="text-indigo-900 font-bold">{item.total.toFixed(2)}</strong> ج.م
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleUpdateQty(idx, item.qty - 1)}
+                            className="w-6 h-6 bg-slate-200 hover:bg-slate-300 rounded font-bold text-slate-800 cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="font-mono font-bold w-6 text-center">{item.qty}</span>
+                          <button
+                            onClick={() => handleUpdateQty(idx, item.qty + 1)}
+                            className="w-6 h-6 bg-slate-200 hover:bg-slate-300 rounded font-bold text-slate-800 cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleUpdateQty(idx, item.qty - 1)}
-                      className="w-6 h-6 bg-slate-200 hover:bg-slate-300 rounded font-bold text-slate-800 cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="font-mono font-bold w-6 text-center">{item.qty}</span>
-                    <button
-                      onClick={() => handleUpdateQty(idx, item.qty + 1)}
-                      className="w-6 h-6 bg-slate-200 hover:bg-slate-300 rounded font-bold text-slate-800 cursor-pointer"
-                    >
-                      +
-                    </button>
-                    <button
-                      onClick={() => handleRemoveItem(idx)}
-                      className="text-rose-600 hover:text-rose-800 font-bold px-1 text-sm cursor-pointer mr-1"
-                      title="حذف"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

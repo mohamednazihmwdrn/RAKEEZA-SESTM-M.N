@@ -317,7 +317,9 @@ input::selection, textarea::selection {
   @media print {
     /* Hide all non-printable UI components */
     .no-print,
+    .no-print-toolbar,
     .no-print-bar,
+    .no-print-backdrop,
     button,
     input,
     select,
@@ -335,68 +337,18 @@ input::selection, textarea::selection {
     html, body {
       background: #ffffff !important;
       color: #000000 !important;
-      font-size: 11pt !important;
       margin: 0 !important;
       padding: 0 !important;
       width: 100% !important;
       height: 100% !important;
       overflow: hidden !important;
-      display: flex !important;
-      flex-direction: column !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
 
-    main {
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Full Page Border Fix Container */
-    .report-container,
-    .voucher-container,
-    .invoice-container,
-    .cash-container,
-    .report-page,
-    .print-sheet {
-      border: 3px solid #000000 !important;
-      width: 100vw !important;
-      height: calc(100vh - 20px) !important;
-      min-height: calc(100vh - 20px) !important;
-      max-height: calc(100vh - 20px) !important;
-      padding: 4mm 6mm !important;
-      box-sizing: border-box !important;
-      box-shadow: none !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      page-break-after: avoid !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-    }
-
-    /* Dynamic flex-grow body to expand and push footers to bottom */
-    .table-wrapper,
-    .voucher-body,
-    .report-content-body {
-      flex-grow: 1 !important;
-      display: flex !important;
-      flex-direction: column !important;
-      width: 100% !important;
-    }
-
-    /* Outer Copyright Anchor */
+    /* Outer Copyright Anchor hidden when printing so it never spills to page 2 */
     .copyright-outside {
-      display: block !important;
-      position: relative !important;
-      margin-top: auto !important;
-      padding-top: 2px !important;
-      font-size: 0.72rem !important;
-      font-weight: bold !important;
-      color: #000000 !important;
-      text-align: center !important;
-      width: 100% !important;
-      direction: ltr !important;
+      display: none !important;
     }
 
     /* Modal printable style */

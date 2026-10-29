@@ -535,6 +535,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const [cardItem, setCardItem] = useState<any>(null);
   const [cardQty, setCardQty] = useState<string>('1');
   const [cardPrice, setCardPrice] = useState<string>('0');
+  const [cardTotal, setCardTotal] = useState<string>('0');
+  const [cardLastEdited, setCardLastEdited] = useState<'price' | 'total'>('price');
   const [cardSpec, setCardSpec] = useState<string>('');
   const cardQtyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -544,6 +546,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const [modifyItemName, setModifyItemName] = useState<string>('');
   const [modifyItemQty, setModifyItemQty] = useState<string>('');
   const [modifyItemPrice, setModifyItemPrice] = useState<string>('');
+  const [modifyItemTotal, setModifyItemTotal] = useState<string>('');
   const [modifyItemSpec, setModifyItemSpec] = useState<string>('');
   const modifyQtyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -634,12 +637,92 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
   };
 
+  const handleCardPriceChange = (val: string) => {
+    setCardPrice(val);
+    setCardLastEdited('price');
+    const p = parseFloat(val);
+    const q = parseFloat(cardQty) || 0;
+    if (!isNaN(p) && q > 0) {
+      setCardTotal((p * q).toFixed(2));
+    } else if (val.trim() === '') {
+      setCardTotal('');
+    }
+  };
+
+  const handleCardQtyChange = (val: string) => {
+    setCardQty(val);
+    const q = parseFloat(val) || 0;
+    if (cardLastEdited === 'total') {
+      const tot = parseFloat(cardTotal) || 0;
+      if (tot > 0 && q > 0) {
+        const unitP = tot / q;
+        const cleanP = Number(unitP.toFixed(4));
+        setCardPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+      }
+    } else {
+      const p = parseFloat(cardPrice) || 0;
+      if (p > 0 && q > 0) {
+        setCardTotal((p * q).toFixed(2));
+      }
+    }
+  };
+
+  const handleCardTotalChange = (val: string) => {
+    setCardTotal(val);
+    setCardLastEdited('total');
+    const tot = parseFloat(val);
+    const q = parseFloat(cardQty) || 0;
+    if (!isNaN(tot) && tot >= 0 && q > 0) {
+      const unitP = tot / q;
+      const cleanP = Number(unitP.toFixed(4));
+      setCardPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+    } else if (val.trim() === '') {
+      setCardPrice('');
+    }
+  };
+
+  const updateTableRowQty = (index: number, val: string) => {
+    const q = parseFloat(val) || 0;
+    setCurrentInvoiceItems((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const tot = q * r.price;
+        return { ...r, qty: q, total: Number(tot.toFixed(2)) };
+      })
+    );
+  };
+
+  const updateTableRowPrice = (index: number, val: string) => {
+    const p = parseFloat(val) || 0;
+    setCurrentInvoiceItems((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const tot = r.qty * p;
+        return { ...r, price: p, total: Number(tot.toFixed(2)) };
+      })
+    );
+  };
+
+  const updateTableRowTotal = (index: number, val: string) => {
+    const tot = parseFloat(val) || 0;
+    setCurrentInvoiceItems((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const unitP = r.qty > 0 ? tot / r.qty : tot;
+        return { ...r, price: Number(unitP.toFixed(4)), total: tot };
+      })
+    );
+  };
+
   // Open Item Detail Card and Auto-Focus & Select on Quantity
   const openItemDetailCard = (item: any) => {
     setCardItem(item);
     const calculatedP = getItemPriceForTier(item, activePricingTier);
-    setCardPrice(calculatedP.toString());
+    const pStr = calculatedP > 0 ? calculatedP.toString() : '0';
+    setCardPrice(pStr);
     setCardQty('1');
+    setCardTotal(pStr);
+    setCardLastEdited('price');
     setCardSpec('');
     setIsLookupModalOpen(false);
     setIsDetailCardOpen(true);
@@ -658,7 +741,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const confirmAddDetailedItem = () => {
     if (!cardItem) return;
     const q = parseFloat(cardQty) || 1;
-    const p = parseFloat(cardPrice) || 0;
+    let p = parseFloat(cardPrice) || 0;
+    const totVal = parseFloat(cardTotal);
+    if ((p <= 0 || isNaN(p)) && !isNaN(totVal) && totVal > 0 && q > 0) {
+      p = Number((totVal / q).toFixed(4));
+    }
+    const finalItemTotal = cardLastEdited === 'total' && !isNaN(totVal) && totVal > 0 ? totVal : Number((q * p).toFixed(2));
     const s = cardSpec.trim();
 
     if (isSale) {
@@ -731,7 +819,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         spec: s,
         qty: q,
         price: p,
-        total: Number((q * p).toFixed(2)),
+        total: finalItemTotal,
         itemId: cardItem.itemId,
         costPrice: cardItem.buyPrice,
         cashPrice: cPrice > 0 ? cPrice : (p > 0 ? p : 10),
@@ -754,6 +842,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     setModifyItemName(item.name);
     setModifyItemQty(item.qty.toString());
     setModifyItemPrice(item.price.toString());
+    setModifyItemTotal((item.qty * item.price).toFixed(2));
     setModifyItemSpec(item.spec || '');
     setIsModifyModalOpen(true);
 
@@ -2047,9 +2136,35 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       <td className="col-desc" style={{ textAlign: 'right', color: '#64748b' }}>
                         {item.spec || '-'}
                       </td>
-                      <td className="col-qty">{item.qty}</td>
-                      <td className="col-price">{item.price.toFixed(2)}</td>
-                      <td className="col-total">{item.total.toFixed(2)}</td>
+                      <td className="col-qty">
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="any"
+                          value={item.qty}
+                          onChange={(e) => updateTableRowQty(index, e.target.value)}
+                          style={{ width: '45px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                        />
+                      </td>
+                      <td className="col-price">
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.price}
+                          onChange={(e) => updateTableRowPrice(index, e.target.value)}
+                          style={{ width: '58px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                        />
+                      </td>
+                      <td className="col-total">
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.total}
+                          onChange={(e) => updateTableRowTotal(index, e.target.value)}
+                          title="تعديل الإجمالي يقسم تلقائياً على العدد ليضبط سعر الوحدة"
+                          style={{ width: '64px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1.5px solid #86efac', background: '#f0fdf4', color: '#166534', borderRadius: '4px' }}
+                        />
+                      </td>
                       <td className="col-action">
                         <span className="invoice-item-actions">
                           <i
@@ -2364,6 +2479,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onClick={() => {
                     const p = getItemPriceForTier(cardItem, 'cash');
                     setCardPrice(p.toString());
+                    setCardLastEdited('price');
+                    const q = parseFloat(cardQty) || 1;
+                    setCardTotal((p * q).toFixed(2));
                   }}
                   className="pricing-tier-btn"
                   style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '3px', cursor: 'pointer' }}
@@ -2375,6 +2493,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onClick={() => {
                     const p = getItemPriceForTier(cardItem, 'wholesale');
                     setCardPrice(p.toString());
+                    setCardLastEdited('price');
+                    const q = parseFloat(cardQty) || 1;
+                    setCardTotal((p * q).toFixed(2));
                   }}
                   className="pricing-tier-btn"
                   style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#e0e7ff', color: '#3730a3', border: '1px solid #a5b4fc', borderRadius: '3px', cursor: 'pointer' }}
@@ -2386,6 +2507,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onClick={() => {
                     const p = getItemPriceForTier(cardItem, 'buy');
                     setCardPrice(p.toString());
+                    setCardLastEdited('price');
+                    const q = parseFloat(cardQty) || 1;
+                    setCardTotal((p * q).toFixed(2));
                   }}
                   className="pricing-tier-btn"
                   style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '3px', cursor: 'pointer' }}
@@ -2396,12 +2520,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
               <div className="edit-card-grid">
                 <div className="field-inline">
-                  <label>سعر الحركة:</label>
+                  <label>سعر الحركة (الوحدة):</label>
                   <input
                     type="number"
                     step="any"
                     value={cardPrice}
-                    onChange={(e) => setCardPrice(e.target.value)}
+                    onChange={(e) => handleCardPriceChange(e.target.value)}
+                    placeholder="سعر الوحدة..."
                     style={{
                       fontWeight: 'bold',
                       color: '#16a34a',
@@ -2439,26 +2564,53 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     min="0.01"
                     step="any"
                     value={cardQty}
-                    onChange={(e) => setCardQty(e.target.value)}
+                    onChange={(e) => handleCardQtyChange(e.target.value)}
                     style={{ textAlign: 'center', fontWeight: 'bold', height: '24px', fontSize: '9.5px' }}
                   />
                 </div>
                 <div className="field-inline">
-                  <label>اجمالي صافي:</label>
+                  <label style={{ color: '#047857', fontWeight: 'bold' }}>
+                    الإجمالي (حساب عكسي للسعر):
+                  </label>
                   <input
-                    type="text"
-                    readOnly
-                    value={`${((parseFloat(cardQty) || 0) * (parseFloat(cardPrice) || 0)).toFixed(2)} ج.م`}
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={cardTotal}
+                    onChange={(e) => handleCardTotalChange(e.target.value)}
+                    placeholder="اكتب الإجمالي..."
+                    title="أدخل الإجمالي هنا ليتم تقسيم السعر على الكمية تلقائياً"
                     style={{
-                      background: '#e2e8f0',
+                      background: '#ecfdf5',
+                      border: '1.5px solid #10b981',
                       fontWeight: 'bold',
-                      color: '#16a34a',
+                      color: '#047857',
                       textAlign: 'center',
                       height: '24px',
                       fontSize: '9.5px',
                     }}
                   />
                 </div>
+              </div>
+
+              {/* شريط توضيح ميزة الحساب العكسي التلقائي */}
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px dashed #86efac',
+                  borderRadius: '4px',
+                  padding: '4px 6px',
+                  margin: '3px 0 5px 0',
+                  fontSize: '8.5px',
+                  color: '#166534',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontWeight: 'bold',
+                }}
+              >
+                <span>⚡ ميزة الحساب العكسي:</span>
+                <span>اكتب الإجمالي ليتم ترتيب سعر الوحدة تلقائياً (السعر = الإجمالي ÷ الكمية)</span>
               </div>
               <div className="field-inline">
                 <label>الوصف / البيان / ملاحظات البند:</label>
@@ -3029,28 +3181,65 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   style={{ background: '#f1f5f9', height: '24px', fontSize: '9.5px' }}
                 />
               </div>
-              <div className="edit-card-grid">
+              <div className="edit-card-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
                 <div className="field-inline">
-                  <label>العدد</label>
+                  <label>العدد (الكمية)</label>
                   <input
                     ref={modifyQtyInputRef}
                     type="number"
                     min="0.01"
                     step="any"
                     value={modifyItemQty}
-                    onChange={(e) => setModifyItemQty(e.target.value)}
+                    onChange={(e) => {
+                      setModifyItemQty(e.target.value);
+                      const q = parseFloat(e.target.value) || 0;
+                      const p = parseFloat(modifyItemPrice) || 0;
+                      if (p > 0 && q > 0) setModifyItemTotal((q * p).toFixed(2));
+                      else if (q > 0 && parseFloat(modifyItemTotal) > 0) {
+                        const unitP = parseFloat(modifyItemTotal) / q;
+                        const cleanP = Number(unitP.toFixed(2));
+                        setModifyItemPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+                      }
+                    }}
                     style={{ height: '24px', fontSize: '9.5px' }}
                   />
                 </div>
                 <div className="field-inline">
-                  <label>سعر</label>
+                  <label>سعر الوحدة</label>
                   <input
                     type="number"
                     min="0"
                     step="any"
                     value={modifyItemPrice}
-                    onChange={(e) => setModifyItemPrice(e.target.value)}
+                    onChange={(e) => {
+                      setModifyItemPrice(e.target.value);
+                      const p = parseFloat(e.target.value) || 0;
+                      const q = parseFloat(modifyItemQty) || 0;
+                      if (q > 0 && p > 0) setModifyItemTotal((q * p).toFixed(2));
+                    }}
                     style={{ height: '24px', fontSize: '9.5px' }}
+                  />
+                </div>
+                <div className="field-inline">
+                  <label>الإجمالي (المبلغ)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={modifyItemTotal}
+                    onChange={(e) => {
+                      setModifyItemTotal(e.target.value);
+                      const tot = parseFloat(e.target.value) || 0;
+                      const q = parseFloat(modifyItemQty) || 0;
+                      if (q > 0) {
+                        const unitPrice = tot / q;
+                        const cleanP = Number(unitPrice.toFixed(4));
+                        setModifyItemPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
+                      }
+                    }}
+                    placeholder="1000..."
+                    title="اكتب الإجمالي وسيتم حسابه وقسمته على الكمية تلقائياً لتحديث سعر الوحدة"
+                    style={{ height: '24px', fontSize: '9.5px', background: '#ecfdf5', borderColor: '#10b981', color: '#065f46', fontWeight: 'bold' }}
                   />
                 </div>
               </div>
