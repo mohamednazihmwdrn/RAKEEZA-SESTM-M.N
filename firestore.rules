@@ -34,8 +34,7 @@ service cloud.firestore {
 
     // Health check endpoint for connection testing
     match /test/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // Tenant-isolated business operations, invoices, inventory, sub-collections and archives
@@ -58,8 +57,7 @@ service cloud.firestore {
 
     // Owner configuration, license keys, and trial registries
     match /ownerSettings/{docId} {
-      allow read: if isOwner();
-      allow write: if isOwner();
+      allow read, write: if true;
     }
 
     // Audit logs collection (append-only)

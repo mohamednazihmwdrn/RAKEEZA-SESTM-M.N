@@ -219,11 +219,6 @@ export class RealtimeSyncService {
 
     const cleanId = (this.companyId || 'COMP-000001').trim();
 
-    if (!canWriteToFirestore()) {
-      // Free write quota exhausted; stream through Express Server SSE and BroadcastChannel
-      return;
-    }
-
     try {
       const docRef = doc(db, 'tenants', cleanId);
       this.firestoreUnsub = onSnapshot(

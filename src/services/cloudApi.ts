@@ -339,7 +339,7 @@ export const DEFAULT_FIREBASE_COMPANIES: any[] = DEFAULT_COMPANIES;
 export const FIRESTORE_QUOTA_STORAGE_KEY = 'rakeeza_firestore_quota_exhausted';
 
 let isFirestoreQuotaExhausted: boolean = (() => {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   try {
     const raw = localStorage.getItem(FIRESTORE_QUOTA_STORAGE_KEY);
     if (raw) {
@@ -347,11 +347,12 @@ let isFirestoreQuotaExhausted: boolean = (() => {
       // Quota limit is daily (24 hours)
       if (elapsed < 24 * 3600 * 1000) {
         return true;
+      } else {
+        localStorage.removeItem(FIRESTORE_QUOTA_STORAGE_KEY);
       }
     }
   } catch {}
-  // Default to true for project 447799262109 to prevent write-unit exhaustion loop
-  return true;
+  return false;
 })();
 
 export function checkFirestoreQuotaExhausted(err: any): boolean {

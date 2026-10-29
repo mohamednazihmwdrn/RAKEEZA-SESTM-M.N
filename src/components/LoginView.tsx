@@ -124,14 +124,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
         users: ((primaryComp as any).users || []) as any[],
       };
 
-      if (!stored || stored.companyId !== 'COMP-000001') {
+      if (!stored) {
         stored = defaultMowan;
         setStoredBoundDevice(defaultMowan);
       }
       setBoundDevice(stored);
 
       // Check if a user was previously assigned/remembered on this device
-      const installedUser = typeof window !== 'undefined' ? localStorage.getItem('mowan_installed_user') : null;
+      const installedUser =
+        typeof window !== 'undefined'
+          ? localStorage.getItem(`rakeeza_installed_user_${stored.companyId}`) ||
+            localStorage.getItem('mowan_installed_user')
+          : null;
       if (installedUser) {
         setSelectedUsername(installedUser);
       } else if (stored.users && stored.users.length > 0) {
@@ -143,14 +147,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
         setSelectedBranchId(mainBranch.id);
       }
 
-      // Silent cloud update of company users & branches for مؤسسة الموان
+      // Silent cloud update of company users & branches for this company
       try {
-        const res = await fetchCompanyPublicDetailsApi('COMP-000001');
+        const res = await fetchCompanyPublicDetailsApi(stored.companyId);
         if (res.success && res.company) {
           const updated: BoundDeviceData = {
             ...stored,
-            companyName: 'مؤسسة الموان للتجارة',
-            companyCode: '101',
+            companyName: res.company.name || stored.companyName,
+            companyCode: res.company.code || (res.company as any).companyCode || stored.companyCode,
             branches: res.branches || stored.branches,
             users: res.users || stored.users,
           };
@@ -699,11 +703,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-bold">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>النظام المعتمد</span>
-                    </span>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    <button
+                      type="button"
+                      id="btn-switch-company-login"
+                      onClick={() => setShowUnbindConfirmModal(true)}
+                      className="px-2.5 py-1.5 text-xs text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/30 rounded-lg transition-colors cursor-pointer flex items-center gap-1 font-bold"
+                      title="ربط الجهاز بشركة أو منشأة أخرى"
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>تبديل المنشأة</span>
+                    </button>
                     <button
                       type="button"
                       id="btn-refresh-company-users"
@@ -1287,17 +1297,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
         >
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
-              <Unlink className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+              <Building2 className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-2">
               <h3 className="text-base sm:text-lg font-bold text-white">
-                تأكيد إلغاء ربط هذا الجهاز
+                تبديل المنشأة أو الدخول لشركة أخرى
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                هل أنت متأكد من رغبتك في إلغاء ربط هذا الجهاز بشركة{' '}
-                <span className="font-bold text-amber-400">"{boundDevice?.companyName}"</span>؟
+                هل ترغب في تغيير المنشأة الحالية{' '}
+                <span className="font-bold text-amber-400">"{boundDevice?.companyName}"</span> والربط بمنشأة أخرى بكود مختلف أو تسجيل منشأة جديدة؟
               </p>
             </div>
 
@@ -1306,9 +1316,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 type="button"
                 id="btn-confirm-unbind"
                 onClick={handleConfirmUnbindDevice}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-bold transition cursor-pointer shadow-lg shadow-rose-600/30"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs sm:text-sm font-bold transition cursor-pointer shadow-lg shadow-blue-600/30"
               >
-                تأكيد إلغاء الربط
+                نعم، اختيار منشأة أخرى
               </button>
               <button
                 type="button"
