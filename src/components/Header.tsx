@@ -493,33 +493,33 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* القائمة المنظمة للثلاث نقاط (مرتبة ومنظمة بدون أي كسور) */}
+            {/* نافذة / صفحة خاصة لمحتويات الثلاث نقاط كاملة وواضحة ومنظمة بدون أي ضغط أو تداخل */}
             {isMobileMenuOpen && (
-              <>
-                {/* طبقة خلفية خفيفة للنقر في أي مكان والإغلاق */}
+              <div
+                className="fixed inset-0 z-[1000] bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+                dir="rtl"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setIsMobileMenuOpen(false);
+                }}
+              >
                 <div
-                  className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                />
-
-                <div
-                  className="absolute left-0 top-full mt-2 w-[350px] sm:w-[420px] max-w-[calc(100vw-20px)] bg-white border-2 border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden text-right text-slate-900 animate-in fade-in zoom-in-95 duration-150"
-                  dir="rtl"
+                  className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border-2 border-slate-200 overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-200"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {/* رأس القائمة: بطاقة المستخدم والفرع وزر إغلاق */}
-                  <div className="p-3.5 bg-gradient-to-r from-blue-50/80 via-slate-50 to-indigo-50/80 border-b-2 border-slate-200 flex items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-black shadow-sm shrink-0">
-                        {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-5 h-5" />}
+                  {/* ترويسة النافذة المميزة */}
+                  <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-600/90 text-white flex items-center justify-center text-lg font-black shadow-md shrink-0 border border-blue-400/40">
+                        {currentUser?.name ? currentUser.name.slice(0, 1).toUpperCase() : <UserIcon className="w-6 h-6" />}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-black text-slate-900 truncate">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-base sm:text-lg font-black text-white truncate">
                             {currentUser?.name || 'مدير النظام'}
-                          </span>
-                          <span className="text-[10px] bg-blue-100 border border-blue-200 text-blue-900 font-bold px-2 py-0.5 rounded-full shrink-0">
+                          </h2>
+                          <span className="text-[11px] bg-blue-500/30 text-blue-200 border border-blue-400/30 font-bold px-2.5 py-0.5 rounded-full shrink-0">
                             {currentUser?.role === 'admin' || currentUser?.role === 'company_admin'
-                              ? 'مدير عام'
+                              ? 'مدير عام المنظومة'
                               : currentUser?.role === 'cashier'
                               ? 'كاشير'
                               : currentUser?.role === 'accountant'
@@ -531,24 +531,39 @@ export const Header: React.FC<HeaderProps> = ({
                               : currentUser?.role || 'مستخدم'}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 font-semibold truncate mt-0.5 flex items-center gap-1">
-                          <span>🏢</span>
-                          <span>{currentActiveBranch?.name || 'الفرع الرئيسي'}</span>
-                        </span>
+                        <div className="text-xs text-slate-300 font-medium truncate mt-1 flex items-center gap-2">
+                          <span>🏢 {companyName || 'الشركة'} ({companyCode || '01029190615'})</span>
+                          <span>•</span>
+                          <span className="text-blue-300 font-bold">{currentActiveBranch?.name || 'الفرع الرئيسي'}</span>
+                        </div>
                       </div>
                     </div>
+
                     <button
                       type="button"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center border border-slate-200 transition cursor-pointer shrink-0"
-                      title="إغلاق القائمة"
+                      className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-slate-200 hover:text-white flex items-center justify-center border border-white/10 transition cursor-pointer shrink-0"
+                      title="إغلاق النافذة"
+                      aria-label="إغلاق النافذة"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  {/* قائمة الإجراءات الرأسية المتكاملة بدون أي تداخل أو ضغط */}
-                  <div className="p-3 space-y-2 max-h-[72vh] overflow-y-auto">
+                  {/* شريط الإحصائية / الإشعار العلوي */}
+                  <div className="px-5 py-2.5 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-600" />
+                      <span>مركز الخدمات والمهام السريعة للمنظومة</span>
+                    </span>
+                    <span className="text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                      <span>سحابي متصل</span>
+                    </span>
+                  </div>
+
+                  {/* قائمة الإجراءات والخدمات بصورة بطاقات كبيرة وواضحة جداً */}
+                  <div className="p-4 sm:p-6 space-y-3 max-h-[62vh] overflow-y-auto">
                     {/* 1. النسخ السحابي وقاعدة البيانات */}
                     {onNavigateBackup && (
                       <button
@@ -557,37 +572,34 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                           onNavigateBackup();
                         }}
-                        className="w-full text-right p-3 rounded-xl bg-slate-50 hover:bg-emerald-50/70 active:bg-emerald-100/70 border border-slate-200 hover:border-emerald-300 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                        className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-white hover:bg-emerald-50/70 active:bg-emerald-100/70 border-2 border-slate-200 hover:border-emerald-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200 group-hover:scale-105 transition-transform">
-                            <Cloud className="w-5 h-5" />
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-300 group-hover:scale-105 transition-transform shadow-2xs">
+                            <Cloud className="w-6 h-6" />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-emerald-800 transition-colors">
-                              النسخ السحابي والمزامنة
+                            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-emerald-800 transition-colors">
+                              النسخ السحابي والمزامنة اللحظية
                             </span>
-                            <span className="text-[11px] text-slate-500 truncate mt-0.5">
-                              مزامنة البيانات والحفظ التلقائي لحظياً
+                            <span className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                              مزامنة البيانات والحفظ التلقائي مع السحابة لحظة بلحظة
                             </span>
                           </div>
                         </div>
-                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-full flex items-center gap-1.5 shrink-0">
-                          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                          <span>متصل</span>
+                        <span className="text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5">
+                          <span>فتح المركز</span>
+                          <ArrowRight className="w-3.5 h-3.5 rotate-180" />
                         </span>
                       </button>
                     )}
 
-                    {/* 2. سحب نسخة احتياطية فورية (تلقائي كل 12 ساعة + سحب يدوي الآن) */}
+                    {/* 2. سحب نسخة احتياطية فورية لجهازك */}
                     <button
                       type="button"
                       onClick={() => {
                         if (appData) {
-                          downloadBackupJsonFile(
-                            appData,
-                            
-                          );
+                          downloadBackupJsonFile(appData);
                           showToast?.('💾 تم سحب وتنزيل النسخة الاحتياطية بنجاح! يتم أخذ نسخة تلقائياً كل 12 ساعة.', 'success');
                           setIsMobileMenuOpen(false);
                         } else if (onNavigateBackup) {
@@ -595,28 +607,28 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                         }
                       }}
-                      className="w-full text-right p-3 rounded-xl bg-blue-50/60 hover:bg-blue-100/70 active:bg-blue-200/70 border border-blue-200 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                      className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-blue-50/50 hover:bg-blue-100/60 active:bg-blue-200/60 border-2 border-blue-200 hover:border-blue-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                       title="سحب نسخة احتياطية فورية الآن لجهازك بصيغة JSON"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                          <Download className="w-5 h-5" />
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                          <Download className="w-6 h-6" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs sm:text-sm font-black text-blue-950 group-hover:text-blue-900 transition-colors">
-                            سحب نسخة احتياطية للجهاز
+                          <span className="text-sm sm:text-base font-black text-blue-950 group-hover:text-blue-900 transition-colors">
+                            سحب نسخة احتياطية للجهاز (JSON)
                           </span>
-                          <span className="text-[11px] text-blue-700 font-medium truncate mt-0.5">
-                            تنزيل ملف JSON فوراً (كل 12 ساعة تلقائياً)
+                          <span className="text-xs text-blue-700 font-medium truncate mt-0.5">
+                            تنزيل ملف البيانات فوراً (ويتم النسخ التلقائي كل 12 ساعة)
                           </span>
                         </div>
                       </div>
-                      <span className="text-[11px] font-bold text-blue-900 bg-white border border-blue-300 px-2.5 py-1 rounded-full shrink-0 shadow-2xs">
-                        تنزيل يدوي
+                      <span className="text-xs font-black text-blue-900 bg-white border border-blue-300 px-3 py-1.5 rounded-xl shrink-0 shadow-2xs">
+                        تنزيل فوري 💾
                       </span>
                     </button>
 
-                    {/* 3. صحة النظام والبيانات (10M+) */}
+                    {/* 3. مركز فحص النزاهة وصحة البيانات (10M+) */}
                     {onOpenDiagnostics && (
                       <button
                         type="button"
@@ -624,23 +636,24 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                           onOpenDiagnostics();
                         }}
-                        className="w-full text-right p-3 rounded-xl bg-slate-50 hover:bg-indigo-50/70 active:bg-indigo-100/70 border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                        className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-white hover:bg-indigo-50/70 active:bg-indigo-100/70 border-2 border-slate-200 hover:border-indigo-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-200 group-hover:scale-105 transition-transform">
-                            <Activity className="w-5 h-5" />
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-300 group-hover:scale-105 transition-transform shadow-2xs">
+                            <Activity className="w-6 h-6" />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-indigo-800 transition-colors">
-                              صحة النظام والبيانات (10M+)
+                            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-indigo-800 transition-colors">
+                              صحة النظام والبيانات (10M+ Enterprise)
                             </span>
-                            <span className="text-[11px] text-slate-500 truncate mt-0.5">
-                              فحص الفهارس وسرعة الاستجابة والنزاهة
+                            <span className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                              فحص الفهارس وسرعة الاستجابة والنزاهة المحاسبية
                             </span>
                           </div>
                         </div>
-                        <span className="text-[11px] font-bold text-indigo-800 bg-indigo-100/90 border border-indigo-300 px-2.5 py-1 rounded-full shrink-0">
-                          فحص دوري
+                        <span className="text-xs font-bold text-indigo-800 bg-indigo-50 border border-indigo-300 px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5">
+                          <span>بدء الفحص</span>
+                          <ArrowRight className="w-3.5 h-3.5 rotate-180" />
                         </span>
                       </button>
                     )}
@@ -653,27 +666,27 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                           onNavigateWebOrders();
                         }}
-                        className="w-full text-right p-3 rounded-xl bg-slate-50 hover:bg-amber-50/70 active:bg-amber-100/70 border border-slate-200 hover:border-amber-300 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                        className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-white hover:bg-amber-50/70 active:bg-amber-100/70 border-2 border-slate-200 hover:border-amber-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200 group-hover:scale-105 transition-transform">
-                            <ShoppingBag className="w-5 h-5" />
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-300 group-hover:scale-105 transition-transform shadow-2xs">
+                            <ShoppingBag className="w-6 h-6" />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-amber-800 transition-colors">
+                            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-amber-800 transition-colors">
                               طلبات المتجر الإلكتروني
                             </span>
-                            <span className="text-[11px] text-slate-500 truncate mt-0.5">
-                              متابعة الطلبيات الواردة من المتجر أونلاين
+                            <span className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                              متابعة الطلبيات الواردة من المتجر والكتالوج أونلاين
                             </span>
                           </div>
                         </div>
                         {Boolean(pendingWebOrdersCount && pendingWebOrdersCount > 0) ? (
-                          <span className="text-[11px] font-black text-white bg-rose-600 px-2.5 py-1 rounded-full animate-bounce shrink-0 shadow-xs">
-                            {pendingWebOrdersCount} جديدة
+                          <span className="text-xs font-black text-white bg-rose-600 px-3 py-1.5 rounded-xl animate-bounce shrink-0 shadow-xs">
+                            {pendingWebOrdersCount} جديدة 🔔
                           </span>
                         ) : (
-                          <span className="text-[11px] font-bold text-slate-600 bg-slate-200/80 px-2.5 py-1 rounded-full shrink-0">
+                          <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl shrink-0">
                             0 طلبات
                           </span>
                         )}
@@ -688,23 +701,23 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsMobileMenuOpen(false);
                           onShareCatalog();
                         }}
-                        className="w-full text-right p-3 rounded-xl bg-slate-50 hover:bg-teal-50/70 active:bg-teal-100/70 border border-slate-200 hover:border-teal-300 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                        className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-white hover:bg-teal-50/70 active:bg-teal-100/70 border-2 border-slate-200 hover:border-teal-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200 group-hover:scale-105 transition-transform">
-                            <Share2 className="w-5 h-5" />
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 border border-teal-300 group-hover:scale-105 transition-transform shadow-2xs">
+                            <Share2 className="w-6 h-6" />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs sm:text-sm font-black text-slate-900 group-hover:text-teal-800 transition-colors">
-                              مشاركة المتجر والكتالوج
+                            <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-teal-800 transition-colors">
+                              مشاركة المتجر والكتالوج للعملاء
                             </span>
-                            <span className="text-[11px] text-slate-500 truncate mt-0.5">
-                              إرسال رابط الكتالوج للعملاء عبر واتساب
+                            <span className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                              إرسال رابط الكتالوج بالأسعار والصور عبر واتساب
                             </span>
                           </div>
                         </div>
-                        <span className="text-[11px] font-bold text-teal-800 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-full shrink-0">
-                          واتساب
+                        <span className="text-xs font-bold text-teal-800 bg-teal-50 border border-teal-300 px-3 py-1.5 rounded-xl shrink-0">
+                          واتساب 📲
                         </span>
                       </button>
                     )}
@@ -718,51 +731,63 @@ export const Header: React.FC<HeaderProps> = ({
                         setSecretPassword('');
                         setSecretError('');
                       }}
-                      className="w-full text-right p-3 rounded-xl bg-amber-50/60 hover:bg-amber-100/70 active:bg-amber-200/70 border border-amber-200 hover:border-amber-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs group"
+                      className="w-full text-right p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border-2 border-amber-300 hover:border-amber-400 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-xs hover:shadow-md group"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0 border border-amber-300 group-hover:scale-105 transition-transform">
-                          <Crown className="w-5 h-5 text-amber-700" />
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0 border border-amber-400 group-hover:scale-105 transition-transform shadow-2xs">
+                          <Crown className="w-6 h-6 text-amber-800" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs sm:text-sm font-black text-amber-950 group-hover:text-amber-900 transition-colors">
+                          <span className="text-sm sm:text-base font-black text-amber-950 group-hover:text-amber-900 transition-colors">
                             لوحة مالك المنظومة 👑
                           </span>
-                          <span className="text-[11px] text-amber-800 font-medium truncate mt-0.5">
-                            إدارة التراخيص والاشتراك وتعيين الصلاحيات
+                          <span className="text-xs text-amber-800 font-medium truncate mt-0.5">
+                            إدارة تراخيص الشركات وتعديل الاشتراكات والصلاحيات
                           </span>
                         </div>
                       </div>
-                      <span className="text-[11px] font-bold text-amber-900 bg-white border border-amber-300 px-2.5 py-1 rounded-full shrink-0 shadow-2xs">
+                      <span className="text-xs font-black text-amber-950 bg-white border border-amber-400 px-3 py-1.5 rounded-xl shrink-0 shadow-2xs">
                         المالك
                       </span>
                     </button>
 
                     {/* تنويه الجدولة التلقائية كل 12 ساعة */}
-                    <div className="mt-2 p-2.5 rounded-xl bg-blue-50/80 border border-blue-200 text-[11px] text-blue-900 flex items-start gap-2 leading-relaxed">
-                      <span className="text-blue-600 font-bold shrink-0 mt-0.5">ℹ️</span>
-                      <span><strong>النسخ الاحتياطي التلقائي:</strong> يتم حفظ وتحديث نسخة احتياطية مشفرة كل 12 ساعة تلقائياً، ويمكنك سحب نسخة يدوية لجهازك في أي وقت.</span>
+                    <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-xs text-blue-950 flex items-start gap-2.5 leading-relaxed">
+                      <span className="text-blue-700 text-base font-bold shrink-0 mt-0.5">ℹ️</span>
+                      <div>
+                        <strong>النسخ الاحتياطي التلقائي الدوري:</strong> يقوم النظام بحفظ وأرشفة نسخة احتياطية مشفرة كل 12 ساعة تلقائياً، مع إمكانية تنزيل نسخة يدوية على جهازك في أي لحظة.
+                      </div>
                     </div>
                   </div>
 
-                  {/* تذييل القائمة: زر تسجيل الخروج الآمن */}
-                  {onLogout && (
-                    <div className="p-3 border-t-2 border-slate-200 bg-slate-50">
+                  {/* تذييل النافذة: تسجيل خروج وإغلاق */}
+                  <div className="p-4 sm:p-5 border-t-2 border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                    {onLogout ? (
                       <button
                         type="button"
                         onClick={() => {
                           setIsMobileMenuOpen(false);
                           onLogout();
                         }}
-                        className="w-full py-2.5 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border-2 border-rose-200 text-rose-700 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                        className="py-2.5 px-5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs sm:text-sm flex items-center gap-2 transition cursor-pointer shadow-sm hover:shadow-md"
                       >
-                        <LogOut className="w-4 h-4 text-rose-600 shrink-0" />
+                        <LogOut className="w-4 h-4 shrink-0" />
                         <span>تسجيل الخروج الآمن</span>
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <div />
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="py-2.5 px-5 rounded-2xl bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 font-bold text-xs sm:text-sm transition cursor-pointer"
+                    >
+                      إغلاق النافذة
+                    </button>
+                  </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
 

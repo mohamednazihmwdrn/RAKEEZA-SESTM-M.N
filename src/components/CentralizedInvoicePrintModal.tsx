@@ -6,6 +6,7 @@ import {
   subscribeToInvoicePrint,
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
+import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { Printer, Download, X, Copy, Check, FileText, ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
@@ -198,136 +199,48 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     'البضاعة المباعة ترجع وتستبدل خلال 14 يوماً بأصل الفاتورة';
 
   /**
-   * 🖨️ Execute high-precision window.print() with customized page CSS
+   * 🖨️ Execute print using the Unified Print Template
    */
   const handlePrint = () => {
-    // 1. Inject or update dynamic @page style
-    let styleEl = document.getElementById('centralized-invoice-print-style');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'centralized-invoice-print-style';
-      document.head.appendChild(styleEl);
-    }
-
-    let pageSizeRule = '@page { size: A4 portrait; margin: 6mm 8mm; }';
-    if (paperSize === 'A5') {
-      pageSizeRule = '@page { size: A5 portrait; margin: 4mm 5mm; }';
-    } else if (paperSize === 'thermal') {
-      pageSizeRule = '@page { size: 80mm auto; margin: 0; }';
-    } else if (paperSize === '58mm') {
-      pageSizeRule = '@page { size: 58mm auto; margin: 0; }';
-    }
-
-    const isThermal = paperSize === 'thermal' || paperSize === '58mm';
-
-    styleEl.innerHTML = `
-      ${pageSizeRule}
-      @media print {
-        html, body {
-          background: #ffffff !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          width: 100% !important;
-          height: ${isThermal ? 'auto' : '100%'} !important;
-          max-height: ${isThermal ? 'none' : '100%'} !important;
-          overflow: ${isThermal ? 'visible' : 'hidden'} !important;
-        }
-        /* Hide all UI elements, toolbars, buttons, outside modals */
-        body > *:not(#centralized-print-modal-root) {
-          display: none !important;
-        }
-        .no-print,
-        .no-print-toolbar,
-        .no-print-backdrop,
-        button,
-        input,
-        select,
-        textarea {
-          display: none !important;
-        }
-        #centralized-print-modal-root,
-        #centralized-print-modal-root .print-stage-wrapper {
-          position: static !important;
-          background: transparent !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          overflow: ${isThermal ? 'visible' : 'hidden'} !important;
-          display: block !important;
-          width: 100% !important;
-          height: ${isThermal ? 'auto' : '100%'} !important;
-          max-height: ${isThermal ? 'none' : '100%'} !important;
-          min-height: auto !important;
-        }
-        .print-stage-scaler-box {
-          width: 100% !important;
-          max-width: 100% !important;
-          display: block !important;
-          transform: none !important;
-          margin: 0 auto !important;
-          padding: 0 !important;
-        }
-        #rakeeza-printable-invoice-container {
-          box-shadow: none !important;
-          margin: 0 auto !important;
-          transform: none !important;
-          page-break-after: avoid !important;
-          page-break-before: avoid !important;
-          page-break-inside: avoid !important;
-          break-inside: avoid !important;
-          break-after: avoid !important;
-          box-sizing: border-box !important;
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: space-between !important;
-          height: ${isThermal ? 'auto' : 'auto'} !important;
-        }
-        body[data-paper-size="A4"] #rakeeza-printable-invoice-container {
-          width: 194mm !important;
-          max-width: 194mm !important;
-          max-height: 280mm !important;
-          padding: 5mm 6mm !important;
-          border: 2px solid #000 !important;
-          font-size: 0.88rem !important;
-        }
-        body[data-paper-size="A5"] #rakeeza-printable-invoice-container {
-          width: 138mm !important;
-          max-width: 138mm !important;
-          max-height: 198mm !important;
-          padding: 3mm 4mm !important;
-          border: 2px solid #000 !important;
-          font-size: 0.75rem !important;
-        }
-        body[data-paper-size="thermal"] #rakeeza-printable-invoice-container {
-          width: 76mm !important;
-          max-width: 76mm !important;
-          padding: 2mm !important;
-          border: 1px dashed #000 !important;
-          font-size: 0.72rem !important;
-        }
-        body[data-paper-size="58mm"] #rakeeza-printable-invoice-container {
-          width: 52mm !important;
-          max-width: 52mm !important;
-          padding: 1.5mm !important;
-          border: 1px dashed #000 !important;
-          font-size: 0.65rem !important;
-        }
-        .copyright-outside {
-          display: none !important;
-        }
-      }
-    `;
-
-    // 2. Add attribute on body
-    document.body.setAttribute('data-print-mode', 'invoice');
-    document.body.setAttribute('data-paper-size', paperSize);
-
-    // 3. Trigger window.print
-    setTimeout(() => {
+    try {
+      openUnifiedPrintWindow(
+        {
+          title: invoiceTypeTitle,
+          docNumber: invoiceNumber,
+          docTypeBadge: invoiceTypeTitle,
+          date: invoiceDate,
+          time: invoiceTime,
+          partyName,
+          partyCode: partyPhone,
+          partyPhone,
+          partyLabel,
+          partyCodeLabel: partyIdLabel,
+          paymentMethod: paymentMethodType,
+          statementNote: (invoice as any).notes || (invoice as any).description,
+          items: items.map((it, idx) => ({
+            index: idx + 1,
+            name: it.name || '-',
+            unit: (it as any).unit || it.spec || '-',
+            qty: it.qty,
+            price: it.price,
+            total: it.total !== undefined ? it.total : Number(it.qty || 0) * Number(it.price || 0),
+          })),
+          summary: [
+            { label: 'إجمالي الأصناف', value: `${(grandTotal - Number(invoice.tax || 0) + Number(invoice.discount || 0)).toFixed(2)} ج.م` },
+            ...(Number(invoice.discount || 0) > 0 ? [{ label: 'الخصم', value: `${Number(invoice.discount).toFixed(2)} ج.م` }] : []),
+            ...(Number(invoice.tax || 0) > 0 ? [{ label: 'ضريبة القيمة المضافة', value: `${Number(invoice.tax).toFixed(2)} ج.م` }] : []),
+            { label: 'الإجمالي الصافي', value: `${grandTotal.toFixed(2)} ج.م`, isTotal: true, isHighlight: true },
+            { label: 'المدفوع', value: `${paidVal.toFixed(2)} ج.م` },
+            { label: 'المتبقي', value: `${remainingVal.toFixed(2)} ج.م` },
+          ],
+          footerNote: footerTermsNote,
+          preferredPaperSize: paperSize === 'thermal' || paperSize === '58mm' ? 'thermal' : paperSize === 'A4' ? 'A4' : 'A5',
+        },
+        settings
+      );
+    } catch {
       window.print();
-      document.body.removeAttribute('data-print-mode');
-    }, 100);
+    }
   };
 
   /**
