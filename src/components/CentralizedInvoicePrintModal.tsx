@@ -6,8 +6,7 @@ import {
   subscribeToInvoicePrint,
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
-import { openUnifiedPrintWindow } from '../utils/printUnified';
-import { Printer, Download, X, Copy, Check, FileText, ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { Printer, Download, X, Copy, Check } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -18,56 +17,25 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activePayload, setActivePayload] = useState<InvoicePrintPayload | null>(null);
-  const [paperSize, setPaperSize] = useState<PaperSize>('A5');
-  const [previewScale, setPreviewScale] = useState<number>(1);
-  const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
+  const [selectedSize, setSelectedSize] = useState<'a4' | 'a5' | 'thermal'>('a5');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const invoiceContainerRef = useRef<HTMLDivElement>(null);
-
-  // Auto-calculate scale on window resize or size change if isAutoFit is active
-  useEffect(() => {
-    const updateScale = () => {
-      if (!isAutoFit) return;
-      if (typeof window === 'undefined') return;
-      const screenW = window.innerWidth;
-      // Target widths in mm converted to approx px (1mm ~ 3.78px)
-      const targetWidthMm = paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72;
-      const targetWidthPx = targetWidthMm * 3.78;
-      const availableW = Math.max(280, screenW - (screenW < 640 ? 16 : 32));
-      if (availableW < targetWidthPx) {
-        const factor = Math.max(0.38, Math.min(1, Math.round((availableW / targetWidthPx) * 100) / 100));
-        setPreviewScale(factor);
-      } else {
-        setPreviewScale(1);
-      }
-    };
-
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, [paperSize, isAutoFit, isOpen]);
 
   // Subscribe to centralized print service events
   useEffect(() => {
     const unsubscribe = subscribeToInvoicePrint((payload) => {
       setActivePayload(payload);
-      const initialSize: PaperSize =
-        payload.preferredPaperSize ||
-        (typeof window !== 'undefined'
-          ? (localStorage.getItem('sys_print_pref_size') as PaperSize)
-          : 'A5') ||
-        'A5';
-      setPaperSize(
-        initialSize === 'thermal'
-          ? 'thermal'
-          : initialSize === '58mm'
-          ? '58mm'
-          : initialSize === 'A4'
-          ? 'A4'
-          : 'A5'
-      );
-      setIsAutoFit(true);
+      let initialSize: 'a4' | 'a5' | 'thermal' = 'a5';
+      const pref = payload.preferredPaperSize || (typeof window !== 'undefined' ? localStorage.getItem('sys_print_pref_size') : null);
+      if (pref === 'A4' || pref === 'a4') {
+        initialSize = 'a4';
+      } else if (pref === 'thermal' || pref === '80mm' || pref === '58mm') {
+        initialSize = 'thermal';
+      } else {
+        initialSize = 'a5';
+      }
+      setSelectedSize(initialSize);
       setIsOpen(true);
     });
     return () => unsubscribe();
@@ -98,8 +66,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     setActivePayload(null);
   };
 
-  const handleChangePaperSize = (size: PaperSize) => {
-    setPaperSize(size);
+  const handleSizeChange = (size: 'a4' | 'a5' | 'thermal') => {
+    setSelectedSize(size);
     try {
       localStorage.setItem('sys_print_pref_size', size);
     } catch {}
@@ -119,6 +87,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const partyName = isSaleInv
     ? (invoice as SaleInvoice).customerName || 'عميل نقدي'
     : (invoice as PurchaseInvoice).supplierName || 'مورد عام';
+
   const partyPhone =
     invoice.phone ||
     (invoice as any).customerId ||
@@ -129,7 +98,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   // Company info
   const companyName = settings.companyName || 'شركة ركيزة للحلول البرمجية';
   const companyAddress = settings.address || 'القاهرة - مصر';
-  const logoUrl = (settings as any).logo || (settings as any).logoUrl || '';
 
   const companyPhones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
   if (companyPhones.length === 0) {
@@ -175,8 +143,9 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   // Financial Totals
   const items = invoice.items || [];
   const grandTotal = Number(invoice.total || 0);
-  const feesName = (invoice as any).feeDescription || (invoice.fees ? 'نقل' : 'مصاريف نقل');
-  const feesVal = Number(invoice.fees || 0);
+  const taxVal = Number(invoice.tax || 0);
+  const discountVal = Number(invoice.discount || 0);
+  const subtotalBeforeTaxDiscount = grandTotal - taxVal + discountVal;
 
   let paidVal = Number(invoice.paidAmount);
   let remainingVal = Number(invoice.remainingAmount);
@@ -199,694 +168,545 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     'البضاعة المباعة ترجع وتستبدل خلال 14 يوماً بأصل الفاتورة';
 
   /**
-   * 🖨️ Execute print using the Unified Print Template
+   * 🖨️ Execute window.print() applying the exact unified print stylesheet
    */
   const handlePrint = () => {
-    try {
-      openUnifiedPrintWindow(
-        {
-          title: invoiceTypeTitle,
-          docNumber: invoiceNumber,
-          docTypeBadge: invoiceTypeTitle,
-          date: invoiceDate,
-          time: invoiceTime,
-          partyName,
-          partyCode: partyPhone,
-          partyPhone,
-          partyLabel,
-          partyCodeLabel: partyIdLabel,
-          paymentMethod: paymentMethodType,
-          statementNote: (invoice as any).notes || (invoice as any).description,
-          items: items.map((it, idx) => ({
-            index: idx + 1,
-            name: it.name || '-',
-            unit: (it as any).unit || it.spec || '-',
-            qty: it.qty,
-            price: it.price,
-            total: it.total !== undefined ? it.total : Number(it.qty || 0) * Number(it.price || 0),
-          })),
-          summary: [
-            { label: 'إجمالي الأصناف', value: `${(grandTotal - Number(invoice.tax || 0) + Number(invoice.discount || 0)).toFixed(2)} ج.م` },
-            ...(Number(invoice.discount || 0) > 0 ? [{ label: 'الخصم', value: `${Number(invoice.discount).toFixed(2)} ج.م` }] : []),
-            ...(Number(invoice.tax || 0) > 0 ? [{ label: 'ضريبة القيمة المضافة', value: `${Number(invoice.tax).toFixed(2)} ج.م` }] : []),
-            { label: 'الإجمالي الصافي', value: `${grandTotal.toFixed(2)} ج.م`, isTotal: true, isHighlight: true },
-            { label: 'المدفوع', value: `${paidVal.toFixed(2)} ج.م` },
-            { label: 'المتبقي', value: `${remainingVal.toFixed(2)} ج.م` },
-          ],
-          footerNote: footerTermsNote,
-          preferredPaperSize: paperSize === 'thermal' || paperSize === '58mm' ? 'thermal' : paperSize === 'A4' ? 'A4' : 'A5',
-        },
-        settings
-      );
-    } catch {
-      window.print();
+    let styleEl = document.getElementById('unified-print-styles');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'unified-print-styles';
+      document.head.appendChild(styleEl);
     }
+
+    let pageSizeRule = '@page { size: A5 landscape; margin: 4mm; }';
+    if (selectedSize === 'a4') {
+      pageSizeRule = '@page { size: A4 portrait; margin: 5mm; }';
+    } else if (selectedSize === 'thermal') {
+      pageSizeRule = '@page { size: 80mm auto; margin: 0; }';
+    }
+
+    styleEl.innerHTML = `
+      ${pageSizeRule}
+      @media print {
+        .preview-toolbar, .no-print, #header, header, nav, aside {
+          display: none !important;
+        }
+        body {
+          background: #fff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body > *:not(#unified-invoice-modal-root) {
+          display: none !important;
+        }
+        #unified-invoice-modal-root {
+          position: static !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          overflow: visible !important;
+          display: block !important;
+          width: 100% !important;
+          height: auto !important;
+        }
+        .print-page {
+          box-shadow: none !important;
+          border: 1px solid #777 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          max-height: 100% !important;
+          page-break-after: avoid !important;
+          page-break-inside: avoid !important;
+          overflow: hidden !important;
+        }
+      }
+    `;
+
+    document.body.className = `mode-${selectedSize}`;
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   /**
-   * 💾 Export exact element to PDF
+   * 💾 Export element to PDF
    */
   const handleSavePdf = async () => {
     if (!invoiceContainerRef.current) return;
     try {
       setIsExportingPdf(true);
-      const filename = `${invoiceTypeTitle}_${invoiceNumber}.pdf`;
-      const pdfFormat = paperSize === 'A5' ? 'a5' : paperSize === 'thermal' ? 'thermal' : paperSize === '58mm' ? '58mm' : 'a4';
-
-      await exportElementToPdf(invoiceContainerRef.current, filename, {
-        format: pdfFormat,
-        orientation: 'portrait',
-        margin: paperSize === 'thermal' || paperSize === '58mm' ? 1.5 : 4,
-        scale: 2,
-      });
+      await exportElementToPdf(
+        invoiceContainerRef.current,
+        `فاتورة_${invoiceNumber}_${selectedSize}.pdf`,
+        {
+          orientation: selectedSize === 'a5' ? 'landscape' : 'portrait',
+          format: selectedSize === 'thermal' ? 'thermal' : selectedSize,
+          margin: 4,
+        }
+      );
     } catch (err) {
-      console.error('Error generating PDF:', err);
-      // Fallback: trigger print
-      handlePrint();
+      console.error('PDF export error:', err);
     } finally {
       setIsExportingPdf(false);
     }
   };
 
   /**
-   * 📋 Copy quick summary to clipboard
+   * 📋 Copy invoice summary
    */
   const handleCopySummary = () => {
-    const text = `*${invoiceTypeTitle} #${invoiceNumber}*\nالطرف: ${partyName} (${partyPhone})\nالتاريخ: ${invoiceDate}\nالإجمالي: ${grandTotal.toFixed(2)} ج.م\nالمدفوع: ${paidVal.toFixed(2)} ج.م\nالمتبقي: ${remainingVal.toFixed(2)} ج.م`;
-    navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
+    const summaryText = `📄 ${invoiceTypeTitle} #${invoiceNumber}
+🏢 ${companyName}
+👤 ${partyLabel}: ${partyName}
+📅 التاريخ: ${invoiceDate} ${invoiceTime}
+💰 الإجمالي: ${grandTotal.toFixed(2)} ج.م
+💵 المدفوع: ${paidVal.toFixed(2)} ج.م
+⏳ المتبقي: ${remainingVal.toFixed(2)} ج.م`;
 
-  const isThermalMode = paperSize === 'thermal' || paperSize === '58mm';
+    try {
+      navigator.clipboard.writeText(summaryText);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {}
+  };
 
   return (
     <div
-      id="centralized-print-modal-root"
-      className="fixed inset-0 z-[9999] flex flex-col justify-start items-center overflow-y-auto no-print-backdrop"
-      style={{ backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)' }}
+      id="unified-invoice-modal-root"
+      className="fixed inset-0 z-[1000] bg-[#eef2f5] overflow-y-auto text-[#222] font-sans"
       dir="rtl"
     >
-      {/* 1. Fixed / Sticky Top Toolbar */}
-      <div className="w-full max-w-6xl px-3 pt-3 pb-2 sticky top-0 z-50 no-print-toolbar">
-        <div className="bg-[#1a237e] text-white p-3 sm:p-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-indigo-400/30">
-          {/* Left section: Title & Badge */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-sm sm:text-base">معاينة وتخصيص الفاتورة</span>
-                <span className="bg-[#2e7d32] text-white px-2 py-0.5 rounded text-xs font-mono font-black">
-                  #{invoiceNumber}
-                </span>
-              </div>
-              <p className="text-[11px] text-indigo-200">{invoiceTypeTitle} - {partyName}</p>
-            </div>
-          </div>
+      {/* 1. شريط التحكم الموحد (للمعاينة فقط ولا يظهر في الطباعة) */}
+      <div
+        className="preview-toolbar no-print sticky top-0 z-50 flex flex-wrap items-center justify-center gap-3 p-2.5 sm:p-3 bg-[#111] text-white shadow-lg text-xs sm:text-sm font-bold select-none"
+      >
+        <div className="flex items-center gap-2">
+          <span>اختر مقاس العرض والطباعة:</span>
+          <select
+            id="sizeSelector"
+            value={selectedSize}
+            onChange={(e) => handleSizeChange(e.target.value as 'a4' | 'a5' | 'thermal')}
+            className="bg-white text-slate-900 px-3 py-1.5 rounded font-bold border border-slate-300 outline-none cursor-pointer text-xs sm:text-sm"
+          >
+            <option value="a4">مقاس ورقة كاملة (A4)</option>
+            <option value="a5">مقاس نصف ورقة (A5 - عرضي)</option>
+            <option value="thermal">طابعة فواتير حرارية (80mm)</option>
+          </select>
+        </div>
 
-          {/* Paper Size Selector Buttons */}
-          <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/20 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleChangePaperSize('A4')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                paperSize === 'A4'
-                  ? 'bg-white text-[#1a237e] shadow-md font-black'
-                  : 'text-white hover:bg-white/10'
-              }`}
-              title="A4 (210mm × 297mm) - المقاس القياسي الكامل"
-            >
-              <span>📄</span>
-              <span>مقاس A4</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChangePaperSize('A5')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                paperSize === 'A5'
-                  ? 'bg-white text-[#1a237e] shadow-md font-black'
-                  : 'text-white hover:bg-white/10'
-              }`}
-              title="A5 (148mm × 210mm) - مقاس مدمج نصف صفحة"
-            >
-              <span>📑</span>
-              <span>مقاس A5</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChangePaperSize('thermal')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                paperSize === 'thermal'
-                  ? 'bg-white text-[#1a237e] shadow-md font-black'
-                  : 'text-white hover:bg-white/10'
-              }`}
-              title="حراري 80mm - بون فواتير نقاط البيع POS"
-            >
-              <span>🧾</span>
-              <span>حراري 80mm</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleChangePaperSize('58mm')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
-                paperSize === '58mm'
-                  ? 'bg-white text-[#1a237e] shadow-md font-black'
-                  : 'text-white hover:bg-white/10'
-              }`}
-              title="حراري 58mm - بون صغير محمول"
-            >
-              <span>📟</span>
-              <span>حراري 58mm</span>
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="bg-[#28a745] hover:bg-[#218838] active:bg-[#1e7e34] text-white px-3.5 py-1.5 rounded font-bold cursor-pointer transition flex items-center gap-1.5 shadow-sm"
+            title="إعطاء أمر الطباعة المباشر"
+          >
+            <Printer className="w-4 h-4" />
+            <span>🖨️ إعطاء أمر الطباعة الآن</span>
+          </button>
 
-          {/* Scale / Zoom Control Section */}
-          <div className="flex items-center gap-1.5 bg-black/25 px-2 py-1 rounded-xl border border-white/15">
-            <span className="text-[11px] text-indigo-200 font-bold hidden md:inline">مقياس العرض:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAutoFit(false);
-                setPreviewScale((s) => Math.max(0.4, Number((s - 0.05).toFixed(2))));
-              }}
-              className="p-1 hover:bg-white/15 rounded text-white cursor-pointer transition"
-              title="تصغير المعاينة"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <select
-              value={isAutoFit ? 'auto' : previewScale.toString()}
-              onChange={(e) => {
-                if (e.target.value === 'auto') {
-                  setIsAutoFit(true);
-                } else {
-                  setIsAutoFit(false);
-                  setPreviewScale(parseFloat(e.target.value));
-                }
-              }}
-              className="bg-white/10 text-white text-xs font-bold rounded px-1.5 py-1 border border-white/20 outline-none cursor-pointer"
-            >
-              <option value="auto" className="bg-slate-900 text-white">ملاءمة العرض (Fit)</option>
-              <option value="1" className="bg-slate-900 text-white">100% (أصلي)</option>
-              <option value="0.9" className="bg-slate-900 text-white">90%</option>
-              <option value="0.8" className="bg-slate-900 text-white">80%</option>
-              <option value="0.7" className="bg-slate-900 text-white">70%</option>
-              <option value="0.6" className="bg-slate-900 text-white">60%</option>
-              <option value="0.5" className="bg-slate-900 text-white">50%</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAutoFit(false);
-                setPreviewScale((s) => Math.min(1.3, Number((s + 0.05).toFixed(2))));
-              }}
-              className="p-1 hover:bg-white/15 rounded text-white cursor-pointer transition"
-              title="تكبير المعاينة"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsAutoFit(true);
-              }}
-              className={`p-1 rounded text-white cursor-pointer transition ${isAutoFit ? 'bg-indigo-600' : 'hover:bg-white/15'}`}
-              title="ملاءمة الشاشة التلقائية"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSavePdf}
+            disabled={isExportingPdf}
+            className="bg-[#d84315] hover:bg-[#bf360c] active:bg-[#992600] disabled:opacity-50 text-white px-3 py-1.5 rounded font-bold cursor-pointer transition flex items-center gap-1.5 shadow-sm"
+            title="حفظ الفاتورة كملف PDF"
+          >
+            <Download className="w-4 h-4" />
+            <span>{isExportingPdf ? 'جارِ التحميل...' : '💾 حفظ PDF'}</span>
+          </button>
 
-          {/* Right section: Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="bg-[#00c853] hover:bg-[#00b248] active:bg-[#009624] text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
-              title="طباعة الفاتورة بالمقاس المحدد"
-            >
-              <Printer className="w-4 h-4" />
-              <span>طباعة ({paperSize === 'thermal' ? 'حراري 80mm' : paperSize === '58mm' ? 'حراري 58mm' : paperSize})</span>
-            </button>
+          <button
+            type="button"
+            onClick={handleCopySummary}
+            className="bg-slate-700 hover:bg-slate-600 text-white p-1.5 rounded font-bold cursor-pointer transition"
+            title="نسخ ملخص الفاتورة"
+          >
+            {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          </button>
 
-            <button
-              type="button"
-              onClick={handleSavePdf}
-              disabled={isExportingPdf}
-              className="bg-[#d84315] hover:bg-[#bf360c] active:bg-[#992600] disabled:opacity-50 text-white px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
-              title="حفظ الفاتورة كملف PDF"
-            >
-              <Download className="w-4 h-4" />
-              <span>{isExportingPdf ? 'جارِ التحميل...' : 'حفظ PDF'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopySummary}
-              className="bg-white/15 hover:bg-white/25 text-white p-2 rounded-xl transition cursor-pointer"
-              title="نسخ ملخص الفاتورة"
-            >
-              {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClose}
-              className="bg-slate-700 hover:bg-slate-800 text-white p-2 rounded-xl transition cursor-pointer"
-              title="إغلاق المعاينة (Esc)"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="bg-[#6c757d] hover:bg-[#5a6268] text-white px-3.5 py-1.5 rounded font-bold cursor-pointer transition flex items-center gap-1"
+            title="إغلاق المعاينة"
+          >
+            <X className="w-4 h-4" />
+            <span>إغلاق</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. Interactive Preview Canvas Stage */}
-      <div 
-        className="w-full flex-1 flex flex-col items-center py-6 px-2 sm:px-4 print-stage-wrapper overflow-x-hidden"
-        style={{
-          minHeight: 'calc(100vh - 120px)',
-          paddingBottom: `${Math.max(40, (1 - previewScale) * (paperSize === 'A4' ? 950 : 650))}px`,
-        }}
-      >
-        {/* Responsive proportional viewport scaler for phone screens without clipping */}
+      {/* 2. حاوية الورقة والمقاس المحدد (A4, A5, Thermal) */}
+      <div className="w-full flex justify-center py-4 sm:py-6 px-2 sm:px-4 overflow-x-auto">
         <div
-          className="print-stage-scaler-box"
+          ref={invoiceContainerRef}
+          id="mainDocument"
+          className={`print-page ${selectedSize} bg-white transition-all`}
           style={{
-            width: `${Math.round((paperSize === 'A4' ? 200 : paperSize === 'A5' ? 140 : paperSize === '58mm' ? 48 : 72) * 3.78 * previewScale)}px`,
-            maxWidth: '100%',
+            width: selectedSize === 'a4' ? '210mm' : selectedSize === 'a5' ? '210mm' : '80mm',
+            minHeight: selectedSize === 'a4' ? '297mm' : selectedSize === 'a5' ? '148mm' : 'auto',
+            padding: selectedSize === 'a4' ? '10mm' : selectedSize === 'a5' ? '6mm' : '4mm',
+            border: '1px solid #ccc',
+            boxShadow: '0 0 15px rgba(0,0,0,0.1)',
             display: 'flex',
-            justifyContent: 'center',
-            overflow: 'visible',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            position: 'relative',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+            backgroundColor: '#ffffff',
+            color: '#222',
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+            fontSize: selectedSize === 'thermal' ? '9px' : '10px',
+            direction: 'rtl',
           }}
         >
-          <div
-            ref={invoiceContainerRef}
-            id="rakeeza-printable-invoice-container"
-            className="bg-white text-black flex flex-col justify-between transition-all duration-200"
-            style={{
-              fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif",
-              border: paperSize === 'thermal' || paperSize === '58mm' ? '1px dashed #000' : '2px solid #000',
-              borderRadius: paperSize === 'thermal' || paperSize === '58mm' ? '0px' : '4px',
-              width: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              minWidth: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              maxWidth: paperSize === 'A4' ? '194mm' : paperSize === 'A5' ? '138mm' : paperSize === '58mm' ? '48mm' : '72mm',
-              maxHeight: paperSize === 'A4' ? '280mm' : paperSize === 'A5' ? '198mm' : 'none',
-              minHeight: 'auto',
-              height: 'auto',
-              padding: paperSize === 'A4' ? '5mm 6mm' : paperSize === 'A5' ? '3mm 4mm' : paperSize === '58mm' ? '1.5mm 1mm' : '2mm 2mm',
-              fontSize: paperSize === 'A5' ? '0.75rem' : paperSize === '58mm' ? '0.65rem' : paperSize === 'thermal' ? '0.72rem' : '0.88rem',
-              boxShadow: paperSize === 'thermal' || paperSize === '58mm' ? 'none' : '0 8px 24px rgba(0, 0, 0, 0.25)',
-              boxSizing: 'border-box',
-              transform: `scale(${previewScale})`,
-              transformOrigin: 'top center',
-            }}
-          >
           <div>
-            {/* الترويسة الديناميكية المعتمدة */}
+            {/* الهيدر الموحد */}
             <div
-              className="company-header"
+              className="doc-header"
               style={{
+                width: '100%',
+                borderBottom: '2px solid #222',
+                paddingBottom: '6px',
+                marginBottom: '8px',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '2.5px solid #000',
-                paddingBottom: '8px',
-                marginBottom: '8px',
-                width: '100%',
-                gap: '8px',
+                alignItems: 'flex-start',
               }}
             >
-              <div className="header-right" style={{ textAlign: 'right', flex: 1.2 }}>
-                <h2 style={{ margin: '0 0 2px 0', fontSize: '1rem', fontWeight: 800 }}>
+              <div className="company-info" style={{ textAlign: 'right' }}>
+                <h2 style={{ fontSize: selectedSize === 'thermal' ? '13px' : '15px', fontWeight: 'bold', color: '#000', margin: 0 }}>
                   {companyName}
                 </h2>
-                <p style={{ margin: 0, fontSize: '0.73rem', fontWeight: 600, color: '#222' }}>
+                <p style={{ fontSize: selectedSize === 'thermal' ? '9px' : '10px', color: '#555', margin: '2px 0 0 0' }}>
                   {companyAddress}
                 </p>
+                <p style={{ fontSize: selectedSize === 'thermal' ? '9px' : '10px', color: '#555', margin: '1px 0 0 0' }}>
+                  {companyPhones.join(' - ')}
+                </p>
               </div>
 
-              <div
-                className="header-center"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  minWidth: '80px',
-                  flex: 0.8,
-                }}
-              >
-                {logoUrl && (
-                  <img
-                    src={logoUrl}
-                    alt="الشعار"
-                    style={{ maxWidth: '80px', maxHeight: '40px', objectFit: 'contain' }}
-                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                  />
-                )}
-              </div>
-
-              <div className="header-left" style={{ flex: 1.2, display: 'flex', justifyContent: 'flex-end' }}>
-                <ul
-                  style={{
-                    listStyle: 'none',
-                    padding: 0,
-                    margin: 0,
-                    fontSize: '0.73rem',
-                    direction: 'ltr',
-                    textAlign: 'left',
-                  }}
-                >
-                  {companyPhones.map((phone, idx) => (
-                    <li key={idx} style={{ marginBottom: '1px', fontWeight: 600 }}>
-                      Tel {idx + 1}: {phone}
-                    </li>
-                  ))}
-                </ul>
+              <div className="doc-meta-top" style={{ textAlign: 'left', fontSize: selectedSize === 'thermal' ? '9px' : '10px' }}>
+                <div style={{ fontSize: selectedSize === 'thermal' ? '11px' : '13px', fontWeight: 'bold', color: '#000', marginBottom: '2px' }}>
+                  {invoiceTypeTitle}
+                </div>
+                <div><strong>الرقم:</strong> #{invoiceNumber}</div>
+                <div><strong>التاريخ:</strong> {invoiceDate} | <strong>الوقت:</strong> {invoiceTime}</div>
               </div>
             </div>
 
-            {/* صندوق معلومات العميل والفاتورة الأصلي */}
+            {/* بطاقة معلومات الحركة (meta-table) */}
+            <table
+              className="meta-table"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginBottom: '8px',
+                fontSize: selectedSize === 'thermal' ? '9px' : '10px',
+              }}
+            >
+              <tbody>
+                <tr>
+                  <th style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', backgroundColor: '#f1f1f1', fontWeight: 'bold', color: '#333', width: '16%' }}>
+                    {partyLabel}:
+                  </th>
+                  <td style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', width: '34%' }}>
+                    {partyName}
+                  </td>
+                  <th style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', backgroundColor: '#f1f1f1', fontWeight: 'bold', color: '#333', width: '16%' }}>
+                    طريقة الدفع:
+                  </th>
+                  <td style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', width: '34%' }}>
+                    {paymentMethodType}
+                  </td>
+                </tr>
+                <tr>
+                  <th style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', backgroundColor: '#f1f1f1', fontWeight: 'bold', color: '#333' }}>
+                    الهاتف / الكود:
+                  </th>
+                  <td style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right' }}>
+                    {partyPhone}
+                  </td>
+                  <th style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', backgroundColor: '#f1f1f1', fontWeight: 'bold', color: '#333' }}>
+                    الفرع / الخزينة:
+                  </th>
+                  <td style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right' }}>
+                    {(invoice as any).branchName || 'الفرع الرئيسي'}
+                  </td>
+                </tr>
+                {Boolean(invoice.notes || (invoice as any).note || (invoice as any).description) && (
+                  <tr>
+                    <th style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right', backgroundColor: '#f1f1f1', fontWeight: 'bold', color: '#333' }}>
+                      البيان / ملاحظات:
+                    </th>
+                    <td colSpan={3} style={{ border: '1px solid #999', padding: '4px 6px', textAlign: 'right' }}>
+                      {invoice.notes || (invoice as any).note || (invoice as any).description}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* جدول بيانات الحركة الديناميكي (dynamic-table) */}
+            <table
+              className="dynamic-table"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                marginBottom: '8px',
+                fontSize: selectedSize === 'thermal' ? '9px' : '10px',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'center', fontWeight: 'bold', width: '6%' }}>
+                    م
+                  </th>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'right', fontWeight: 'bold', width: '42%' }}>
+                    اسم الصنف / البيان
+                  </th>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'center', fontWeight: 'bold', width: '13%' }}>
+                    الوحدة
+                  </th>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'center', fontWeight: 'bold', width: '13%' }}>
+                    الكمية
+                  </th>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'center', fontWeight: 'bold', width: '13%' }}>
+                    السعر
+                  </th>
+                  <th style={{ backgroundColor: '#e2e6ea', border: '1px solid #777', padding: '5px', textAlign: 'center', fontWeight: 'bold', width: '13%' }}>
+                    الإجمالي
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ border: '1px solid #bbb', padding: '10px', textAlign: 'center', color: '#666' }}>
+                      لا توجد أصناف مدخلة في هذه الفاتورة
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item, idx) => {
+                    const itPrice = Number(item.price || 0);
+                    const itQty = Number(item.qty || 0);
+                    const itTotal = Number(item.total !== undefined ? item.total : itQty * itPrice);
+                    return (
+                      <tr key={idx}>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'center' }}>
+                          {idx + 1}
+                        </td>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'right', fontWeight: 600 }}>
+                          {item.name || '-'}
+                        </td>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'center' }}>
+                          {(item as any).unit || (item as any).spec || '-'}
+                        </td>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'center', fontWeight: 'bold' }}>
+                          {item.qty}
+                        </td>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'center' }}>
+                          {itPrice.toFixed(2)}
+                        </td>
+                        <td style={{ border: '1px solid #bbb', padding: '5px', textAlign: 'center', fontWeight: 'bold' }}>
+                          {itTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+
+            {/* ملخص الأرقام والمجاميع (summary-section) */}
             <div
-              className="invoice-info-box"
+              className="summary-section"
               style={{
                 display: 'flex',
-                flexDirection: isThermalMode ? 'column' : 'row',
                 justifyContent: 'space-between',
-                alignItems: 'center',
-                border: isThermalMode ? '1px dashed #000' : '1.5px solid #000',
-                padding: isThermalMode ? '4px 6px' : '6px 8px',
+                flexWrap: selectedSize === 'thermal' ? 'wrap' : 'nowrap',
+                gap: '6px',
                 marginBottom: '8px',
-                fontSize: paperSize === '58mm' ? '0.68rem' : isThermalMode ? '0.74rem' : '0.78rem',
-                lineHeight: 1.5,
-                width: '100%',
-                backgroundColor: '#ffffff',
-                gap: isThermalMode ? '4px' : '0px',
-                fontWeight: 600,
-              }}
-            >
-              <div style={{ textAlign: isThermalMode ? 'center' : 'right', flex: 1.3 }}>
-                <p style={{ margin: '1px 0' }}>
-                  <strong>{partyIdLabel}:</strong> <span>{partyPhone}</span>
-                </p>
-                <p style={{ margin: '1px 0' }}>
-                  <strong>{partyLabel}:</strong> <span>{partyName}</span>
-                </p>
-                <p style={{ margin: '1px 0' }}>
-                  <strong>الهاتف:</strong> <span>{invoice.phone || '-'}</span>
-                </p>
-              </div>
-
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <p style={{ margin: '1px 0' }}>
-                  <strong>{invoiceTypeTitle}</strong>
-                </p>
-                <p style={{ margin: '1px 0' }}>
-                  <span style={{ fontSize: isThermalMode ? '0.88rem' : '0.95rem', fontWeight: 800 }}>رقم: #{invoiceNumber}</span>
-                </p>
-              </div>
-
-              <div style={{ textAlign: isThermalMode ? 'center' : 'left', flex: 1.1 }}>
-                <p style={{ margin: '1px 0' }}>
-                  <strong>التاريخ:</strong> <span>{invoiceDate}</span>
-                </p>
-                <p style={{ margin: '1px 0' }} className="print-hide-time">
-                  <strong>الوقت:</strong> <span>{invoiceTime}</span>
-                </p>
-              </div>
-            </div>
-
-            {/* مستطيل البيان (يختفي تماماً إذا ترك فارغاً) */}
-            {Boolean(invoice.notes || (invoice as any).note || (invoice as any).description) && (
-              <div
-                className="invoice-statement-box"
-                style={{
-                  border: '1.5px solid #333',
-                  padding: '5px 8px',
-                  marginBottom: '8px',
-                  fontSize: '0.76rem',
-                  fontWeight: 600,
-                  backgroundColor: '#fff',
-                }}
-              >
-                <strong>البيان: </strong>
-                <span>{invoice.notes || (invoice as any).note || (invoice as any).description}</span>
-              </div>
-            )}
-
-            {/* جدول الأصناف الأصلي المعتمد */}
-            <div style={{ width: '100%', flexGrow: 1 }}>
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  marginBottom: '8px',
-                  tableLayout: 'fixed',
-                  fontSize: paperSize === '58mm' ? '0.62rem' : isThermalMode ? '0.7rem' : '0.76rem',
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: '#e6e6e6' }}>
-                    <th
-                      style={{
-                        width: '34%',
-                        border: '1.5px solid #000',
-                        padding: '4px 6px',
-                        textAlign: 'right',
-                        fontWeight: 800,
-                      }}
-                    >
-                      اسم الصنف
-                    </th>
-                    <th
-                      style={{
-                        width: '22%',
-                        border: '1.5px solid #000',
-                        padding: '4px 4px',
-                        textAlign: 'center',
-                        fontWeight: 800,
-                      }}
-                    >
-                      البيان
-                    </th>
-                    <th
-                      style={{
-                        width: '10%',
-                        border: '1.5px solid #000',
-                        padding: '4px 4px',
-                        textAlign: 'center',
-                        fontWeight: 800,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      العدد
-                    </th>
-                    <th
-                      style={{
-                        width: '16%',
-                        border: '1.5px solid #000',
-                        padding: '4px 4px',
-                        textAlign: 'center',
-                        fontWeight: 800,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      السعر
-                    </th>
-                    <th
-                      style={{
-                        width: '18%',
-                        border: '1.5px solid #000',
-                        padding: '4px 4px',
-                        textAlign: 'center',
-                        fontWeight: 800,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      الإجمالي
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        style={{
-                          border: '1.5px solid #000',
-                          padding: '10px',
-                          textAlign: 'center',
-                          color: '#777',
-                        }}
-                      >
-                        لا توجد أصناف في هذه الفاتورة
-                      </td>
-                    </tr>
-                  ) : (
-                    items.map((it, idx) => {
-                      const qty = parseFloat(String(it.qty)) || 0;
-                      const price = parseFloat(String(it.price)) || 0;
-                      const itemTotal = Number(it.total !== undefined ? it.total : qty * price);
-                      const desc =
-                        it.spec || it.notes || (it as any).desc || (it as any).description || '-';
-
-                      return (
-                        <tr key={idx}>
-                          <td
-                            style={{
-                              border: '1.5px solid #000',
-                              padding: '4px 6px',
-                              textAlign: 'right',
-                              fontWeight: 700,
-                              wordWrap: 'break-word',
-                            }}
-                          >
-                            {it.name}
-                          </td>
-                          <td
-                            style={{
-                              border: '1.5px solid #000',
-                              padding: '4px 4px',
-                              textAlign: 'center',
-                              color: '#333',
-                              fontSize: '0.72rem',
-                              wordWrap: 'break-word',
-                            }}
-                          >
-                            {desc}
-                          </td>
-                          <td
-                            style={{
-                              border: '1.5px solid #000',
-                              padding: '4px 4px',
-                              textAlign: 'center',
-                              fontFamily: 'monospace',
-                              fontWeight: 700,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {qty}
-                          </td>
-                          <td
-                            style={{
-                              border: '1.5px solid #000',
-                              padding: '4px 4px',
-                              textAlign: 'center',
-                              fontFamily: 'monospace',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {price.toFixed(2)}
-                          </td>
-                          <td
-                            style={{
-                              border: '1.5px solid #000',
-                              padding: '4px 4px',
-                              textAlign: 'center',
-                              fontFamily: 'monospace',
-                              fontWeight: 800,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {itemTotal.toFixed(2)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* قسم الإجماليات وتفاصيل الدفع */}
-            <div
-              className="totals-section"
-              style={{
-                width: '100%',
-                borderTop: '2.5px solid #000',
-                paddingTop: '6px',
-                fontSize: paperSize === '58mm' ? '0.7rem' : isThermalMode ? '0.76rem' : '0.8rem',
-                fontWeight: 800,
-                marginBottom: '8px',
+                fontSize: selectedSize === 'thermal' ? '9px' : '10px',
               }}
             >
               <div
+                className="summary-box-item"
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '2px 0',
+                  flex: 1,
+                  minWidth: selectedSize === 'thermal' ? '45%' : 'auto',
+                  border: '1px solid #28a745',
+                  backgroundColor: '#f8fff9',
+                  padding: '5px',
+                  textAlign: 'center',
+                  borderRadius: '2px',
                 }}
               >
-                <span>إجمالي الفاتورة:</span>
-                <span>{grandTotal.toFixed(2)} ج.م</span>
+                <strong>إجمالي الأصناف:</strong>
+                <br />
+                <span>{subtotalBeforeTaxDiscount.toFixed(2)} ج.م</span>
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  borderTop: '1px dashed #666',
-                  paddingTop: '3px',
-                  marginTop: '2px',
-                }}
-              >
-                <span>طريقة الدفع: <span style={{ display: 'inline-block', padding: '1px 5px', borderRadius: '3px', background: '#e2e8f0', border: '1px solid #000', fontSize: '0.7rem' }}>{paymentMethodType}</span></span>
-                <span>المدفوع: <strong>{paidVal.toFixed(2)} ج.م</strong></span>
-              </div>
-
-              {remainingVal > 0 && (
+              {discountVal > 0 && (
                 <div
+                  className="summary-box-item"
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    color: '#b91c1c',
-                    padding: '2px 0',
+                    flex: 1,
+                    minWidth: selectedSize === 'thermal' ? '45%' : 'auto',
+                    border: '1px solid #28a745',
+                    backgroundColor: '#f8fff9',
+                    padding: '5px',
+                    textAlign: 'center',
+                    borderRadius: '2px',
                   }}
                 >
-                  <span>المبلغ المتبقي (الآجل):</span>
-                  <strong>{remainingVal.toFixed(2)} ج.م</strong>
+                  <strong>الخصم:</strong>
+                  <br />
+                  <span>{discountVal.toFixed(2)} ج.م</span>
                 </div>
               )}
+
+              {taxVal > 0 && (
+                <div
+                  className="summary-box-item"
+                  style={{
+                    flex: 1,
+                    minWidth: selectedSize === 'thermal' ? '45%' : 'auto',
+                    border: '1px solid #28a745',
+                    backgroundColor: '#f8fff9',
+                    padding: '5px',
+                    textAlign: 'center',
+                    borderRadius: '2px',
+                  }}
+                >
+                  <strong>الضريبة:</strong>
+                  <br />
+                  <span>{taxVal.toFixed(2)} ج.م</span>
+                </div>
+              )}
+
+              <div
+                className="summary-box-item"
+                style={{
+                  flex: 1.2,
+                  minWidth: selectedSize === 'thermal' ? '100%' : 'auto',
+                  border: '2px solid #28a745',
+                  backgroundColor: '#eafaf1',
+                  padding: '5px',
+                  textAlign: 'center',
+                  borderRadius: '2px',
+                }}
+              >
+                <strong style={{ fontSize: '11px', color: '#155724' }}>الصافي النهائي:</strong>
+                <br />
+                <span style={{ fontWeight: 'bold', fontSize: '12px', color: '#1e7e34' }}>
+                  {grandTotal.toFixed(2)} ج.م
+                </span>
+              </div>
+
+              <div
+                className="summary-box-item"
+                style={{
+                  flex: 1,
+                  minWidth: selectedSize === 'thermal' ? '45%' : 'auto',
+                  border: '1px solid #28a745',
+                  backgroundColor: '#f8fff9',
+                  padding: '5px',
+                  textAlign: 'center',
+                  borderRadius: '2px',
+                }}
+              >
+                <strong>المدفوع:</strong>
+                <br />
+                <span>{paidVal.toFixed(2)} ج.م</span>
+              </div>
+
+              <div
+                className="summary-box-item"
+                style={{
+                  flex: 1,
+                  minWidth: selectedSize === 'thermal' ? '45%' : 'auto',
+                  border: '1px solid #28a745',
+                  backgroundColor: '#f8fff9',
+                  padding: '5px',
+                  textAlign: 'center',
+                  borderRadius: '2px',
+                }}
+              >
+                <strong>المتبقي:</strong>
+                <br />
+                <span>{remainingVal.toFixed(2)} ج.م</span>
+              </div>
             </div>
           </div>
 
-          {/* التزييل الداخلي وحقوق الملكية للمطور داخل إطار المستند */}
-          <div style={{ marginTop: 'auto', paddingTop: '4px', width: '100%' }}>
-            <div
-              className="invoice-bottom-notes"
-              style={{
-                width: '100%',
-                textAlign: 'center',
-                fontSize: '0.72rem',
-                fontWeight: 800,
-                color: '#000',
-                borderTop: '1.5px dashed #000',
-                paddingTop: '4px',
-                marginBottom: '3px',
-              }}
-            >
-              <p>{footerTermsNote}</p>
-            </div>
+          {/* التذييل والتوقيعات (doc-footer) */}
+          <div
+            className="doc-footer"
+            style={{
+              marginTop: 'auto',
+              borderTop: '1px dashed #777',
+              paddingTop: '8px',
+            }}
+          >
+            {selectedSize !== 'thermal' && (
+              <table
+                className="signatures-grid"
+                style={{
+                  width: '100%',
+                  fontSize: '9px',
+                  borderCollapse: 'collapse',
+                  marginBottom: '6px',
+                }}
+              >
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: 'center', width: '33.33%', paddingTop: '5px' }}>
+                      <strong>توقيع المستلم</strong>
+                      <br />
+                      <br />
+                      ...................
+                    </td>
+                    <td style={{ textAlign: 'center', width: '33.33%', paddingTop: '5px' }}>
+                      <strong>توقيع المحاسب</strong>
+                      <br />
+                      <br />
+                      ...................
+                    </td>
+                    <td style={{ textAlign: 'center', width: '33.33%', paddingTop: '5px' }}>
+                      <strong>توقيع المدير العام</strong>
+                      <br />
+                      <br />
+                      ...................
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
 
             <div
-              className="copyright-inside-frame"
+              className="footer-note"
               style={{
-                width: '100%',
+                fontSize: '8px',
+                color: '#555',
                 textAlign: 'center',
-                fontSize: '0.67rem',
-                fontWeight: 700,
-                color: '#1e293b',
-                paddingTop: '2px',
-                direction: 'rtl',
+                marginTop: '5px',
+                borderTop: '1px solid #eee',
+                paddingTop: '3px',
               }}
             >
-              حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+              <div>{footerTermsNote}</div>
+              <div style={{ marginTop: '2px', color: '#777', fontSize: '7.5px' }}>
+                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+              </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );

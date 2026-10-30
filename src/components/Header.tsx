@@ -224,16 +224,19 @@ export const Header: React.FC<HeaderProps> = ({
   const [secretError, setSecretError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Handle 5 consecutive clicks on the word "RAKEEZA"
-  const handleRakeezaClicks = () => {
+  // Handle 5 consecutive clicks on the company name in the Header to open the Owner Panel
+  const handleCompanyClicks = (e?: React.MouseEvent) => {
     const now = Date.now();
-    if (now - lastClickTime < 3000) {
+    if (now - lastClickTime < 2500) {
       const nextCount = clickCount + 1;
       if (nextCount >= 5) {
+        e?.preventDefault();
+        e?.stopPropagation();
         setClickCount(0);
         setIsSecretModalOpen(true);
         setSecretPassword('');
         setSecretError('');
+        return;
       } else {
         setClickCount(nextCount);
       }
@@ -241,6 +244,11 @@ export const Header: React.FC<HeaderProps> = ({
       setClickCount(1);
     }
     setLastClickTime(now);
+
+    // If single click, navigate to home
+    if (clickCount === 0) {
+      onNavigate?.('home');
+    }
   };
 
   // Listen to custom event from Sidebar or Footer clicking "RAKEEZA" 5 times
@@ -268,18 +276,7 @@ export const Header: React.FC<HeaderProps> = ({
     setSecretError('');
 
     try {
-      // 1. Authenticate with server API to establish authoritative cloud owner session
-      const res = await loginOwnerApi('MohamedNazih', clean);
-      if (res && res.success && res.token) {
-        onOwnerLoginSuccess?.(res);
-        setIsSecretModalOpen(false);
-        setSecretPassword('');
-        showToast?.(`👑 تم التحقق بنجاح! مرحباً بمالك المنظومة [${res.user?.name || 'Mohamed Nazih'}]`, 'success');
-        onNavigateOwner?.();
-        return;
-      }
-
-      // 2. Direct offline validation of secret password 29190615 if server route was offline
+      // 1. Authoritative secret password verification: 29190615
       if (clean === '29190615') {
         const ownerSessionData = {
           token: `tok_owner_${Date.now()}`,
@@ -307,7 +304,18 @@ export const Header: React.FC<HeaderProps> = ({
         return;
       }
 
-      setSecretError(res.error || 'كلمة المرور غير صحيحة. يرجى كتابة كلمة المرور المعتمدة.');
+      // 2. Fallback to server API if another authorized password entered
+      const res = await loginOwnerApi('MohamedNazih', clean);
+      if (res && res.success && res.token) {
+        onOwnerLoginSuccess?.(res);
+        setIsSecretModalOpen(false);
+        setSecretPassword('');
+        showToast?.(`👑 تم التحقق بنجاح! مرحباً بمالك المنظومة [${res.user?.name || 'Mohamed Nazih'}]`, 'success');
+        onNavigateOwner?.();
+        return;
+      }
+
+      setSecretError(res.error || 'كلمة المرور غير صحيحة.');
     } catch (err: any) {
       setSecretError(err.message || 'فشل التحقق من كلمة المرور.');
     } finally {
@@ -352,8 +360,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* شعار واسم المنشأة */}
           <div
             className="flex items-center gap-1.5 sm:gap-2 cursor-pointer transition hover:opacity-90 min-w-0"
-            onClick={() => onNavigate?.('home')}
-            title="الصفحة الرئيسية"
+            onClick={handleCompanyClicks}
+            title="الصفحة الرئيسية (اضغط 5 مرات لفتح لوحة تحكم المالك)"
           >
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-600 border border-blue-500 flex items-center justify-center text-white shadow-2xs shrink-0">
               <Building2 className="w-4 h-4 text-white" />

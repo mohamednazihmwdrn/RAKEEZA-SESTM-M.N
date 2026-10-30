@@ -279,24 +279,24 @@ function saveStoredLocalSession(session: AuthSessionResponse): void {
 function getStoredLocalCompanies(): TenantCompany[] {
   try {
     const raw = localStorage.getItem(LOCAL_COMPANIES_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        return list.filter(
+          (c) =>
+            c &&
+            c.id !== 'COMP-000001' &&
+            c.code !== '101' &&
+            c.code !== '818' &&
+            c.code !== '190' &&
+            !c.name?.includes('شركة ركيزة للمحاسبة') &&
+            !c.name?.includes('شركة الأخوة للتجارة') &&
+            c.name !== 'الأخوة'
+        );
+      }
+    }
   } catch {}
-  return [
-    {
-      id: 'COMP-000001',
-      name: 'شركة ركيزة للتجارة والتوزيع المحدودة',
-      email: 'admin@rakeeza.com',
-      phone: '01029190615',
-      address: 'القاهرة - التجمع الخامس - مصر',
-      createdAt: '2026-01-01',
-      plan: 'enterprise',
-      status: 'active',
-      trialEndsAt: '2026-12-31',
-      maxUsers: 50,
-      activeUsersCount: 1,
-      adminName: 'المدير العام',
-    },
-  ];
+  return [];
 }
 
 function saveStoredLocalCompany(comp: TenantCompany): void {
@@ -2365,7 +2365,18 @@ export async function fetchOwnerCompaniesCloud(): Promise<{
             const parsed = JSON.parse(rawAppData);
             if (parsed && Array.isArray(parsed.companies)) {
               parsed.companies.forEach((c: TenantCompany) => {
-                if (c && c.id && !mergedMap.has(c.id)) {
+                if (
+                  c &&
+                  c.id &&
+                  c.id !== 'COMP-000001' &&
+                  c.code !== '101' &&
+                  c.code !== '818' &&
+                  c.code !== '190' &&
+                  !c.name?.includes('شركة ركيزة للمحاسبة') &&
+                  !c.name?.includes('شركة الأخوة للتجارة') &&
+                  c.name !== 'الأخوة' &&
+                  !mergedMap.has(c.id)
+                ) {
                   mergedMap.set(c.id, c);
                 }
               });
@@ -2401,7 +2412,18 @@ export async function fetchOwnerCompaniesCloud(): Promise<{
       const parsed = JSON.parse(localAppDataRaw);
       if (parsed && Array.isArray(parsed.companies) && parsed.companies.length > 0) {
         parsed.companies.forEach((c: TenantCompany) => {
-          if (c && c.id && !mergedMap.has(c.id)) {
+          if (
+            c &&
+            c.id &&
+            c.id !== 'COMP-000001' &&
+            c.code !== '101' &&
+            c.code !== '818' &&
+            c.code !== '190' &&
+            !c.name?.includes('شركة ركيزة للمحاسبة') &&
+            !c.name?.includes('شركة الأخوة للتجارة') &&
+            c.name !== 'الأخوة' &&
+            !mergedMap.has(c.id)
+          ) {
             mergedMap.set(c.id, c);
           }
         });
@@ -2421,7 +2443,7 @@ export async function fetchOwnerCompaniesCloud(): Promise<{
 
   return {
     success: true,
-    companies: DEFAULT_COMPANIES,
+    companies: [],
     plans: DEFAULT_SUBSCRIPTION_PLANS,
     trialRegistry: DEFAULT_TRIAL_REGISTRY,
     licenses: [],

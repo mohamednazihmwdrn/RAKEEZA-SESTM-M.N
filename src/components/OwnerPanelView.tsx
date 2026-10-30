@@ -158,8 +158,19 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
   const [firestoreCleanType, setFirestoreCleanType] = useState<'zero_movements' | 'full_wipe'>('zero_movements');
   const [firestoreCleanConfirmCode, setFirestoreCleanConfirmCode] = useState<string>('');
 
-  // Initial state setup if empty
-  const companies: TenantCompany[] = cloudCompanies.length > 0 ? cloudCompanies : (appData.companies || []);
+  // Only display real registered companies (no mock/demo companies)
+  const rawCompanies = cloudCompanies.length > 0 ? cloudCompanies : (appData.companies || []);
+  const companies: TenantCompany[] = rawCompanies.filter(
+    (c) =>
+      c &&
+      c.id !== 'COMP-000001' &&
+      c.code !== '101' &&
+      c.code !== '818' &&
+      c.code !== '190' &&
+      !c.name?.includes('شركة ركيزة للمحاسبة') &&
+      !c.name?.includes('شركة الأخوة للتجارة') &&
+      c.name !== 'الأخوة'
+  );
   const plans: SubscriptionPlan[] =
     Array.isArray(appData.plans) && appData.plans.length > 0
       ? appData.plans
@@ -1060,7 +1071,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
                     </div>
                     <div>
                       <span className="text-slate-500 block text-[10px]">المستخدمين:</span>
-                      <span className="font-mono text-slate-300">{c.usersCount || 1} / {c.limits.maxUsers}</span>
+                      <span className="font-mono text-slate-300">{c.usersCount || 1} / {c.limits?.maxUsers ?? 10}</span>
                     </div>
                   </div>
 
@@ -1182,7 +1193,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
 
                         <td className="p-3.5">
                           <div className="text-slate-300 font-mono">
-                            {c.usersCount || 1} مستخدم / {c.limits.maxUsers} متاح
+                            {c.usersCount || 1} مستخدم / {c.limits?.maxUsers ?? 10} متاح
                           </div>
                           <div className="text-slate-400 text-[11px] mt-0.5">
                             {c.branchesCount || 1} فروع • {c.operationsCount || 0} حركة
@@ -1194,7 +1205,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
                             {c.trialExpiresAt || c.subscriptionExpiresAt || 'دائم'}
                           </div>
                           <div className="text-[10px] text-slate-500 mt-0.5">
-                            تم الإنشاء: {c.createdAt.split(' ')[0]}
+                            تم الإنشاء: {c.createdAt ? c.createdAt.split(' ')[0] : '—'}
                           </div>
                         </td>
 

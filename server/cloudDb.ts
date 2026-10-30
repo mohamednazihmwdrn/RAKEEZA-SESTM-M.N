@@ -80,12 +80,18 @@ export function initCloudDatabase(): CloudDatabaseSchema {
       const parsed = JSON.parse(content) as CloudDatabaseSchema;
       parsed.pendingVerifications = parsed.pendingVerifications || {};
       parsed.verifiedEmails = parsed.verifiedEmails || {};
-      parsed.companies = parsed.companies || [];
+      parsed.companies = (parsed.companies || []).filter(
+        (c) =>
+          c &&
+          c.id !== 'COMP-000001' &&
+          c.code !== '101' &&
+          c.code !== '818' &&
+          c.code !== '190' &&
+          !c.name?.includes('شركة ركيزة للمحاسبة') &&
+          !c.name?.includes('شركة الأخوة للتجارة') &&
+          c.name !== 'الأخوة'
+      );
       let needsSave = false;
-      if (parsed.companies.length === 0) {
-        parsed.companies = [...DEFAULT_COMPANIES];
-        needsSave = true;
-      }
       parsed.companies = parsed.companies.map((c) => {
         if (!c.apiKey) {
           c.apiKey = `rkz_live_${c.id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${Math.random().toString(36).substring(2, 8)}${Math.random().toString(36).substring(2, 8)}`;

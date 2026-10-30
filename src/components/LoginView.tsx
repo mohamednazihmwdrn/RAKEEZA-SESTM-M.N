@@ -110,25 +110,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setIsCheckingDevice(true);
       let stored = getStoredBoundDevice();
 
-      const primaryComp = DEFAULT_COMPANIES[0];
-      const defaultMowan: BoundDeviceData = {
-        companyId: 'COMP-000001',
-        companyCode: '101',
-        companyName: 'مؤسسة الموان للتجارة',
-        boundAt: new Date().toISOString(),
-        deviceId: (typeof window !== 'undefined' ? localStorage.getItem('rakeeza_device_uuid') : '') || `mowan-${Date.now()}`,
-        branches: (primaryComp as any).branches || [
-          { id: 'br-main', code: 'HQ-01', name: 'فرع الاخوة', location: 'المقر الرئيسي', phone: '01029190615', isMain: true, manager: 'Mohamed Nazih' },
-          { id: 'br-mowan', code: 'BR-02', name: 'فرع الموان', location: 'فرع الموان', phone: '01100000000', isMain: false, manager: 'محمود سعيد' },
-        ],
-        users: ((primaryComp as any).users || []) as any[],
-      };
-
-      if (!stored) {
-        stored = defaultMowan;
-        setStoredBoundDevice(defaultMowan);
+      // Clear any legacy mock demo bound devices
+      if (
+        stored &&
+        (stored.companyId === 'COMP-000001' ||
+          stored.companyCode === '101' ||
+          stored.companyCode === '818' ||
+          stored.companyCode === '190' ||
+          stored.companyName?.includes('مؤسسة الموان') ||
+          stored.companyName?.includes('شركة ركيزة للمحاسبة') ||
+          stored.companyName?.includes('شركة الأخوة للتجارة'))
+      ) {
+        clearStoredBoundDevice();
+        stored = null;
       }
-      setBoundDevice(stored);
+
+      if (stored) {
+        setBoundDevice(stored);
+      } else {
+        setBoundDevice(null);
+        setBindMode('register');
+      }
 
       // Check if a user was previously assigned/remembered on this device
       const installedUser =
