@@ -1,5 +1,6 @@
 import { CashTransaction, AppData, Settings } from '../types';
-import { tafqeetArabic } from './tafqeet';
+import { tafqeetArabic, tafqeetNumber } from './tafqeet';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface UnifiedVoucherData {
   type: 'receive' | 'pay' | 'deposit' | 'withdraw' | 'قبض' | 'صرف' | string;
@@ -803,16 +804,58 @@ export function printCashVoucherWindow(
   appDataOrSettings: AppData | Settings,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void
 ) {
-  const printWin = window.open('', '_blank', 'width=850,height=900');
+  // 🖨️ Open in Universal Print Modal immediately
+  try {
+    const settings: Settings = (appDataOrSettings as AppData).settings || (appDataOrSettings as Settings);
+    const rawType = trans.type || 'receive';
+    const isReceive =
+      rawType === 'receive' ||
+      rawType === 'deposit' ||
+      rawType === 'قبض';
+    const partyName =
+      (trans as any).partyName ||
+      (trans as any).customerName ||
+      (trans as any).supplierName ||
+      'طرف نقدي عام';
+    const curSymbol = settings?.currencySymbol || 'ج.م';
+    const curName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
+    const amountNum = Number(trans.amount || 0);
+
+    openUniversalPrint({
+      kind: isReceive ? 'receipt_voucher' : 'payment_voucher',
+      title: isReceive ? 'سند قبض نقدي' : 'سند صرف نقدي',
+      docNumber: (trans as any).id || (trans as any).serialNo || 1,
+      date: (trans as any).date || new Date().toISOString().split('T')[0],
+      time: (trans as any).time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      partyName,
+      partyLabel: isReceive ? 'استلمنا من' : 'اصرفوا إلى',
+      paymentMethod: (trans as any).method || (trans as any).paymentMethod || 'نقداً',
+      treasuryOrBank: (trans as any).accountName || 'الخزينة الرئيسية',
+      amount: amountNum,
+      amountInWords: tafqeetNumber(amountNum, curName, 'قرش'),
+      statementOrReason: (trans as any).reason || (trans as any).note || '',
+      preferredPaperSize: 'a5-portrait',
+      settings,
+    });
+  } catch (err) {
+    console.error('Error dispatching voucher universal print:', err);
+  }
+
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=850,height=900');
+  } catch {
+    printWin = null;
+  }
+
   if (!printWin) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    }
     return;
   }
 
-  const html = generateCashVoucherPrintHtml(trans, appDataOrSettings);
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+  try {
+    const html = generateCashVoucherPrintHtml(trans, appDataOrSettings);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  } catch {}
 }

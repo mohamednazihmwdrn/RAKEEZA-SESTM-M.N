@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { AppData, PurchaseInvoice, InvoiceItem } from '../types';
 import { Modal } from './Modal';
@@ -33,6 +34,7 @@ import { postPurchaseInvoice, deletePurchaseInvoice } from '../utils/posting';
 import { calculateSupplierBalance } from '../utils/accounting';
 import { RakeezaInvoiceWorkspace } from './RakeezaInvoiceWorkspace';
 import { getBranchItems, getMainBranchId, updateBranchCashBoxDelta } from '../utils/branchIsolation';
+import { processPurchasePayment, auditAndDeduplicateTransactions } from '../utils/accountingEngine';
 
 interface PurchasesViewProps {
   appData: AppData;
@@ -49,6 +51,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
   const [modalType, setModalType] = useState<'nagdi' | 'ajel' | 'return_nagdi' | 'return_ajel'>('nagdi');
   const [selectedInvoice, setSelectedInvoice] = useState<PurchaseInvoice | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // ⚡ 10M+ High-Volume Big Data Pagination States
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -434,37 +437,40 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
   };
 
   const handleSaveInvoice = () => {
-    const finalItemsToSave: InvoiceItem[] =
-      unifiedItems.length > 0
-        ? unifiedItems.map((ui, idx) => ({
-            itemId: ui.itemId || `itm_${idx}_${Date.now()}`,
-            code: ui.code,
-            name: ui.name,
-            category: ui.category || '',
-            qty: ui.qty,
-            price: ui.price,
-            salePrice: ui.salePrice,
-            costPrice: ui.costPrice || ui.price,
-            discount: ui.actualDisc,
-            discountType: ui.discType === 'val' ? 'fixed' : 'percent',
-            discountValue: ui.discVal,
-            tax: ui.actualTax,
-            taxType: ui.taxType === 'val' ? 'fixed' : 'percent',
-            taxValue: ui.taxVal,
-            spec: ui.spec,
-            notes: ui.spec,
-            total: ui.total,
-          }))
-        : tempItems;
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const finalItemsToSave: InvoiceItem[] =
+        unifiedItems.length > 0
+          ? unifiedItems.map((ui, idx) => ({
+              itemId: ui.itemId || `itm_${idx}_${Date.now()}`,
+              code: ui.code,
+              name: ui.name,
+              category: ui.category || '',
+              qty: ui.qty,
+              price: ui.price,
+              salePrice: ui.salePrice,
+              costPrice: ui.costPrice || ui.price,
+              discount: ui.actualDisc,
+              discountType: ui.discType === 'val' ? 'fixed' : 'percent',
+              discountValue: ui.discVal,
+              tax: ui.actualTax,
+              taxType: ui.taxType === 'val' ? 'fixed' : 'percent',
+              taxValue: ui.taxVal,
+              spec: ui.spec,
+              notes: ui.spec,
+              total: ui.total,
+            }))
+          : tempItems;
 
-    if (finalItemsToSave.length === 0) {
-      showToast('يرجى إضافة صنف واحد على الأقل', 'warning');
-      return;
-    }
-    if (!supplierName.trim()) {
-      showToast('يرجى إدخال اسم المورد', 'warning');
-      return;
-    }
+      if (finalItemsToSave.length === 0) {
+        showToast('يرجى إضافة صنف واحد على الأقل', 'warning');
+        return;
+      }
+      if (!supplierName.trim()) {
+        showToast('يرجى إدخال اسم المورد', 'warning');
+        return;
+      }
 
     const { subtotal, total, totalDiscount, totalTax, effectivePaid, effectiveRemaining } = calculateTotals();
     const isReturn = modalType.startsWith('return_');
@@ -557,7 +563,10 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     });
     setActiveModal(null);
     showToast(`تم حفظ ${isReturn ? 'مرتجع' : 'فاتورة'} مشتريات رقم #${newInvoice.id} بنجاح`, 'success');
-  };
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleDeleteInvoice = (id: number) => {
     if (!confirm('هل أنت متأكد من حذف فاتورة المشتريات هذه؟ سيتم خصم الكميات المشتراة من رصيد المخزن وتسوية حساب المورد والخزينة تلقائياً.')) return;
@@ -587,6 +596,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
 
   const handleConfirmPayment = () => {
     if (!selectedInvoice) return;
+    if (isSubmitting) return;
     if (payAmount <= 0) {
       showToast('يرجى إدخال مبلغ سداد صحيح', 'warning');
       return;
@@ -597,52 +607,42 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
       return;
     }
 
-    const updatedData = { ...appData };
-    const inv = updatedData.purchaseInvoices.find((i) => i.id === selectedInvoice.id);
-    if (inv) {
-      inv.paidAmount = (inv.paidAmount || 0) + payAmount;
-      inv.remainingAmount = inv.total - inv.paidAmount;
-
-      // Deduct from Treasury and Branch Cashbox
-      updatedData.cashBox[payMethod] = (updatedData.cashBox[payMethod] || 0) - payAmount;
-      const invBranch = inv.branchId || appData.activeBranchId || 'br-main';
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, invBranch, payMethod, -payAmount);
-
-      // Deduct from Supplier Balance
-      const supp = updatedData.suppliers.find((s) => s.name === inv.supplierName);
-      if (supp) supp.balance = (supp.balance || 0) - payAmount;
-
-      const nowIso = new Date().toISOString();
-      const currentUserObj = updatedData.users?.find((u) => u.id === updatedData.currentUser) || updatedData.users?.[0];
-      const newCashId = updatedData.nextCashId || 1;
-      updatedData.nextCashId = newCashId + 1;
-
-      updatedData.cashTransactions.push({
-        id: newCashId,
-        companyId: appData.companyId || 'COMP-000001',
-        branchId: inv.branchId || appData.activeBranchId || 'main',
-        date: new Date().toISOString().split('T')[0],
-        type: 'pay',
-        method: payMethod,
+    setIsSubmitting(true);
+    try {
+      const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+      const updatedData = processPurchasePayment(appData, {
+        invoiceId: selectedInvoice.id,
         amount: payAmount,
-        note: `سداد دفعة فاتورة مشتريات #${inv.id} (${getMethodLabel(payMethod)}) - المورد: ${inv.supplierName}`,
-        supplierName: inv.supplierName,
-        invoiceId: inv.id,
-        status: 'approved',
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        createdBy: currentUserObj?.name || 'مستخدم النظام',
-        createdByUserId: currentUserObj?.id,
-        createdByUserCode: currentUserObj?.code || 1,
+        method: payMethod,
+        branchId: selectedInvoice.branchId || selectedBranchId || appData.activeBranchId || 'main',
+        user: currentUserObj,
       });
 
       onUpdateData(updatedData, {
         action: 'purchase_payment',
         module: 'المشتريات والخزينة',
-        details: `سداد مبلغ ${payAmount} ج.م للمورد ${inv.supplierName} عبر ${getMethodLabel(payMethod)}`,
+        details: `سداد مبلغ ${payAmount.toFixed(2)} ج.م للمورد ${selectedInvoice.supplierName} عبر ${getMethodLabel(payMethod)} مع قيد يومية متوازن`,
       });
       setActiveModal(null);
-      showToast(`تم سداد ${payAmount} ج.م للمورد ${inv.supplierName} بنجاح`, 'success');
+      showToast(`تم سداد ${payAmount.toFixed(2)} ج.م للمورد ${selectedInvoice.supplierName} بنجاح وتسوية الخزينة والقيد المزدوج`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء معالجة السداد', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRunAuditAndClean = () => {
+    const result = auditAndDeduplicateTransactions(appData);
+    if (result.removedVouchersCount > 0 || result.repairedInvoicesCount > 0) {
+      onUpdateData(result.cleanedData, {
+        action: 'audit_repair',
+        module: 'المشتريات والحسابات',
+        details: `تم تدقيق وتطهير ${result.removedVouchersCount} سند صرف مكرر وإصلاح ${result.repairedInvoicesCount} فاتورة مشتريات وتسوية الخزائن بدقة`,
+      });
+      showToast(`تم بنجاح حذف ${result.removedVouchersCount} سند مكرر وإصلاح ${result.repairedInvoicesCount} فاتورة وإعادة ضبط أرصدة الخزينة بدقة`, 'success');
+    } else {
+      showToast('تم فحص السجلات المحاسبية بالكامل: كافة سندات الصرف والفواتير والخزائن متزنة 100% ولا توجد أي سندات مكررة.', 'info');
     }
   };
 
@@ -861,6 +861,16 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
             <span>↩ مرتجع أجل</span>
+          </button>
+
+          {/* 7. فحص وتطهير السندات المكررة */}
+          <button
+            onClick={handleRunAuditAndClean}
+            className="min-h-[40px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-indigo-900 hover:scale-[1.02]"
+            title="فحص فوري لسندات الصرف والقبض وإزالة أي تكرار ناتج عن الشبكة وتوفيق أرصدة الخزائن"
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-300" />
+            <span>🛡️ فحص وتطهير التكرار</span>
           </button>
 
           <TableActionButtons
@@ -1346,9 +1356,10 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <button
                 onClick={handleConfirmPayment}
-                className="min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold transition shadow-xs flex-1 sm:flex-initial text-center cursor-pointer"
+                disabled={isSubmitting}
+                className="min-h-[44px] bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-bold transition shadow-xs flex-1 sm:flex-initial text-center cursor-pointer"
               >
-                ✓ تأكيد سداد {payAmount.toFixed(2)} ج.م
+                {isSubmitting ? 'جاري المعالجة المحاسبية...' : `✓ تأكيد سداد ${payAmount.toFixed(2)} ج.م`}
               </button>
               <button
                 onClick={() => setActiveModal(null)}

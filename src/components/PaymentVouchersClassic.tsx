@@ -32,6 +32,7 @@ import {
   filterCashTransactionsByBranch,
   filterPurchaseInvoicesByBranch,
 } from '../utils/branchIsolation';
+import { reconcileTreasuryCashBox } from '../utils/accountingEngine';
 
 interface PaymentVouchersClassicProps {
   appData: AppData;
@@ -388,6 +389,10 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
       updatedData.nextCashId = nextId + 1;
       updatedData.cashTransactions = [savedTransaction, ...(updatedData.cashTransactions || [])];
 
+      const reconciled = reconcileTreasuryCashBox(updatedData);
+      updatedData.cashBox = reconciled.cashBox;
+      updatedData.branchCashBoxes = reconciled.branchCashBoxes;
+
       onUpdateData(updatedData, {
         action: 'create_payment',
         module: 'سندات الصرف',
@@ -409,11 +414,6 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
 
     const updatedData = { ...appData };
 
-    // Revert cashbox (refund to drawer) and Branch Cashbox
-    updatedData.cashBox[t.method] = (updatedData.cashBox[t.method] || 0) + t.amount;
-    const transBranch = t.branchId || appData.activeBranchId || 'br-main';
-    updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, t.method, t.amount);
-
     // Revert supplier balance if applicable
     if (t.supplierName) {
       updatedData.suppliers = (updatedData.suppliers || []).map((s) => {
@@ -430,6 +430,10 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
     if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
     updatedData.deletedRecords[`cash_${t.id}`] = Date.now();
     updatedData.cashTransactions = updatedData.cashTransactions.filter((x) => x.id !== t.id);
+
+    const reconciled = reconcileTreasuryCashBox(updatedData);
+    updatedData.cashBox = reconciled.cashBox;
+    updatedData.branchCashBoxes = reconciled.branchCashBoxes;
 
     onUpdateData(updatedData, {
       action: 'delete_payment',

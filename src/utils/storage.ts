@@ -4,6 +4,7 @@ import { DEFAULT_COMPANIES } from './multiTenantService';
 import { saveToIndexedDB } from './indexedDbStorage';
 import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
 import { syncMissingBranchItems, getMainBranchId } from './branchIsolation';
+import { reconcileTreasuryCashBox } from './accountingEngine';
 
 export const STORAGE_KEY = 'accounting_system_v8';
 
@@ -242,46 +243,9 @@ export function getDefaultData(companyId?: string): AppData {
       notifyOnBackup: true,
     },
 
-    // 8. Multi-Tenant Enterprise Architecture (مؤسسة الموان)
-    companies: DEFAULT_COMPANIES,
-    companyCatalogConfigs: {
-      'COMP-000001': {
-        enabled: true,
-        storeName: 'مؤسسة الموان للتجارة',
-        storeDescription: 'الكتالوج الإلكتروني لمؤسسة الموان للتجارة والتوزيع',
-        contactPhone: '01029190615',
-        whatsappNumber: '01029190615',
-        allowOnlineOrders: true,
-        priceDisplayMode: 'both',
-        showStockStatus: true,
-        showExactStockQty: false,
-        bannerMessage: '🚚 شحن وتوصيل فوري لجميع المحافظات مع ضمان الاستبدال',
-        minOrderAmount: 200,
-        currencySymbol: 'ج.م',
-        autoPrintOrders: true,
-        printFormat: '80mm',
-        soundAlertEnabled: true,
-        companyId: 'COMP-000001',
-      },
-      'COMP-000002': {
-        enabled: true,
-        storeName: 'مؤسسة الأمل للتوريدات ومستلزمات الكاشير',
-        storeDescription: 'المتجر الإلكتروني لتوريدات الورق الحراري وطابعات الفواتير والأجهزة المكتبية',
-        contactPhone: '01011223344',
-        whatsappNumber: '01011223344',
-        allowOnlineOrders: true,
-        priceDisplayMode: 'both',
-        showStockStatus: true,
-        showExactStockQty: false,
-        bannerMessage: '📦 أسعار خاصة وخصومات للكميات والجملة لكراتين بكر الكاشير وورق التصوير',
-        minOrderAmount: 150,
-        currencySymbol: 'ج.م',
-        autoPrintOrders: true,
-        printFormat: '80mm',
-        soundAlertEnabled: true,
-        companyId: 'COMP-000002',
-      },
-    },
+    // 8. Multi-Tenant Enterprise Architecture
+    companies: [],
+    companyCatalogConfigs: {},
     deletedRecords: {},
   };
 }
@@ -535,6 +499,11 @@ export function loadAppData(companyId?: string): AppData {
       const syncRes = syncMissingBranchItems(loaded);
       loaded.items = syncRes.items;
 
+      // 🏦 Authoritative Treasury Reconciliation: ensure cashboxes never drift from validated transactions
+      const reconciled = reconcileTreasuryCashBox(loaded);
+      loaded.cashBox = reconciled.cashBox;
+      loaded.branchCashBoxes = reconciled.branchCashBoxes;
+
       return ensureProductPricesSynced(loaded);
     }
   } catch (e) {
@@ -683,11 +652,18 @@ function getItemDeduplicationKey(item: any, collectionKey?: string): string | nu
       return `item_name_${String(item.name).trim().toLowerCase()}`;
     }
   } else if (collectionKey === 'cashTransactions') {
+    if (item.voucherNo && String(item.voucherNo).trim()) {
+      return `vouch_no_${String(item.voucherNo).trim().toUpperCase()}`;
+    }
     if (item.invoiceId && item.amount && item.type) {
-      return `cash_inv_${item.invoiceId}_${item.type}_${item.amount}_${item.method || ''}`;
+      const normAmt = Number(item.amount || 0).toFixed(2);
+      const rawM = String(item.method || '').toLowerCase();
+      const mKey = rawM.includes('voda') ? 'vodafone' : rawM.includes('insta') ? 'instapay' : rawM.includes('bank') ? 'bank' : 'drawer';
+      return `cash_inv_${item.invoiceId}_${item.type}_${normAmt}_${mKey}`;
     }
     if (item.date && item.type && item.amount && (item.customerName || item.supplierName || item.note)) {
-      return `cash_tx_${item.date}_${item.type}_${item.amount}_${String(item.customerName || item.supplierName || '').trim()}_${String(item.note || '').trim()}`;
+      const normAmt = Number(item.amount || 0).toFixed(2);
+      return `cash_tx_${item.date}_${item.type}_${normAmt}_${String(item.customerName || item.supplierName || '').trim()}_${String(item.note || '').trim()}`;
     }
   } else if (collectionKey === 'salesInvoices' || collectionKey === 'purchaseInvoices') {
     const party = String(item.customerName || item.supplierName || '').trim().toLowerCase();

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Settings } from '../types';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface UnifiedReportConfig {
   reportTitle: string;
@@ -633,6 +634,49 @@ export function openUnifiedPrintWindow(
       isThermal: d.isThermal,
       preferredPaperSize: d.preferredPaperSize || (d.isThermal ? 'thermal' : 'A5'),
     };
+  }
+
+  // 🖨️ Dispatch to in-app Universal Print Modal immediately for instant zero-popup preview
+  try {
+    const rawRows = (unifiedConfig.rows || []).map((r) =>
+      r.map((cell) => (typeof cell === 'string' || typeof cell === 'number' ? cell : ''))
+    );
+    const summaries = (unifiedConfig.summary || []).map((s) => ({
+      label: s.label,
+      value: s.value,
+      isTotal: s.isTotal,
+      isHighlight: s.isHighlight,
+      color: s.isTotal ? '#dc2626' : '#16a34a',
+    }));
+
+    openUniversalPrint({
+      kind: 'generic_report',
+      title: unifiedConfig.reportTitle,
+      subTitle: unifiedConfig.subTitle,
+      docNumber: unifiedConfig.serial,
+      date: unifiedConfig.date,
+      time: unifiedConfig.time,
+      branch: unifiedConfig.branch,
+      partyName: unifiedConfig.partyName,
+      partyCode: unifiedConfig.partyCode,
+      partyPhone: unifiedConfig.partyPhone,
+      partyLabel: unifiedConfig.partyLabel,
+      paymentMethod: unifiedConfig.paymentMethod,
+      statementOrReason: unifiedConfig.statementNote || unifiedConfig.notes,
+      columns: unifiedConfig.columns,
+      rows: rawRows,
+      summaries,
+      footerTermsNote: unifiedConfig.footerNote,
+      preferredPaperSize:
+        unifiedConfig.preferredPaperSize === 'A4'
+          ? 'a4-portrait'
+          : unifiedConfig.preferredPaperSize === 'thermal'
+          ? 'thermal-80'
+          : 'a5-portrait',
+      settings,
+    });
+  } catch (err) {
+    console.error('Error dispatching openUniversalPrint:', err);
   }
 
   const html = generateUnifiedReportHtml(unifiedConfig);

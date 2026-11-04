@@ -1,9 +1,10 @@
 /**
- * Arabic Number to Words Converter (Tafqeet / تفقيط)
- * Converts numbers into formal Arabic textual representation with currency and sub-currency.
+ * 🔤 RAKEEZA Arabic Currency Tafqeet Engine
+ * Converts numerical financial amounts to formal legal Arabic words.
+ * Example: 1540.50 => فقط ألف وخمسمائة وأربعون جنيهاً مصرياً وخمسون قرشاً لا غير
  */
 
-const ones = [
+const ONES = [
   '',
   'واحد',
   'اثنان',
@@ -26,7 +27,7 @@ const ones = [
   'تسعة عشر',
 ];
 
-const tens = [
+const TENS = [
   '',
   '',
   'عشرون',
@@ -39,10 +40,10 @@ const tens = [
   'تسعون',
 ];
 
-const hundreds = [
+const HUNDREDS = [
   '',
   'مائة',
-  'مئتان',
+  'مائتان',
   'ثلاثمائة',
   'أربعمائة',
   'خمسمائة',
@@ -52,118 +53,145 @@ const hundreds = [
   'تسعمائة',
 ];
 
-function convertThreeDigitGroup(num: number): string {
-  let res = '';
-  const h = Math.floor(num / 100);
-  const remainder = num % 100;
+const THOUSANDS = [
+  '',
+  'ألف',
+  'ألفان',
+  'آلاف',
+  'ألفاً',
+];
+
+const MILLIONS = [
+  '',
+  'مليون',
+  'مليونان',
+  'ملايين',
+  'مليوناً',
+];
+
+const BILLIONS = [
+  '',
+  'مليار',
+  'ملياران',
+  'مليارات',
+  'ملياراً',
+];
+
+function convertGroup(n: number): string {
+  if (n === 0) return '';
+  const parts: string[] = [];
+
+  const h = Math.floor(n / 100);
+  const remainder = n % 100;
 
   if (h > 0) {
-    res += hundreds[h];
+    parts.push(HUNDREDS[h]);
   }
 
   if (remainder > 0) {
-    if (res !== '') res += ' و';
     if (remainder < 20) {
-      res += ones[remainder];
+      parts.push(ONES[remainder]);
     } else {
       const o = remainder % 10;
       const t = Math.floor(remainder / 10);
       if (o > 0) {
-        res += ones[o] + ' و' + tens[t];
+        parts.push(`${ONES[o]} و${TENS[t]}`);
       } else {
-        res += tens[t];
+        parts.push(TENS[t]);
       }
     }
   }
 
-  return res;
+  return parts.join(' و');
+}
+
+function formatScale(count: number, forms: string[]): string {
+  if (count === 0) return '';
+  if (count === 1) return forms[1];
+  if (count === 2) return forms[2];
+  if (count >= 3 && count <= 10) return `${convertGroup(count)} ${forms[3]}`;
+  return `${convertGroup(count)} ${forms[4]}`;
 }
 
 export interface TafqeetOptions {
-  currency?: string; // e.g. "جنيه مصري", "ريال سعودي", "درهم"
-  fractionName?: string; // e.g. "قرش", "هللة", "فلس"
-  prefix?: string; // e.g. "فقط"
-  suffix?: string; // e.g. "لا غير"
+  currency?: string;
+  fractionName?: string;
+  prefix?: string;
+  suffix?: string;
 }
 
-export function tafqeetArabic(amount: number, options: TafqeetOptions = {}): string {
-  const {
-    currency = 'جنيه مصري',
-    fractionName = 'قرش',
-    prefix = 'فقط',
-    suffix = 'لا غير',
-  } = options;
+export function tafqeetNumber(
+  amount: number | string,
+  optionsOrCurrencyName?: string | TafqeetOptions,
+  fractionNameArg = 'قرش'
+): string {
+  let currencyName = 'جنيه مصري';
+  let fractionName = fractionNameArg;
+  let prefix = 'فقط';
+  let suffix = 'لا غير';
 
-  if (isNaN(amount) || amount === 0) {
-    return `${prefix} صفر ${currency} ${suffix}`;
+  if (typeof optionsOrCurrencyName === 'object' && optionsOrCurrencyName !== null) {
+    if (optionsOrCurrencyName.currency) currencyName = optionsOrCurrencyName.currency;
+    if (optionsOrCurrencyName.fractionName) fractionName = optionsOrCurrencyName.fractionName;
+    if (optionsOrCurrencyName.prefix !== undefined) prefix = optionsOrCurrencyName.prefix;
+    if (optionsOrCurrencyName.suffix !== undefined) suffix = optionsOrCurrencyName.suffix;
+  } else if (typeof optionsOrCurrencyName === 'string') {
+    currencyName = optionsOrCurrencyName;
   }
 
-  const isNegative = amount < 0;
-  const absAmount = Math.abs(amount);
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numericAmount) || numericAmount === 0) {
+    return `${prefix ? `${prefix} ` : ''}صفر ${currencyName}${suffix ? ` ${suffix}` : ''}`.trim();
+  }
+
+  const isNegative = numericAmount < 0;
+  const absAmount = Math.abs(numericAmount);
 
   const integerPart = Math.floor(absAmount);
   const fractionPart = Math.round((absAmount - integerPart) * 100);
 
-  if (integerPart === 0 && fractionPart === 0) {
-    return `${prefix} صفر ${currency} ${suffix}`;
-  }
-
-  const parts: string[] = [];
-
-  // Billions
   const billions = Math.floor(integerPart / 1_000_000_000);
-  // Millions
   const millions = Math.floor((integerPart % 1_000_000_000) / 1_000_000);
-  // Thousands
   const thousands = Math.floor((integerPart % 1_000_000) / 1_000);
-  // Units
   const units = integerPart % 1_000;
 
+  const resultParts: string[] = [];
+
   if (billions > 0) {
-    if (billions === 1) parts.push('مليار');
-    else if (billions === 2) parts.push('ملياران');
-    else if (billions >= 3 && billions <= 10) parts.push(`${convertThreeDigitGroup(billions)} مليارات`);
-    else parts.push(`${convertThreeDigitGroup(billions)} مليار`);
+    resultParts.push(formatScale(billions, BILLIONS));
   }
-
   if (millions > 0) {
-    if (millions === 1) parts.push('مليون');
-    else if (millions === 2) parts.push('مليونان');
-    else if (millions >= 3 && millions <= 10) parts.push(`${convertThreeDigitGroup(millions)} ملايين`);
-    else parts.push(`${convertThreeDigitGroup(millions)} مليون`);
+    resultParts.push(formatScale(millions, MILLIONS));
   }
-
   if (thousands > 0) {
-    if (thousands === 1) parts.push('ألف');
-    else if (thousands === 2) parts.push('ألفان');
-    else if (thousands >= 3 && thousands <= 10) parts.push(`${convertThreeDigitGroup(thousands)} آلاف`);
-    else parts.push(`${convertThreeDigitGroup(thousands)} ألف`);
+    resultParts.push(formatScale(thousands, THOUSANDS));
   }
-
   if (units > 0) {
-    parts.push(convertThreeDigitGroup(units));
+    resultParts.push(convertGroup(units));
   }
 
-  let result = parts.join(' و');
+  let text = resultParts.filter(Boolean).join(' و');
 
-  if (result.trim() === '') {
-    result = 'صفر';
+  if (!text) {
+    text = 'صفر';
   }
 
-  let finalStr = `${prefix} ${result} ${currency}`;
+  let finalArabic = `${prefix ? `${prefix} ` : ''}${text} ${currencyName}`.trim();
 
   if (fractionPart > 0) {
-    const fractionText = convertThreeDigitGroup(fractionPart);
-    finalStr += ` و${fractionText} ${fractionName}`;
+    finalArabic += ` و${convertGroup(fractionPart)} ${fractionName}`;
   }
 
   if (suffix) {
-    finalStr += ` ${suffix}`;
+    finalArabic += ` ${suffix}`;
   }
 
   if (isNegative) {
-    finalStr = `سالب ` + finalStr;
+    finalArabic = `سالب ${finalArabic}`;
   }
 
-  return finalStr.trim();
+  return finalArabic;
 }
+
+export const tafqeetArabic = tafqeetNumber;
+export default tafqeetNumber;

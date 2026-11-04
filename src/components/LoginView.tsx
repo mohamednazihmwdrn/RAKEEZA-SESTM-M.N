@@ -127,47 +127,47 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       if (stored) {
         setBoundDevice(stored);
+
+        // Check if a user was previously assigned/remembered on this device
+        const installedUser =
+          typeof window !== 'undefined'
+            ? localStorage.getItem(`rakeeza_installed_user_${stored.companyId}`) ||
+              localStorage.getItem('mowan_installed_user')
+            : null;
+        if (installedUser) {
+          setSelectedUsername(installedUser);
+        } else if (stored.users && stored.users.length > 0) {
+          setSelectedUsername(stored.users[0].username || stored.users[0].name);
+        }
+
+        if (stored.branches && stored.branches.length > 0) {
+          const mainBranch = stored.branches.find((b) => b.isMain) || stored.branches[0];
+          setSelectedBranchId(mainBranch.id);
+        }
+
+        // Silent cloud update of company users & branches for this company
+        try {
+          const res = await fetchCompanyPublicDetailsApi(stored.companyId);
+          if (res.success && res.company) {
+            const updated: BoundDeviceData = {
+              ...stored,
+              companyName: res.company.name || stored.companyName,
+              companyCode: res.company.code || (res.company as any).companyCode || stored.companyCode,
+              branches: res.branches || stored.branches,
+              users: res.users || stored.users,
+            };
+            setStoredBoundDevice(updated);
+            setBoundDevice(updated);
+
+            if (installedUser && updated.users?.some((u: any) => u.username === installedUser || u.name === installedUser)) {
+              setSelectedUsername(installedUser);
+            }
+          }
+        } catch {}
       } else {
         setBoundDevice(null);
-        setBindMode('register');
+        setSetupTab('register_new');
       }
-
-      // Check if a user was previously assigned/remembered on this device
-      const installedUser =
-        typeof window !== 'undefined'
-          ? localStorage.getItem(`rakeeza_installed_user_${stored.companyId}`) ||
-            localStorage.getItem('mowan_installed_user')
-          : null;
-      if (installedUser) {
-        setSelectedUsername(installedUser);
-      } else if (stored.users && stored.users.length > 0) {
-        setSelectedUsername(stored.users[0].username || stored.users[0].name);
-      }
-
-      if (stored.branches && stored.branches.length > 0) {
-        const mainBranch = stored.branches.find((b) => b.isMain) || stored.branches[0];
-        setSelectedBranchId(mainBranch.id);
-      }
-
-      // Silent cloud update of company users & branches for this company
-      try {
-        const res = await fetchCompanyPublicDetailsApi(stored.companyId);
-        if (res.success && res.company) {
-          const updated: BoundDeviceData = {
-            ...stored,
-            companyName: res.company.name || stored.companyName,
-            companyCode: res.company.code || (res.company as any).companyCode || stored.companyCode,
-            branches: res.branches || stored.branches,
-            users: res.users || stored.users,
-          };
-          setStoredBoundDevice(updated);
-          setBoundDevice(updated);
-
-          if (installedUser && updated.users?.some((u: any) => u.username === installedUser || u.name === installedUser)) {
-            setSelectedUsername(installedUser);
-          }
-        }
-      } catch {}
 
       setIsCheckingDevice(false);
     };

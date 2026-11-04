@@ -584,6 +584,62 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
         </div>
       </div>
 
+      {/* 🖨️ 5. RAKEEZA Universal Printing Engine Settings */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
+        <h4 className="text-[#1a237e] font-black text-sm sm:text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+          <span>🖨️</span> إعدادات محرك الطباعة الموحد RAKEEZA UNIVERSAL PRINT ENGINE
+        </h4>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">المقاس الافتراضي للطباعة (Default Size)</label>
+            <select
+              value={settings.paperSize || 'A5'}
+              onChange={(e) => {
+                const s = e.target.value;
+                setSettings({ ...settings, paperSize: s as any });
+                try {
+                  localStorage.setItem('sys_print_pref_size', s);
+                } catch {}
+              }}
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none bg-slate-50 font-bold"
+            >
+              <option value="A5">ورق قياسي A5 عمودي (148×210 mm) - الافتراضي للفواتير والسندات</option>
+              <option value="a5-landscape">ورق قياسي A5 أفقي (210×148 mm)</option>
+              <option value="A4">ورق قياسي A4 عمودي (210×297 mm)</option>
+              <option value="a4-landscape">ورق قياسي A4 أفقي (297×210 mm)</option>
+              <option value="thermal">طابعة إيصالات حرارية (80mm Thermal)</option>
+              <option value="58mm">طابعة إيصالات حرارية صغيرة (58mm)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">هوامش صفحة الطباعة</label>
+            <select
+              value={settings.pageMargin || 4}
+              onChange={(e) => setSettings({ ...settings, pageMargin: Number(e.target.value) })}
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none bg-slate-50 font-bold"
+            >
+              <option value={3}>هوامش ضيقة (3mm) - أقصى استغلال للمساحة</option>
+              <option value={4}>هوامش قياسية متوازنة (4mm) - موصى به</option>
+              <option value={6}>هوامش واسعة (6mm)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">إظهار شعار المنشأة في المستندات</label>
+            <select
+              value={settings.showLogoInPrint !== false ? 'yes' : 'no'}
+              onChange={(e) => setSettings({ ...settings, showLogoInPrint: e.target.value === 'yes' })}
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none bg-slate-50 font-bold"
+            >
+              <option value="yes">نعم، إظهار الشعار الرسمي في أعلى المستند</option>
+              <option value="no">لا، الاعتماد على اسم المنشأة النصي فقط</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* 🔑 External API & Mobile APK Integration Key Card */}
       <div className="bg-white text-slate-900 p-6 rounded-2xl shadow-xs border-2 border-slate-200 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">

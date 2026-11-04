@@ -41,6 +41,7 @@ import { calculateCustomerBalance } from '../utils/accounting';
 import { RakeezaInvoiceWorkspace } from './RakeezaInvoiceWorkspace';
 import { BigDataDiagnosticsModal } from './BigDataDiagnosticsModal';
 import { updateBranchCashBoxDelta, getBranchItems, getMainBranchId } from '../utils/branchIsolation';
+import { processSalePayment } from '../utils/accountingEngine';
 
 interface SalesViewProps {
   appData: AppData;
@@ -57,6 +58,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
   const [modalType, setModalType] = useState<'nagdi' | 'ajel' | 'return_nagdi' | 'return_ajel'>('nagdi');
   const [selectedInvoice, setSelectedInvoice] = useState<SaleInvoice | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // ⚡ 10M+ High-Volume Big Data Pagination & Partitioning States
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -561,14 +563,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
   };
 
   const handleSaveInvoice = () => {
-    if (unifiedItems.length === 0) {
-      showToast('يرجى إضافة صنف واحد على الأقل في الفاتورة', 'warning');
-      return;
-    }
-    if (!customerName.trim()) {
-      showToast('يرجى إدخال اسم العميل', 'warning');
-      return;
-    }
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (unifiedItems.length === 0) {
+        showToast('يرجى إضافة صنف واحد على الأقل في الفاتورة', 'warning');
+        return;
+      }
+      if (!customerName.trim()) {
+        showToast('يرجى إدخال اسم العميل', 'warning');
+        return;
+      }
 
     const { subtotal, totalDiscount, totalTax, total, effectivePaid, effectiveRemaining, extraRevenueAmount } = calculateTotals();
     const isReturn = modalType.startsWith('return_');
@@ -698,7 +703,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     });
     setActiveModal(null);
     showToast(`تم حفظ ${isReturn ? 'مرتجع' : 'فاتورة'} مبيعات رقم #${newInvoice.id} بنجاح`, 'success');
-  };
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleDeleteInvoice = (id: number) => {
     if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟ سيتم استرجاع كميات الأصناف تلقائياً إلى رصيد المخزون وتسوية الحسابات والخزينة.')) return;
@@ -728,6 +736,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
 
   const handleConfirmPayment = () => {
     if (!selectedInvoice) return;
+    if (isSubmitting) return;
     if (payAmount <= 0) {
       showToast('يرجى إدخال مبلغ دفع صحيح', 'warning');
       return;
@@ -738,50 +747,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       return;
     }
 
-    const updatedData = { ...appData };
-    const inv = updatedData.salesInvoices.find((i) => i.id === selectedInvoice.id);
-    if (inv) {
-      inv.paidAmount = (inv.paidAmount || 0) + payAmount;
-      inv.remainingAmount = inv.total - inv.paidAmount;
-
-      updatedData.cashBox[payMethod] += payAmount;
-      const invBranch = inv.branchId || appData.activeBranchId || 'br-main';
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, invBranch, payMethod, payAmount);
-
-      const cust = updatedData.customers.find((c) => c.name === inv.customerName);
-      if (cust) cust.balance = (cust.balance || 0) - payAmount;
-
-      const nowIso = new Date().toISOString();
-      const currentUserObj = updatedData.users?.find((u) => u.id === updatedData.currentUser) || updatedData.users?.[0];
-      const newCashId = updatedData.nextCashId || 1;
-      updatedData.nextCashId = newCashId + 1;
-
-      updatedData.cashTransactions.push({
-        id: newCashId,
-        companyId: appData.companyId || 'COMP-000001',
-        branchId: inv.branchId || appData.activeBranchId || 'main',
-        date: new Date().toISOString().split('T')[0],
-        type: 'receive',
-        method: payMethod,
+    setIsSubmitting(true);
+    try {
+      const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+      const updatedData = processSalePayment(appData, {
+        invoiceId: selectedInvoice.id,
         amount: payAmount,
-        note: `تسديد فاتورة مبيعات #${inv.id} - العميل: ${inv.customerName}`,
-        customerName: inv.customerName,
-        invoiceId: inv.id,
-        status: 'approved',
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        createdBy: currentUserObj?.name || 'مستخدم النظام',
-        createdByUserId: currentUserObj?.id,
-        createdByUserCode: currentUserObj?.code || 1,
+        method: payMethod,
+        branchId: selectedInvoice.branchId || selectedBranchId || appData.activeBranchId || 'main',
+        user: currentUserObj,
       });
 
       onUpdateData(updatedData, {
         action: 'invoice_payment',
         module: 'المبيعات والخزينة',
-        details: `تسديد مبلغ ${payAmount} ج.م من الفاتورة رقم #${inv.id}`,
+        details: `تحصيل مبلغ ${payAmount.toFixed(2)} ج.م من فاتورة مبيعات #${selectedInvoice.id} مع قيد محاسبي متوازن`,
       });
       setActiveModal(null);
-      showToast(`تم تسديد ${payAmount} ج.م للفاتورة #${inv.id} بنجاح`, 'success');
+      showToast(`تم تحصيل ${payAmount.toFixed(2)} ج.م للفاتورة #${selectedInvoice.id} بنجاح وتسوية الخزينة والقيد المزدوج`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء معالجة التحصيل', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1594,9 +1581,10 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleConfirmPayment}
-                className="min-h-[44px] bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] text-white px-6 py-2 rounded-xl font-bold cursor-pointer transition shadow-xs flex-1 sm:flex-initial text-center"
+                disabled={isSubmitting}
+                className="min-h-[44px] bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-xl font-bold cursor-pointer transition shadow-xs flex-1 sm:flex-initial text-center"
               >
-                ✅ تأكيد التسديد
+                {isSubmitting ? 'جاري التحصيل والترحيل...' : '✅ تأكيد التسديد'}
               </button>
               <button
                 onClick={() => setActiveModal(null)}

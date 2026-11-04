@@ -1,4 +1,6 @@
 import { AppData, Settings } from '../types';
+import { openUniversalPrint } from '../services/centralizedPrintService';
+import { tafqeetNumber } from './tafqeet';
 
 export interface StatementData {
   company: {
@@ -984,27 +986,103 @@ export function printStatementWindow(
   filterToDate?: string,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void
 ) {
-  const printWin = window.open('', '_blank', 'width=950,height=900');
-  if (!printWin) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    } else {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
+  // 🖨️ Dispatch to in-app Universal Print Modal immediately
+  try {
+    let compiled: StatementData | null = null;
+    if (typeof partyNameOrData === 'object' && partyNameOrData !== null) {
+      compiled = partyNameOrData;
+    } else if (appData) {
+      compiled = compileStatementData(
+        partyNameOrData as string,
+        partyType || 'customer',
+        appData,
+        filterFromDate,
+        filterToDate
+      );
     }
+
+    if (compiled) {
+      let runBal = compiled.previousBalance || 0;
+      let totalDeb = 0;
+      let totalCred = 0;
+
+      const rows = compiled.transactions.map((t) => {
+        const d = Number(t.debit || 0);
+        const c = Number(t.credit || 0);
+        totalDeb += d;
+        totalCred += c;
+        runBal += (d - c);
+        return [
+          t.date,
+          t.refNo || '-',
+          t.description || '-',
+          d > 0 ? d.toFixed(2) : '-',
+          c > 0 ? c.toFixed(2) : '-',
+          runBal.toFixed(2),
+        ];
+      });
+
+      const isCust = partyType !== 'supplier';
+      const curSymbol = appData?.settings?.currencySymbol || 'ج.م';
+      const curName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
+
+      openUniversalPrint({
+        kind: 'account_statement',
+        title: `كشف حساب ${isCust ? 'عميل' : 'مورد'} تفصيلي`,
+        subTitle: compiled.accountName,
+        partyName: compiled.accountName,
+        partyCode: compiled.accountCode,
+        partyLabel: isCust ? 'العميل' : 'المورد',
+        period: { from: compiled.dateFrom, to: compiled.dateTo },
+        amount: Math.abs(runBal),
+        amountInWords: tafqeetNumber(Math.abs(runBal), curName, 'قرش'),
+        columns: ['التاريخ', 'رقم الحركة', 'نوع الحركة والبيان', 'مدين (+)', 'دائن (-)', 'الرصيد'],
+        rows,
+        summaries: [
+          { label: 'عدد الحركات', value: `${rows.length} حركة`, color: '#16a34a' },
+          { label: 'الرصيد السابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { label: 'إجمالي المدين', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
+          { label: 'إجمالي الدائن', value: `${totalCred.toFixed(2)} ${curSymbol}` },
+          {
+            label: 'الرصيد الختامي',
+            value: `${runBal.toFixed(2)} ${curSymbol} (${runBal > 0 ? 'مدين له' : runBal < 0 ? 'دائن عليه' : 'متزن'})`,
+            isHighlight: true,
+            isTotal: true,
+            color: '#dc2626',
+          },
+        ],
+        preferredPaperSize: 'a4-portrait',
+        settings: appData?.settings,
+      });
+    }
+  } catch (err) {
+    console.error('Error dispatching statement universal print:', err);
+  }
+
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=950,height=900');
+  } catch {
+    printWin = null;
+  }
+
+  if (!printWin) {
     return;
   }
 
-  let html = '';
-  if (typeof partyNameOrData === 'object' && partyNameOrData !== null) {
-    const isSupplier = partyType === 'supplier';
-    html = generateStatementPrintHtml(partyNameOrData, isSupplier);
-  } else if (appData) {
-    const compiled = compileStatementData(partyNameOrData as string, partyType || 'customer', appData, filterFromDate, filterToDate);
-    const isSupplier = partyType === 'supplier';
-    html = generateStatementPrintHtml(compiled, isSupplier);
-  }
+  try {
+    let html = '';
+    if (typeof partyNameOrData === 'object' && partyNameOrData !== null) {
+      const isSupplier = partyType === 'supplier';
+      html = generateStatementPrintHtml(partyNameOrData, isSupplier);
+    } else if (appData) {
+      const compiled = compileStatementData(partyNameOrData as string, partyType || 'customer', appData, filterFromDate, filterToDate);
+      const isSupplier = partyType === 'supplier';
+      html = generateStatementPrintHtml(compiled, isSupplier);
+    }
 
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  } catch {}
 }
