@@ -1,5 +1,6 @@
 import { AppData, StocktakeSession, InventoryAdjustmentVoucher, FiscalYearClosingRecord, Settings } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 export { generateGoodsIssuePrintHtml, printGoodsIssueNote } from './printGoodsIssueNote';
 
 /**
@@ -912,30 +913,111 @@ ${getPrintToolbarScript()}
  * Trigger print dialog for Stocktake Session
  */
 export function printStocktakeSession(session: StocktakeSession, appData: AppData): void {
-  const html = generateStocktakePrintHtml(session, appData);
-  const printWin = window.open('', '_blank', 'width=1100,height=900');
-  if (!printWin) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    return;
+  try {
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const rows = (session.items || []).map((it, idx) => [
+      idx + 1,
+      it.barcode || it.itemId,
+      it.itemName,
+      it.unit || 'قطعة',
+      it.bookQty,
+      it.countedQty,
+      it.varianceQty,
+      it.varianceCostTotal !== undefined ? Number(it.varianceCostTotal).toFixed(2) : '-',
+    ]);
+
+    openUniversalPrint({
+      kind: 'inventory_stocktaking',
+      title: 'محضر جلسة الجرد الفعلي للمستودع',
+      docNumber: session.sessionNumber || session.id,
+      date: session.date,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (session as any).branchName || 'المستودع الرئيسي',
+      partyName: session.committeeMembers || session.createdBy || 'لجنة الجرد والمطابقة',
+      partyLabel: 'لجنة الفحص والاعتماد',
+      columns: ['م', 'كود الصنف', 'اسم الصنف', 'الوحدة', 'الرصيد الدفتري', 'الرصيد الفعلي', 'الفارق', 'قيمة الفارق'],
+      rows,
+      amount: Math.abs(session.netVarianceValue || 0),
+      summaries: [
+        { label: 'عدد الأصناف المجرودة', value: `${session.items?.length || 0} صنف` },
+        { label: 'إجمالي الفائض / العجز', value: `${(session.netVarianceValue || 0).toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a4-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching stocktake universal print:', err);
   }
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=1100,height=900');
+  } catch {
+    printWin = null;
+  }
+
+  if (printWin) {
+    const html = generateStocktakePrintHtml(session, appData);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
 
 /**
  * Trigger print dialog for Settlement Voucher
  */
 export function printSettlementVoucher(voucher: InventoryAdjustmentVoucher, appData: AppData): void {
-  const html = generateSettlementPrintHtml(voucher, appData);
-  const printWin = window.open('', '_blank', 'width=1100,height=900');
-  if (!printWin) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    return;
+  try {
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const rows = (voucher.items || []).map((it, idx) => [
+      idx + 1,
+      it.itemId,
+      it.itemName,
+      'قطعة',
+      it.adjustedQty,
+      Number(it.unitCost || 0).toFixed(2),
+      Number(it.totalAmount || 0).toFixed(2),
+      it.reason || '-',
+    ]);
+
+    const isSurplus = voucher.type === 'surplus_only';
+    openUniversalPrint({
+      kind: 'inventory_settlement',
+      title: isSurplus ? 'سند تسوية جردية (إضافة فائض)' : 'سند تسوية جردية (تسوية عجز)',
+      docNumber: voucher.voucherNumber || voucher.id,
+      date: voucher.date,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (voucher as any).branchName || 'المستودع الرئيسي',
+      partyName: voucher.createdBy || 'إدارة المخازن والمحاسبة',
+      partyLabel: 'المسؤول المعتمد',
+      columns: ['م', 'كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية المسواة', 'سعر الوحدة', 'إجمالي القيمة', 'البيان'],
+      rows,
+      amount: Math.abs(voucher.netAdjustmentAmount || 0),
+      summaries: [
+        { label: 'عدد الأصناف', value: `${voucher.items?.length || 0} صنف` },
+        { label: 'إجمالي قيمة التسوية', value: `${(voucher.netAdjustmentAmount || 0).toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a5-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching settlement voucher universal print:', err);
   }
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=1100,height=900');
+  } catch {
+    printWin = null;
+  }
+
+  if (printWin) {
+    const html = generateSettlementPrintHtml(voucher, appData);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
 
 /**
@@ -943,12 +1025,16 @@ export function printSettlementVoucher(voucher: InventoryAdjustmentVoucher, appD
  */
 export function printAnnualClosing(closingRecord: FiscalYearClosingRecord, appData: AppData): void {
   const html = generateAnnualClosingPrintHtml(closingRecord, appData);
-  const printWin = window.open('', '_blank', 'width=1100,height=900');
-  if (!printWin) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    return;
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=1100,height=900');
+  } catch {
+    printWin = null;
   }
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
+

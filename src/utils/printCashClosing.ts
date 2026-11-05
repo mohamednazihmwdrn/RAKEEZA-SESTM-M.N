@@ -1,5 +1,6 @@
 import { AppData } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface CashClosingData {
   company: {
@@ -645,19 +646,60 @@ export function printCashClosingWindow(
   customOpenBalance?: number,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void
 ) {
-  const printWin = window.open('', '_blank', 'width=950,height=900');
-  if (!printWin) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    } else {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    }
-    return;
+  const compiled = compileCashClosingData(appData, filterDate, customActualCash, customOpenBalance);
+
+  // 🖨️ Dispatch to Centralized Universal Print Modal
+  try {
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const totalIn = compiled.transactions.reduce((sum, t) => sum + (t.amountIn || 0), 0);
+    const totalOut = compiled.transactions.reduce((sum, t) => sum + (t.amountOut || 0), 0);
+    const netCash = compiled.openBalance + totalIn - totalOut;
+
+    const rows = compiled.transactions.map((t) => [
+      t.no,
+      t.desc,
+      t.amountIn > 0 ? t.amountIn.toFixed(2) : '-',
+      t.amountOut > 0 ? t.amountOut.toFixed(2) : '-',
+      t.method || 'نقداً',
+    ]);
+
+    openUniversalPrint({
+      kind: 'treasury_balances',
+      title: 'محضر إغلاق الخزينة والوردية',
+      docNumber: compiled.serialNo,
+      date: compiled.date,
+      time: compiled.time,
+      branch: compiled.branch,
+      partyName: compiled.cashierName,
+      partyLabel: 'مسؤول الخزينة',
+      columns: ['م', 'البيان والحركة', 'وارد (+)', 'منصرف (-)', 'طريقة الدفع'],
+      rows,
+      amount: netCash,
+      summaries: [
+        { label: 'الرصيد الافتتاحي', value: `${compiled.openBalance.toFixed(2)} ${curSymbol}` },
+        { label: 'إجمالي المقبوضات', value: `${totalIn.toFixed(2)} ${curSymbol}`, color: '#16a34a' },
+        { label: 'إجمالي المدفوعات', value: `${totalOut.toFixed(2)} ${curSymbol}`, color: '#dc2626' },
+        { label: 'الرصيد الدفتري الحالي', value: `${netCash.toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a5-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching cash closing print:', err);
   }
 
-  const compiled = compileCashClosingData(appData, filterDate, customActualCash, customOpenBalance);
-  const html = generateCashClosingPrintHtml(compiled);
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=950,height=900');
+  } catch {
+    printWin = null;
+  }
+
+  if (printWin) {
+    const html = generateCashClosingPrintHtml(compiled);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
+

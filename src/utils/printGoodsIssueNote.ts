@@ -1,5 +1,6 @@
 import { AppData, GoodsIssueVoucher, Settings } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 /**
  * Generate Ultra-Precise HTML for Goods Issue Note (إذن صرف مخزني)
@@ -273,20 +274,58 @@ export function printGoodsIssueNote(
   appData: AppData,
   showToast?: (msg: string, type: any) => void
 ): void {
-  const html = generateGoodsIssuePrintHtml(issue, appData);
-  const printWindow = window.open('', '_blank', 'width=1000,height=850');
+  // 🖨️ Dispatch to Centralized Universal Print Modal
+  try {
+    const totalQty = issue.items?.reduce((sum, item) => sum + (Number(item.qty) || 0), 0) || 0;
+    const grandTotalCost =
+      issue.items?.reduce((sum, item) => sum + (Number(item.totalCost) || Number(item.qty) * Number(item.unitCost) || 0), 0) ||
+      issue.totalCost ||
+      0;
 
-  if (!printWindow) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة (Popups) لمعاينة وطباعة إذن الصرف', 'warning');
-    }
-    return;
+    openUniversalPrint({
+      kind: 'inventory_movement',
+      title: 'إذن صرف مخزني',
+      docNumber: (issue as any).serialNumber || issue.id,
+      date: issue.date || new Date().toISOString().split('T')[0],
+      time: issue.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (appData.settings as any)?.branchName || 'المستودع الرئيسي',
+      partyName: issue.recipientName || 'أمين المستودع',
+      partyLabel: 'جهة الصرف / المستلم',
+      items: (issue.items || []).map((it, idx) => ({
+        index: idx + 1,
+        code: it.code || `ITM-${idx + 1}`,
+        name: it.name,
+        unit: it.unit || 'قطعة',
+        qty: it.qty,
+        price: it.unitCost,
+        total: it.totalCost || Number(it.qty) * Number(it.unitCost),
+      })),
+      amount: grandTotalCost,
+      summaries: [
+        { label: 'عدد الأصناف', value: `${issue.items?.length || 0} صنف` },
+        { label: 'إجمالي الكميات', value: `${totalQty}` },
+        { label: 'إجمالي التكلفة', value: `${grandTotalCost.toFixed(2)} ${appData.settings?.currencySymbol || 'ج.م'}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a5-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching goods issue print:', err);
   }
 
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  const html = generateGoodsIssuePrintHtml(issue, appData);
+  let printWindow: Window | null = null;
+  try {
+    printWindow = window.open('', '_blank', 'width=1000,height=850');
+  } catch {
+    printWindow = null;
+  }
 
-  // Focus and optionally trigger print
-  printWindow.focus();
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+  }
 }
+

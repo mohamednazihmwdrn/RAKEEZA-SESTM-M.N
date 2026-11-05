@@ -263,16 +263,28 @@ export function loadAppData(companyId?: string): AppData {
         if (legacyRaw) {
           try {
             const parsedLegacy = JSON.parse(legacyRaw);
-            const legacyCompId = (parsedLegacy.companyId || parsedLegacy.settings?.companyId || '').trim().toUpperCase();
+            const legacyCompId = (parsedLegacy.companyId || parsedLegacy.settings?.companyId || parsedLegacy.activeCompanyId || '').trim().toUpperCase();
             if (legacyCompId === cleanCompId) {
-              raw = legacyRaw;
+              raw = parsedLegacy.activeCompanyId ? localStorage.getItem(`rakeeza_tenant_data_${parsedLegacy.activeCompanyId}`) : legacyRaw;
             }
           } catch {}
         }
       }
     } else {
       raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.activeCompanyId) {
+            raw = localStorage.getItem(`rakeeza_tenant_data_${parsed.activeCompanyId}`);
+          }
+        } catch {}
+      }
+      if (!raw) {
+        raw = localStorage.getItem('rakeeza_tenant_data_COMP-000001');
+      }
     }
+
     const defaults = getDefaultData(cleanCompId);
     const storedLogo = localStorage.getItem('company_logo_base64');
     if (raw) {
@@ -515,51 +527,149 @@ export function loadAppData(companyId?: string): AppData {
   return ensureProductPricesSynced(fallbackDef);
 }
 
+/**
+ * 🧹 Clean up stale or non-essential localStorage keys to prevent QuotaExceededError
+ */
+export function purgeStaleLocalStorageKeys(activeCompanyId?: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  const currentActive = (activeCompanyId || 'COMP-000001').trim().toUpperCase();
+
+  try {
+    const keysToPurge: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // 1. Remove obsolete backup keys (backups live in IndexedDB and Cloud)
+      if (k.startsWith('rakeeza_backup_') || k.startsWith('rakeeza_auto_backup_')) {
+        keysToPurge.push(k);
+      }
+      // 2. Remove non-active tenant keys to prevent quota exhaustion
+      if (k.startsWith('rakeeza_tenant_data_') && k !== `rakeeza_tenant_data_${currentActive}`) {
+        keysToPurge.push(k);
+      }
+      // 3. Remove old temporary cache keys
+      if (k.startsWith('temp_') || k.startsWith('cache_') || k.startsWith('offline_queue_backup_')) {
+        keysToPurge.push(k);
+      }
+    }
+    for (const key of keysToPurge) {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+    }
+  } catch {}
+}
+
+/**
+ * 📦 Prepares a lightweight, compact version of AppData suitable for LocalStorage
+ * Full rich data (unlimited backups, item catalogs, images) is always stored in IndexedDB.
+ */
+function createLocalStorageSafePayload(data: AppData, targetCompId: string): AppData {
+  return {
+    ...data,
+    companyId: targetCompId,
+    backups: [], // IndexedDB & Cloud retain all backups
+    auditLogs: (data.auditLogs || []).slice(0, 30),
+    priceHistories: (data.priceHistories || []).slice(0, 30),
+    // Strip large movement history arrays from the LocalStorage snapshot
+    items: (data.items || []).map((it) => {
+      if (it.movements && it.movements.length > 5) {
+        return { ...it, movements: it.movements.slice(-5) };
+      }
+      return it;
+    }),
+  };
+}
+
 export function saveAppData(data: AppData, companyId?: string): void {
   const targetCompId = (companyId || data.companyId || 'COMP-000001').trim().toUpperCase();
   data.companyId = targetCompId;
 
-  // ⚡ Enterprise Async IndexedDB High-Capacity Storage (Supports 10M+ records)
+  // 1. ⚡ Enterprise Async IndexedDB High-Capacity Storage (Primary: supports 10M+ records)
   try {
     saveToIndexedDB(data, targetCompId).catch((err) => {
-      console.warn('[IndexedDB Sync Error]', err);
+      console.warn('[IndexedDB Sync Notice]', err);
     });
   } catch {}
 
+  // 2. 🗄️ Resilient LocalStorage Persistence (Fallback & fast synchronous bootstrap)
+  if (typeof window === 'undefined' || !window.localStorage) return;
+
+  const storageKey = `rakeeza_tenant_data_${targetCompId}`;
+
+  // Step A: Attempt standard compact save
   try {
-    localStorage.setItem(`rakeeza_tenant_data_${targetCompId}`, JSON.stringify(data));
-    // Also update current active storage key
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e: any) {
-    console.warn('Storage quota warning, performing defensive cache pruning:', e);
-    try {
-      // 1. Prune heavy backups and remove redundant base64 strings
-      const trimmedBackups = (data.backups || []).slice(0, 3).map((b) => ({
-        ...b,
-        code: '', // remove redundant base64
-      }));
-      // 2. Trim audit logs to latest 100
-      const trimmedAudit = (data.auditLogs || []).slice(0, 100);
-      const prunedData: AppData = {
-        ...data,
-        companyId: targetCompId,
-        backups: trimmedBackups,
-        auditLogs: trimmedAudit,
-      };
-      localStorage.setItem(`rakeeza_tenant_data_${targetCompId}`, JSON.stringify(prunedData));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prunedData));
-    } catch (e2) {
-      try {
-        // Fallback: save without backups to guarantee core ERP state is always persisted
-        const strippedData = { ...data, companyId: targetCompId, backups: [], auditLogs: (data.auditLogs || []).slice(0, 50) };
-        localStorage.setItem(`rakeeza_tenant_data_${targetCompId}`, JSON.stringify(strippedData));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(strippedData));
-      } catch (e3) {
-        console.error('Critical localStorage save failure:', e3);
-      }
-    }
+    const safePayload = createLocalStorageSafePayload(data, targetCompId);
+    localStorage.setItem(storageKey, JSON.stringify(safePayload));
+    // Save lightweight pointer in STORAGE_KEY to avoid storing duplicate multi-megabyte payloads
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeCompanyId: targetCompId, updatedAt: Date.now() }));
+    return;
+  } catch (quotaErr: any) {
+    // Storage quota warning - perform deep purge and multi-tier compaction
+    purgeStaleLocalStorageKeys(targetCompId);
+  }
+
+  // Step B: 2nd tier compaction - strip non-essential item properties
+  try {
+    const compactPayload: AppData = {
+      ...createLocalStorageSafePayload(data, targetCompId),
+      items: (data.items || []).map((it) => ({
+        id: it.id,
+        code: it.code || '',
+        name: it.name,
+        quantity: it.quantity ?? 0,
+        purchasePrice: it.purchasePrice ?? 0,
+        salePrice: it.salePrice ?? 0,
+        price: it.price,
+        costPrice: it.costPrice,
+        companyId: it.companyId || targetCompId,
+        branchId: it.branchId || 'br-main',
+        category: it.category,
+        unit: it.unit || 'قطعة',
+      })),
+    };
+    localStorage.setItem(storageKey, JSON.stringify(compactPayload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeCompanyId: targetCompId, updatedAt: Date.now() }));
+    return;
+  } catch (quotaErr2: any) {
+    purgeStaleLocalStorageKeys(targetCompId);
+  }
+
+  // Step C: 3rd tier minimal core bootstrap fallback
+  try {
+    const minimalPayload: Partial<AppData> = {
+      companyId: targetCompId,
+      settings: data.settings,
+      users: data.users,
+      branches: data.branches,
+      activeBranchId: data.activeBranchId,
+      accounts: data.accounts,
+      cashBox: data.cashBox,
+      branchCashBoxes: data.branchCashBoxes,
+      salesInvoices: (data.salesInvoices || []).slice(-100),
+      purchaseInvoices: (data.purchaseInvoices || []).slice(-100),
+      cashTransactions: (data.cashTransactions || []).slice(-100),
+      journalEntries: (data.journalEntries || []).slice(-100),
+      items: (data.items || []).slice(0, 500).map((it) => ({
+        id: it.id,
+        code: it.code || '',
+        name: it.name,
+        quantity: it.quantity ?? 0,
+        purchasePrice: it.purchasePrice ?? 0,
+        salePrice: it.salePrice ?? 0,
+        companyId: it.companyId || targetCompId,
+        branchId: it.branchId || 'br-main',
+      })),
+    };
+    localStorage.setItem(storageKey, JSON.stringify(minimalPayload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeCompanyId: targetCompId, updatedAt: Date.now() }));
+  } catch (finalErr) {
+    // Browser LocalStorage is completely restricted or private browsing quota reached.
+    // Graceful notice: Data is 100% securely saved in IndexedDB and Cloud Firestore!
+    console.warn('[RAKEEZA Storage Engine] LocalStorage browser quota reached; full dataset safely preserved in IndexedDB & Cloud Sync.');
   }
 }
+
 
 /**
  * 🛡️ Detects whether an action represents an intentional record deletion

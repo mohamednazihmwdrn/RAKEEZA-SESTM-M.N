@@ -1,5 +1,6 @@
 import { AppData, Settings, SaleInvoice } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface ShiftReportData {
   cashierName?: string;
@@ -454,19 +455,54 @@ export function printShiftReportWindow(
   customCashierName?: string,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void
 ) {
-  const printWin = window.open('', '_blank', 'width=950,height=900');
-  if (!printWin) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    } else {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    }
-    return;
+  const shiftData = compileShiftReportData(appData, filterDate, customCashierName);
+
+  // 🖨️ Dispatch to Centralized Universal Print Modal
+  try {
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const totalInvoices = shiftData.totalInvoicesCount || (shiftData.salesCount || 0) + (shiftData.returnsCount || 0);
+    const totalNetSales = shiftData.totalNet || shiftData.salesNet || 0;
+
+    openUniversalPrint({
+      kind: 'sales_report',
+      title: 'تقرير إغلاق الوردية والمبيعات',
+      docNumber: shiftData.serialNo || 1,
+      date: shiftData.date || new Date().toISOString().split('T')[0],
+      time: shiftData.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: shiftData.branch || 'الفرع الرئيسي',
+      partyName: shiftData.cashierName || 'كاشير الوردية',
+      partyLabel: 'الكاشير المسؤول',
+      columns: ['البيان', 'العدد', 'الإجمالي'],
+      rows: [
+        ['مبيعات الوردية الإجمالية', shiftData.salesCount || 0, `${(shiftData.salesGross || 0).toFixed(2)} ${curSymbol}`],
+        ['خصومات المبيعات', '-', `${(shiftData.salesDiscount || 0).toFixed(2)} ${curSymbol}`],
+        ['صافي المبيعات', '-', `${(shiftData.salesNet || 0).toFixed(2)} ${curSymbol}`],
+        ['مرتجعات الوردية', shiftData.returnsCount || 0, `${(shiftData.returnsNet || 0).toFixed(2)} ${curSymbol}`],
+      ],
+      amount: totalNetSales,
+      summaries: [
+        { label: 'عدد الفواتير', value: `${totalInvoices} فاتورة` },
+        { label: 'صافي مبيعات الوردية', value: `${totalNetSales.toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a5-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching shift report print:', err);
   }
 
-  const shiftData = compileShiftReportData(appData, filterDate, customCashierName);
-  const html = generateShiftReportPrintHtml(shiftData, appData);
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=950,height=900');
+  } catch {
+    printWin = null;
+  }
+
+  if (printWin) {
+    const html = generateShiftReportPrintHtml(shiftData, appData);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
+

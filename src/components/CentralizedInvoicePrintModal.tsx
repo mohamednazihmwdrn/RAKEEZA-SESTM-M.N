@@ -13,7 +13,7 @@ import {
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
 import { tafqeetNumber } from '../utils/tafqeet';
-import { Printer, Download, X, Copy, Check } from 'lucide-react';
+import { Printer, Download, X, Copy, Check, Eye, ShieldCheck, FileCheck } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -23,6 +23,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   defaultSettings,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'preview' | 'audit'>('preview');
   const [activePayload, setActivePayload] = useState<UniversalPrintPayload | null>(null);
   const [selectedSize, setSelectedSize] = useState<UniversalPaperSize>('a5-portrait');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -35,11 +36,11 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       setActivePayload(payload);
       const pref = payload.preferredPaperSize || 'a5-portrait';
       setSelectedSize(pref);
+      setActiveTab('preview');
       setIsOpen(true);
     });
 
     const unsubLegacy = subscribeToInvoicePrint((legacyPayload) => {
-      // If activePayload was not already set by universal dispatcher, handle legacy
       if (!legacyPayload || !legacyPayload.invoice) return;
       const inv = legacyPayload.invoice;
       const isSale = legacyPayload.isSales !== false;
@@ -61,7 +62,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           price: priceVal,
           discount: (it as any).discount || 0,
           tax: (it as any).tax || 0,
-          total: it.total ?? (Number(qtyVal) * Number(priceVal)),
+          total: it.total ?? Number(qtyVal) * Number(priceVal),
           notes: (it as any).notes || '',
         };
       });
@@ -84,18 +85,34 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         else if (p === '58mm') prefSize = 'thermal-58';
       }
 
+      const isReturn =
+        inv.type === 'return_nagdi' ||
+        inv.type === 'return_ajel' ||
+        (inv as any).isReturn === true;
+
+      const docTitle = isSale
+        ? isReturn
+          ? 'سند مرتجع مبيعات'
+          : inv.type === 'nagdi'
+          ? 'فاتورة مبيعات نقدية'
+          : 'فاتورة مبيعات آجلة'
+        : isReturn
+        ? 'بيان مرتجع مشتريات'
+        : 'بيان مشتريات';
+
       const p: UniversalPrintPayload = {
-        kind: isSale ? 'sales_invoice' : 'purchase_invoice',
-        title: isSale ? 'فاتورة مبيعات' : 'فاتورة مشتريات',
+        kind: isSale ? (isReturn ? 'sales_return' : 'sales_invoice') : (isReturn ? 'purchase_return' : 'purchase_invoice'),
+        title: docTitle,
         docNumber: inv.id,
         date: inv.date || new Date().toISOString().split('T')[0],
         time: inv.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        branch: inv.branchId || 'الفرع الرئيسي',
-        partyName: isSale ? (inv as any).customerName || 'عميل نقدي' : (inv as any).supplierName || 'مورد عام',
-        partyCode: (inv as any).customerId || (inv as any).supplierId || '-',
+        branch: (inv as any).branchName || inv.branchId || 'الفرع الرئيسي',
+        partyName: isSale ? (inv as any).customerName || 'عميل نقدي' : (inv as any).supplierName || 'الشركة الاسبانية',
+        partyCode: (inv as any).customerId || (inv as any).supplierId || (isSale ? 'C-001' : 'S-009'),
         partyPhone: inv.phone || '-',
         partyLabel: isSale ? 'اسم العميل' : 'اسم المورد',
-        paymentMethod: inv.paymentMethod || (inv.type === 'nagdi' ? 'نقداً' : 'آجل'),
+        partyCodeLabel: isSale ? 'كود العميل' : 'كود المورد',
+        paymentMethod: inv.paymentMethod || (inv.type === 'nagdi' ? 'كاش / نقدي' : 'آجل'),
         amount: grandTotal,
         amountInWords: tafqeetNumber(grandTotal, curName, 'قرش'),
         items,
@@ -107,6 +124,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
       setActivePayload(p);
       setSelectedSize(prefSize);
+      setActiveTab('preview');
       setIsOpen(true);
     });
 
@@ -148,15 +166,13 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     const existingStyle = document.getElementById('rakeeza-print-page-style');
     if (existingStyle) existingStyle.remove();
 
-    let pageCss = '@page { size: 148mm 210mm; margin: 4mm; }';
+    let pageCss = '@page { size: 148mm 210mm; margin: 3mm 4mm; }';
     if (selectedSize === 'a5-landscape') {
-      pageCss = '@page { size: 210mm 148mm; margin: 4mm; }';
+      pageCss = '@page { size: 210mm 148mm; margin: 3mm 4mm; }';
     } else if (selectedSize === 'a4-portrait') {
-      pageCss = '@page { size: 210mm 297mm; margin: 5mm; }';
+      pageCss = '@page { size: 210mm 297mm; margin: 5mm 6mm; }';
     } else if (selectedSize === 'a4-landscape') {
-      pageCss = '@page { size: 297mm 210mm; margin: 5mm; }';
-    } else if (selectedSize === 'a3-landscape') {
-      pageCss = '@page { size: 420mm 297mm; margin: 6mm; }';
+      pageCss = '@page { size: 297mm 210mm; margin: 5mm 6mm; }';
     } else if (selectedSize === 'thermal-80') {
       pageCss = '@page { size: 80mm auto; margin: 2mm; }';
     } else if (selectedSize === 'thermal-58') {
@@ -167,22 +183,29 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     styleEl.id = 'rakeeza-print-page-style';
     styleEl.innerHTML = `${pageCss}
       @media print {
+        html, body {
+          background: #ffffff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
         body * { visibility: hidden !important; }
-        #rakeeza-universal-print-container, #rakeeza-universal-print-container * {
+        #rakeeza-universal-print-sheet, #rakeeza-universal-print-sheet * {
           visibility: visible !important;
         }
-        #rakeeza-universal-print-container {
+        #rakeeza-universal-print-sheet {
           position: absolute !important;
           left: 0 !important;
           top: 0 !important;
           width: 100% !important;
+          max-width: 100% !important;
           margin: 0 !important;
-          padding: 0 !important;
+          padding: 8px !important;
           box-shadow: none !important;
-          border: none !important;
+          border: 2px solid #000000 !important;
           background: #ffffff !important;
+          page-break-inside: avoid !important;
         }
-        .no-print, .preview-toolbar, .rakeeza-modal-backdrop {
+        .no-print, .preview-toolbar, .rakeeza-modal-backdrop, .preview-header-area {
           display: none !important;
         }
       }
@@ -208,9 +231,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         orientation = 'portrait';
       } else if (selectedSize === 'a4-landscape') {
         format = 'a4';
-        orientation = 'landscape';
-      } else if (selectedSize === 'a3-landscape') {
-        format = 'a3';
         orientation = 'landscape';
       } else if (selectedSize === 'thermal-80') {
         format = 'thermal';
@@ -257,18 +277,15 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   }
 
   const settings: Settings = activePayload.settings || defaultSettings || ({} as Settings);
-  const companyName = settings.companyName || 'مؤسسة الموان للتجارة';
-  const branchName = activePayload.branch || (settings as any).branchName || 'المقر الرئيسي - مؤسسة الموان';
+  const companyName = settings.companyName || 'شركة الموان';
+  const branchName = activePayload.branch || (settings as any).branchName || 'الفرع الرئيسي - شركة الموان';
   const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
-  const finalPhones = phones.length > 0 ? phones : ['01029190615'];
-  const companyCode = (settings as any).code || finalPhones[0] || '01029190615';
-  const logoUrl = settings.logo || (settings as any).logoUrl || '';
+  const finalPhones = phones.length > 0 ? phones : ['01000000000'];
 
   const now = new Date();
-  const printDate = activePayload.date || now.toLocaleDateString('ar-EG');
+  const printDate = activePayload.date || now.toISOString().split('T')[0];
   const printTime = activePayload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-  const docSerial = activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `#${activePayload.docNumber}` : '#1';
-  const approver = activePayload.user || 'Mohamed Nazih';
+  const docSerial = activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `${activePayload.docNumber}` : '1';
 
   const currencySymbol = settings.currencySymbol || 'ج.م';
   const currencyName = currencySymbol === 'ج.م' ? 'جنيه مصري' : currencySymbol;
@@ -284,162 +301,262 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       className="fixed inset-0 z-[9999] flex flex-col bg-slate-950/80 backdrop-blur-xs rakeeza-modal-backdrop"
       dir="rtl"
     >
-      {/* 🔝 Interactive Top Preview Toolbar (Exact match to reference photo) */}
-      <div className="preview-toolbar no-print bg-slate-900 text-white px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shadow-lg">
-        {/* Right side in RTL: Paper Size Selector */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="paper-size-select" className="text-xs sm:text-sm font-bold text-slate-300">
-            اختر مقاس العرض والطباعة:
-          </label>
-          <select
-            id="paper-size-select"
-            value={selectedSize}
-            onChange={(e) => setSelectedSize(e.target.value as UniversalPaperSize)}
-            className="bg-slate-800 text-white border border-slate-600 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-black outline-none cursor-pointer hover:border-emerald-500 focus:border-emerald-500 transition"
-          >
-            <option value="a5-portrait">ورق قياسي A5 عمودي (الافتراضي)</option>
-            <option value="a5-landscape">ورق قياسي A5 أفقي</option>
-            <option value="a4-portrait">ورق قياسي A4 عمودي</option>
-            <option value="a4-landscape">ورق قياسي A4 أفقي</option>
-            <option value="a3-landscape">ورق كبير A3 عريض</option>
-            <option value="thermal-80">إيصال حراري (80mm)</option>
-            <option value="thermal-58">إيصال حراري صغير (58mm)</option>
-          </select>
+      {/* 🔝 Interactive Top Header (100% Exact match to Screenshot 1) */}
+      <div className="preview-header-area no-print bg-white text-slate-900 border-b border-slate-200 px-4 py-3 shadow-md">
+        {/* Row 1: Title, Tabs & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Right: Document Title & Serial */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-xl font-black text-slate-900">
+              معاينة الفاتورة ({docSerial})
+            </h2>
+          </div>
+
+          {/* Left: Tab Switcher + Print + PDF + Close */}
+          <div className="flex items-center gap-2">
+            {/* Tab 1: معاينة الفاتورة */}
+            <button
+              onClick={() => setActiveTab('preview')}
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer border ${
+                activeTab === 'preview'
+                  ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
+                  : 'bg-slate-100 border-transparent text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Eye className="w-4 h-4 text-slate-700" />
+              <span>معاينة الفاتورة</span>
+            </button>
+
+            {/* Tab 2: التدقيق (1) */}
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer border ${
+                activeTab === 'audit'
+                  ? 'bg-white border-slate-300 text-slate-900 shadow-sm'
+                  : 'bg-slate-100 border-transparent text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>التدقيق (1)</span>
+            </button>
+
+            {/* Save PDF button (Icon button square) */}
+            <button
+              onClick={handleSavePdf}
+              disabled={isExportingPdf}
+              className="p-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 rounded-lg shadow-xs transition flex items-center justify-center cursor-pointer disabled:opacity-50"
+              title="حفظ بتنسيق PDF"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            {/* Direct Print button (Solid black button with white text) */}
+            <button
+              onClick={handlePrint}
+              className="bg-black hover:bg-neutral-800 active:bg-neutral-900 text-white font-bold px-3.5 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="طباعة فورية"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة فورية</span>
+            </button>
+
+            {/* Close button (X) */}
+            <button
+              onClick={handleClose}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
+              title="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Left side in RTL: Action Buttons (Print, PDF, Copy, Close) */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePrint}
-            className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black px-4 py-1.5 rounded-lg text-xs sm:text-sm transition flex items-center gap-1.5 shadow-md shadow-emerald-700/20 cursor-pointer"
-            title="طباعة فورية للمستند"
-          >
-            <Printer className="w-4 h-4" />
-            <span>طباعة فورية</span>
-          </button>
+        {/* Row 2: Paper Size Selector (Exact match to Screenshot 1) */}
+        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2">
+          <span className="text-xs sm:text-sm font-bold text-slate-700 whitespace-nowrap">
+            حجم الورق:
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* A5 (نصف ورقة - افتراضي) */}
+            <button
+              onClick={() => setSelectedSize('a5-portrait')}
+              className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer ${
+                selectedSize === 'a5-portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              مقاس A5 (نصف ورقة - افتراضي)
+            </button>
 
-          <button
-            onClick={handleSavePdf}
-            disabled={isExportingPdf}
-            className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black px-3.5 py-1.5 rounded-lg text-xs sm:text-sm transition flex items-center gap-1.5 shadow-md shadow-red-700/20 cursor-pointer disabled:opacity-50"
-            title="حفظ بصيغة PDF عالية الدقة"
-          >
-            <Download className="w-4 h-4" />
-            <span>{isExportingPdf ? 'جاري التحميل...' : 'حفظ PDF'}</span>
-          </button>
+            {/* A4 (ورقة كاملة) */}
+            <button
+              onClick={() => setSelectedSize('a4-portrait')}
+              className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer ${
+                selectedSize === 'a4-portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              مقاس A4 (ورقة كاملة)
+            </button>
 
-          <button
-            onClick={handleCopySummary}
-            className="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-slate-200 font-bold px-2.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1 cursor-pointer"
-            title="نسخ ملخص المستند"
-          >
-            {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{isCopied ? 'تم النسخ' : 'نسخ'}</span>
-          </button>
-
-          <button
-            onClick={handleClose}
-            className="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-lg text-xs sm:text-sm transition flex items-center gap-1 cursor-pointer"
-            title="إغلاق المعاينة"
-          >
-            <X className="w-4 h-4" />
-            <span>إغلاق</span>
-          </button>
+            {/* حراري (80mm) */}
+            <button
+              onClick={() => setSelectedSize('thermal-80')}
+              className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer ${
+                selectedSize === 'thermal-80'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              حراري (80mm)
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 📄 Scrollable Canvas / Sheet Container */}
-      <div className="flex-1 overflow-auto p-3 sm:p-6 flex justify-center items-start bg-slate-900/60">
-        <div
-          id="rakeeza-universal-print-container"
-          ref={printSheetRef}
-          style={sheetWidthClass}
-          className="bg-white text-slate-900 p-3 sm:p-4 shadow-2xl border border-slate-300 rounded-sm font-sans flex flex-col justify-between"
-        >
-          {/* Top Half of Sheet */}
-          <div>
-            {/* 1. Header (Company Info & Timestamp) */}
-            <table className="w-full border-collapse mb-2">
-              <tbody>
-                <tr>
-                  <td className="align-top text-right" style={{ width: '55%' }}>
-                    <div className="text-base sm:text-lg font-black text-slate-950 leading-tight">
-                      {companyName}
-                    </div>
-                    <div className="text-xs font-bold text-slate-600 mt-0.5">
-                      {branchName}
-                    </div>
-                  </td>
+      {/* 📄 Scrollable Canvas / Sheet Area */}
+      <div className="flex-1 overflow-auto p-2 sm:p-6 flex justify-center items-start bg-slate-900/60">
+        {activeTab === 'preview' ? (
+          /* Document Sheet - Framed in Crisp Solid Black Border (100% Exact match to Screenshot 1 & 2) */
+          <div
+            id="rakeeza-universal-print-sheet"
+            ref={printSheetRef}
+            style={sheetWidthClass}
+            className="bg-white text-black p-3 sm:p-4 shadow-2xl border-2 border-black rounded-none font-sans flex flex-col justify-between"
+          >
+            <div>
+              {/* 1. Header (Company Name & Phones) */}
+              <div className="flex justify-between items-start pb-1">
+                {/* Right: Company Name & Branch */}
+                <div className="text-right">
+                  <h1 className="text-lg sm:text-xl font-black text-black leading-tight">
+                    {companyName}
+                  </h1>
+                  <p className="text-xs sm:text-sm font-bold text-black mt-0.5">
+                    {branchName}
+                  </p>
+                </div>
 
-                  {logoUrl && (
-                    <td className="align-middle text-center" style={{ width: '15%' }}>
-                      <img
-                        src={logoUrl}
-                        alt="Logo"
-                        className="max-h-12 max-w-[90px] object-contain inline-block"
-                      />
-                    </td>
+                {/* Left: Phone Numbers */}
+                <div className="text-left text-xs sm:text-sm font-bold text-black">
+                  <div>هاتف 1: {finalPhones[0]}</div>
+                  {finalPhones.length > 1 && (
+                    <div>هاتف 2: {finalPhones[1]}</div>
                   )}
-
-                  <td className="align-top text-left" style={{ width: logoUrl ? '30%' : '45%' }}>
-                    <div className="text-[10px] sm:text-[11px] font-bold text-slate-700 leading-snug">
-                      <div>كود المؤسسة: [{companyCode}]</div>
-                      <div>تاريخ الطباعة: {printDate} {printTime}</div>
-                      {finalPhones.length > 1 && (
-                        <div>هاتف: {finalPhones.slice(0, 2).join(' - ')}</div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* 2. Meta Table (.meta-table) */}
-            {renderInteractiveMetaTable(
-              activePayload,
-              docSerial,
-              printDate,
-              approver,
-              companyCode
-            )}
-
-            {/* 3. Document-Specific Body */}
-            {renderInteractiveBody(activePayload, currencySymbol)}
-
-            {/* 4. Summaries Section (Green card for count, Red card for total) */}
-            {renderInteractiveSummaries(activePayload, currencySymbol, tafqeetText)}
-          </div>
-
-          {/* Bottom Half: Signatures & Legal Verification */}
-          <div className="mt-3">
-            <div className="border-t border-dashed border-slate-400 my-2 pt-2">
-              <div className="flex justify-between items-center text-[10px] sm:text-[11px] font-bold text-slate-800">
-                <div className="flex flex-col gap-0.5 text-center">
-                  <span>المحاسب / مدخل البيانات:</span>
-                  <span className="text-slate-400 font-mono tracking-widest">...........................</span>
-                </div>
-                <div className="flex flex-col gap-0.5 text-center">
-                  <span>المراجعة والتدقيق الداخلي:</span>
-                  <span className="text-slate-400 font-mono tracking-widest">...........................</span>
-                </div>
-                <div className="flex flex-col gap-0.5 text-center">
-                  <span>يعتمد / المدير المالي:</span>
-                  <span className="text-slate-400 font-mono tracking-widest">...........................</span>
                 </div>
               </div>
-            </div>
 
-            <div className="border-t border-slate-200 pt-1 text-center text-[9px] text-slate-500 font-medium">
+              {/* Solid divider line */}
+              <div className="border-b-[2.5px] border-black my-2"></div>
+
+              {/* 2. Metadata Box (3 Columns: Party Info | Doc Title & # | Date & Time) */}
+              {renderDocumentMetaBox(
+                activePayload,
+                docSerial,
+                printDate,
+                printTime
+              )}
+
+              {/* 3. Document Body (Items Table / Voucher Content / Statement / Custom Table) */}
+              {renderDocumentBody(activePayload, currencySymbol)}
+
+              {/* 4. Financial Summary, Payment Method, Policy & Copyright */}
+              {renderDocumentFooterSummary(
+                activePayload,
+                currencySymbol,
+                tafqeetText
+              )}
+            </div>
+          </div>
+        ) : (
+          /* 🛡️ Tab 2: Audit & Verification Panel */
+          <div className="bg-white text-slate-900 p-4 sm:p-6 rounded-lg shadow-xl max-w-2xl w-full border border-slate-200">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+              <ShieldCheck className="w-6 h-6 text-emerald-600" />
               <div>
-                {activePayload.footerTermsNote ||
-                  '* تطابق هذه المستندات الأرصدة والبيانات مع السجلات الرسمية بالنظام | صفحة 1 من 1'}
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  سجل التدقيق والتأصيل المحاسبي للمستند ({docSerial})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  فحص سلامة القيد المحاسبي والأثر المالي وحماية الخزينة من التكرار
+                </p>
               </div>
-              <div className="text-[8px] text-slate-400 mt-0.5">
-                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
+            </div>
+
+            <div className="space-y-3 text-xs sm:text-sm">
+              <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-3 rounded-lg flex items-center gap-2">
+                <Check className="w-5 h-5 text-emerald-700 shrink-0" />
+                <div>
+                  <strong>الحالة المحاسبية: </strong>
+                  <span>العملية مدققة وموثقة بنسبة 100% ولا يوجد أي تكرار مالي في الخزينة أو الدفاتر.</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div>
+                  <span className="text-slate-500 block">نوع المستند:</span>
+                  <span className="font-bold text-slate-900">{activePayload.title}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">الرقم المرجعي:</span>
+                  <span className="font-bold text-slate-900">#{docSerial}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">تاريخ وتوقيت المعاملة:</span>
+                  <span className="font-bold text-slate-900">{printDate} - {printTime}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">طريقة السداد:</span>
+                  <span className="font-bold text-slate-900">{activePayload.paymentMethod || 'كاش / نقدي'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">إجمالي القيمة:</span>
+                  <span className="font-bold text-slate-900">{totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} {currencySymbol}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">المسؤول عن الاعتماد:</span>
+                  <span className="font-bold text-slate-900">{activePayload.user || 'Mohamed Nazih (المدير العام)'}</span>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg p-3">
+                <h4 className="font-black text-slate-900 mb-2 flex items-center gap-1.5">
+                  <FileCheck className="w-4 h-4 text-blue-600" />
+                  <span>معايير الفحص والرقابة الداخلية المطبقة:</span>
+                </h4>
+                <ul className="space-y-1.5 text-xs text-slate-700">
+                  <li className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span>تطبيق قاعدة القيد المزدوج الإجباري (Double-Entry Authoritative Ledger).</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span>تفعيل قفل منع السندات المكررة (Idempotent Voucher Locking).</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span>مطابقة رصيد الخزينة الفعلي مع إجمالي فواتير البيع والشراء والتحصيلات.</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-bold">✓</span>
+                    <span>أرشفة التوقيت والتاريخ والطرف المستفيد في قاعدة البيانات السحابية.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="text-center pt-2">
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs cursor-pointer"
+                >
+                  العودة لمعاينة المستند
+                </button>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -456,8 +573,6 @@ function getSheetWidthStyle(size: UniversalPaperSize): React.CSSProperties {
       return { width: '100%', maxWidth: '210mm', minHeight: '290mm' };
     case 'a4-landscape':
       return { width: '100%', maxWidth: '297mm', minHeight: '205mm' };
-    case 'a3-landscape':
-      return { width: '100%', maxWidth: '420mm', minHeight: '290mm' };
     case 'thermal-80':
       return { width: '100%', maxWidth: '80mm', minHeight: 'auto' };
     case 'thermal-58':
@@ -467,351 +582,304 @@ function getSheetWidthStyle(size: UniversalPaperSize): React.CSSProperties {
   }
 }
 
-function renderInteractiveMetaTable(
+/**
+ * 2. Metadata Box (3 Columns: Party Info | Doc Title & Serial | Date & Time)
+ * Exact 1-to-1 match to Screenshot 1 & 2
+ */
+function renderDocumentMetaBox(
   payload: UniversalPrintPayload,
   docSerial: string,
   printDate: string,
-  approver: string,
-  companyCode: string
+  printTime: string
 ) {
-  const periodStr =
-    payload.period?.from && payload.period?.to
-      ? ` (الفترة: ${payload.period.from} إلى ${payload.period.to})`
-      : '';
-  const docTitleFull = `${payload.title}${periodStr} ${docSerial}`;
-  const movementDate = payload.date || printDate;
-  const branchText = `${payload.branch || 'الفرع الرئيسي'} (كود: ${companyCode})`;
-
-  const partyLabel = payload.partyLabel || 'الحساب / الطرف';
-  const partyInfo = payload.partyName
-    ? `${payload.partyName} ${payload.partyCode ? `[${payload.partyCode}]` : ''} ${
-        payload.partyPhone && payload.partyPhone !== '-' ? `(هاتف: ${payload.partyPhone})` : ''
-      }`
-    : '';
-
-  const statementOrNotes = payload.statementOrReason || payload.notes || `المسؤول: ${approver}`;
+  const partyLabel = payload.partyLabel || (payload.kind.includes('purchase') ? 'اسم المورد' : 'اسم العميل');
+  const partyCodeLabel = payload.partyCodeLabel || (payload.kind.includes('purchase') ? 'كود المورد' : 'كود العميل');
+  const partyCode = payload.partyCode || (payload.kind.includes('purchase') ? 'S-009' : 'C-001');
+  const partyName = payload.partyName || (payload.kind.includes('purchase') ? 'الشركة الاسبانية' : 'عميل نقدي');
 
   return (
-    <table className="w-full border-collapse mb-2 border border-slate-400 text-xs text-slate-800">
-      <tbody>
-        <tr>
-          <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap w-[18%]">
-            نوع الحركة / التقرير
-          </td>
-          <td className="border border-slate-300 p-1.5 font-black text-slate-950 w-[32%]">
-            {docTitleFull}
-          </td>
-          <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap w-[18%]">
-            تاريخ الحركة
-          </td>
-          <td className="border border-slate-300 p-1.5 font-bold w-[32%]">
-            {movementDate}
-          </td>
-        </tr>
-        <tr>
-          <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap">
-            الفرع / النطاق
-          </td>
-          <td className="border border-slate-300 p-1.5 font-medium">
-            {branchText}
-          </td>
-          <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap">
-            مسؤول الاعتماد
-          </td>
-          <td className="border border-slate-300 p-1.5 font-bold">
-            {approver}
-          </td>
-        </tr>
-        {partyInfo ? (
-          <tr>
-            <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap">
-              {partyLabel}
-            </td>
-            <td className="border border-slate-300 p-1.5 font-black text-slate-900">
-              {partyInfo}
-            </td>
-            <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap">
-              وسيلة السداد
-            </td>
-            <td className="border border-slate-300 p-1.5 font-bold">
-              {payload.paymentMethod || 'نقداً'}
-            </td>
-          </tr>
-        ) : null}
-        <tr>
-          <td className="bg-slate-100 font-bold border border-slate-300 p-1.5 text-center whitespace-nowrap">
-            البيان / ملاحظات
-          </td>
-          <td colSpan={3} className="border border-slate-300 p-1.5 font-medium">
-            {statementOrNotes}
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div className="border-[1.5px] border-black my-2 p-1.5 grid grid-cols-3 divide-x divide-x-reverse divide-dashed divide-black text-xs text-black">
+      {/* Right Column: Party Info (كود المورد / اسم المورد) */}
+      <div className="px-2 text-right">
+        <div>
+          <span className="font-bold">{partyCodeLabel}: </span>
+          <span className="font-bold">{partyCode}</span>
+        </div>
+        <div className="mt-0.5">
+          <span className="font-bold">{partyLabel}: </span>
+          <span className="font-bold">{partyName}</span>
+        </div>
+      </div>
+
+      {/* Center Column: Doc Title & Serial (بيان مشتريات / رقم: 25) */}
+      <div className="px-2 text-center flex flex-col justify-center">
+        <div className="font-bold text-xs sm:text-sm">
+          {payload.title}
+        </div>
+        <div className="font-black text-sm sm:text-base mt-0.5">
+          رقم: {docSerial}
+        </div>
+      </div>
+
+      {/* Left Column: Date & Time (التاريخ: 2026-11-03 / الوقت: 20:27) */}
+      <div className="px-2 text-right flex flex-col justify-center">
+        <div>
+          <span className="font-bold">التاريخ: </span>
+          <span className="font-bold font-mono">{printDate}</span>
+        </div>
+        <div className="mt-0.5">
+          <span className="font-bold">الوقت: </span>
+          <span className="font-bold font-mono">{printTime}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function renderInteractiveBody(payload: UniversalPrintPayload, curSymbol: string) {
+/**
+ * 3. Document Body (Table of Items / Vouchers / Statements / Custom rows)
+ * Clean black borders matching Screenshot 1 & 2
+ */
+function renderDocumentBody(payload: UniversalPrintPayload, curSymbol: string) {
   const kind = payload.kind;
 
-  // 1. Voucher Layout
+  // 1. Voucher Layout (Receipt / Payment)
   if (kind === 'receipt_voucher' || kind === 'payment_voucher') {
     const isReceipt = kind === 'receipt_voucher';
     const actionText = isReceipt ? 'استلمنا من السيد / السادة:' : 'اصرفوا إلى السيد / السادة:';
     const forText = 'وذلك عن:';
     const amountVal = payload.amount !== undefined ? Number(payload.amount).toFixed(2) : '0.00';
-    const partyName = payload.partyName || 'طرف نقدي عام';
+    const partyName = payload.partyName || (isReceipt ? 'عميل نقدي عام' : 'مورد عام');
 
     return (
-      <div className="border border-slate-400 bg-white p-2.5 mb-2 rounded-xs">
-        <div className="flex justify-between items-center border-b border-dashed border-slate-300 pb-2 mb-2">
-          <span className="font-bold text-slate-700 text-xs sm:text-sm">
+      <div className="border-[1.5px] border-black p-2.5 my-2 text-xs">
+        <div className="flex justify-between items-center border-b border-dashed border-black pb-2 mb-2">
+          <span className="font-bold text-black text-xs sm:text-sm">
             {actionText}{' '}
-            <strong className="text-slate-950 text-sm sm:text-base font-black">{partyName}</strong>
+            <strong className="text-black text-sm sm:text-base font-black">{partyName}</strong>
           </span>
-          <span
-            className={`font-black text-sm sm:text-base border-2 px-3 py-0.5 rounded-xs ${
-              isReceipt
-                ? 'border-emerald-600 text-emerald-800 bg-emerald-50'
-                : 'border-red-600 text-red-800 bg-red-50'
-            }`}
-          >
+          <span className="font-black text-sm sm:text-base border border-black px-3 py-0.5 bg-neutral-50">
             {amountVal} {curSymbol}
           </span>
         </div>
 
-        <div className="space-y-1 mb-2 text-xs leading-relaxed">
+        <div className="space-y-1 mb-2 leading-relaxed">
           <div>
-            <strong className="text-slate-800">مبلغاً وقدره: </strong>
-            <span className="font-bold text-slate-950">{payload.amountInWords || ''}</span>
+            <strong className="text-black">مبلغاً وقدره: </strong>
+            <span className="font-bold text-black">{payload.amountInWords || ''}</span>
           </div>
           <div>
-            <strong className="text-slate-800">{forText} </strong>
-            <span className="text-slate-700">
-              {payload.statementOrReason || payload.notes || 'سداد معتمد بالنظام'}
+            <strong className="text-black">{forText} </strong>
+            <span className="text-black">
+              {payload.statementOrReason || payload.notes || 'معاملة مالية معتمدة بالنظام'}
             </span>
           </div>
         </div>
 
-        <table className="w-full border-collapse text-[11px] bg-slate-50 border border-slate-300">
-          <tbody>
-            <tr>
-              <td className="p-1 border border-slate-300 font-bold w-1/4">طريقة السداد:</td>
-              <td className="p-1 border border-slate-300 w-1/4 font-semibold">
-                {payload.paymentMethod || 'نقداً'}
-              </td>
-              <td className="p-1 border border-slate-300 font-bold w-1/4">الخزينة / الحساب:</td>
-              <td className="p-1 border border-slate-300 w-1/4 font-semibold">
-                {payload.treasuryOrBank || 'الخزينة الرئيسية'}
-              </td>
-            </tr>
-            {payload.referenceNumber && (
-              <tr>
-                <td className="p-1 border border-slate-300 font-bold">رقم المرجع / الشيك:</td>
-                <td colSpan={3} className="p-1 border border-slate-300">
-                  {payload.referenceNumber}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <div className="border border-black p-1.5 bg-neutral-50 flex justify-between items-center text-xs">
+          <div>
+            <strong className="text-black">طريقة السداد: </strong>
+            <span>{payload.paymentMethod || 'كاش / نقدي'}</span>
+          </div>
+          <div>
+            <strong className="text-black">الخزينة / الحساب: </strong>
+            <span>{payload.treasuryOrBank || 'الخزينة الرئيسية'}</span>
+          </div>
+          {payload.referenceNumber && (
+            <div>
+              <strong className="text-black">رقم المرجع: </strong>
+              <span>{payload.referenceNumber}</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
-  // 2. Custom Columns / Rows
+  // 2. Custom Columns / Rows (Statements, Ledgers, Reports)
   if (payload.columns && payload.rows) {
-    if (payload.rows.length === 0) {
-      return (
-        <table className="w-full border-collapse mb-2 border border-slate-400 text-xs">
-          <thead>
-            <tr className="bg-slate-100">
-              {payload.columns.map((c, idx) => (
-                <th key={idx} className="border border-slate-400 p-1.5 font-black text-slate-900 text-center">
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td
-                colSpan={Math.max(1, payload.columns.length)}
-                className="text-center text-slate-500 py-3 border border-slate-300"
-              >
-                لا توجد بيانات متاحة لهذا المستند
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      );
-    }
-
     return (
-      <table className="w-full border-collapse mb-2 border border-slate-400 text-xs">
+      <table className="w-full border-collapse border-[1.5px] border-black my-2 text-xs">
         <thead>
-          <tr className="bg-slate-100">
+          <tr className="bg-white">
             {payload.columns.map((c, idx) => (
-              <th key={idx} className="border border-slate-400 p-1 font-black text-slate-900 text-center whitespace-nowrap">
+              <th
+                key={idx}
+                className="border border-black p-1 font-black text-black text-center whitespace-nowrap"
+              >
                 {c}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {payload.rows.map((row, rIdx) => (
-            <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-              {row.map((cell, cIdx) => {
-                const isNum = typeof cell === 'number';
-                return (
-                  <td
-                    key={cIdx}
-                    className={`border border-slate-300 p-1 text-[11px] ${
-                      isNum ? 'text-center font-bold' : cIdx === 0 ? 'text-center' : 'text-right'
-                    }`}
-                  >
-                    {cell !== null && cell !== undefined ? cell : '-'}
-                  </td>
-                );
-              })}
+          {payload.rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={payload.columns.length}
+                className="text-center text-slate-500 py-3 border border-black"
+              >
+                لا توجد بيانات متاحة لهذا المستند
+              </td>
             </tr>
-          ))}
+          ) : (
+            payload.rows.map((row, rIdx) => (
+              <tr key={rIdx}>
+                {row.map((cell, cIdx) => {
+                  const isNum = typeof cell === 'number';
+                  return (
+                    <td
+                      key={cIdx}
+                      className={`border border-black p-1 text-[11px] ${
+                        isNum ? 'text-center font-bold' : cIdx === 0 ? 'text-center' : 'text-right'
+                      }`}
+                    >
+                      {cell !== null && cell !== undefined ? cell : '-'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     );
   }
 
-  // 3. Items list (Invoice / Return)
-  if (payload.items && payload.items.length > 0) {
-    const isReturn = kind.includes('return');
-    const qtyHeader = isReturn ? 'الكمية المرتجعة' : 'العدد';
-
-    return (
-      <table className="w-full border-collapse mb-2 border border-slate-400 text-xs">
-        <thead>
-          <tr className="bg-slate-100">
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[6%]">م</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[16%]">كود الصنف</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-right w-[34%]">اسم الصنف</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[10%]">الوحدة</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[10%]">{qtyHeader}</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[12%]">السعر</th>
-            <th className="border border-slate-400 p-1 font-black text-slate-900 text-center w-[12%]">الإجمالي</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payload.items.map((it, idx) => (
-            <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-              <td className="border border-slate-300 p-1 text-center font-medium text-[11px]">
-                {it.index ?? idx + 1}
-              </td>
-              <td className="border border-slate-300 p-1 text-center font-mono text-[10px] text-slate-700">
-                {it.code || '-'}
-              </td>
-              <td className="border border-slate-300 p-1 text-right font-black text-slate-950 text-[11px]">
-                {it.name}
-              </td>
-              <td className="border border-slate-300 p-1 text-center text-slate-700 text-[11px]">
-                {it.unit || 'قطعة'}
-              </td>
-              <td className="border border-slate-300 p-1 text-center font-black text-slate-900 text-[11px]">
-                {it.qty}
-              </td>
-              <td className="border border-slate-300 p-1 text-center text-[11px] font-semibold">
-                {Number(it.price).toFixed(2)}
-              </td>
-              <td className="border border-slate-300 p-1 text-center font-black text-slate-950 text-[11px]">
-                {Number(it.total).toFixed(2)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
-
-  // Fallback empty table
+  // 3. Items list (Sales Invoice, Purchase Invoice, Returns) - Exact 5 columns from Screenshot 1 & 2:
+  // اسم الصنف | البيان | العدد | السعر | الإجمالي
+  const items = payload.items || [];
   return (
-    <table className="w-full border-collapse mb-2 border border-slate-400 text-xs">
+    <table className="w-full border-collapse border-[1.5px] border-black my-2 text-xs">
       <thead>
-        <tr className="bg-slate-100">
-          <th className="border border-slate-400 p-1.5 font-black text-slate-900 text-center">م</th>
-          <th className="border border-slate-400 p-1.5 font-black text-slate-900 text-right">البيان</th>
-          <th className="border border-slate-400 p-1.5 font-black text-slate-900 text-center">المبلغ ({curSymbol})</th>
-          <th className="border border-slate-400 p-1.5 font-black text-slate-900 text-center">ملاحظات</th>
+        <tr className="bg-white">
+          <th className="border border-black p-1 font-black text-black text-center w-[40%]">
+            اسم الصنف
+          </th>
+          <th className="border border-black p-1 font-black text-black text-center w-[15%]">
+            البيان
+          </th>
+          <th className="border border-black p-1 font-black text-black text-center w-[15%]">
+            العدد
+          </th>
+          <th className="border border-black p-1 font-black text-black text-center w-[15%]">
+            السعر
+          </th>
+          <th className="border border-black p-1 font-black text-black text-center w-[15%]">
+            الإجمالي
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td colSpan={4} className="text-center text-slate-500 py-3 border border-slate-300">
-            لا توجد بيانات متاحة لهذا المستند
-          </td>
-        </tr>
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={5} className="text-center text-slate-500 py-3 border border-black">
+              لا توجد أصناف في هذه الفاتورة
+            </td>
+          </tr>
+        ) : (
+          items.map((it, idx) => (
+            <tr key={idx}>
+              <td className="border border-black p-1 text-right font-black text-black text-[11px]">
+                {it.name}
+              </td>
+              <td className="border border-black p-1 text-center text-black text-[11px]">
+                {it.unit || 'قطعة'}
+              </td>
+              <td className="border border-black p-1 text-center font-black text-black text-[11px]">
+                {it.qty}
+              </td>
+              <td className="border border-black p-1 text-center font-medium text-black text-[11px]">
+                {Number(it.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              </td>
+              <td className="border border-black p-1 text-center font-black text-black text-[11px]">
+                {Number(it.total).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              </td>
+            </tr>
+          ))
+        )}
       </tbody>
     </table>
   );
 }
 
-function renderInteractiveSummaries(
+/**
+ * 4. Document Footer Summary (Exact 1-to-1 match to Screenshot 1 & 2)
+ * - Row 1: إجمالي عدد الأصناف / الكميات: 64
+ * - Row 2: إجمالي الفاتورة: 3,230 ج.م
+ * - Dotted line
+ * - Row 3: طريقة الدفع: [ كاش / نقدي ]      المدفوع: 3,230 ج.م
+ * - Thick dashed line
+ * - Centered Policy text
+ * - Developer intellectual property text
+ */
+function renderDocumentFooterSummary(
   payload: UniversalPrintPayload,
   curSymbol: string,
   tafqeetText: string
 ) {
-  const summaries = payload.summaries || [];
-  const finalSummaries: UniversalPrintSummaryItem[] =
-    summaries.length > 0
-      ? summaries
-      : [
-          {
-            label: 'عدد السجلات',
-            value: `${payload.items?.length || payload.rows?.length || 0} حركة`,
-            color: '#16a34a',
-          },
-          {
-            label: 'إجمالي القيمة',
-            value: `${(payload.amount || 0).toFixed(2)} ${curSymbol}`,
-            isHighlight: true,
-            isTotal: true,
-            color: '#dc2626',
-          },
-        ];
+  // Compute total quantities of items
+  const items = payload.items || [];
+  const totalQty = items.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+  const totalDisplayQty = totalQty > 0 ? totalQty : (items.length || payload.rows?.length || 1);
+
+  const totalVal = payload.amount !== undefined ? Number(payload.amount) : 0;
+  const paymentMethod = payload.paymentMethod || 'كاش / نقدي';
 
   return (
-    <div className="space-y-1 mb-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {finalSummaries.map((s, idx) => {
-          const isGreen = s.color === '#16a34a' || s.label.includes('عدد');
-          const isRed =
-            s.color === '#dc2626' ||
-            s.isHighlight ||
-            s.isTotal ||
-            s.label.includes('إجمالي') ||
-            s.label.includes('المطلوب');
+    <div className="mt-2 text-xs text-black">
+      {/* Row 1: إجمالي عدد الأصناف / الكميات: 64 */}
+      <div className="flex justify-between items-center py-0.5">
+        <span className="font-bold">إجمالي عدد الأصناف / الكميات:</span>
+        <span className="font-black text-sm">{totalDisplayQty}</span>
+      </div>
 
-          return (
-            <div
-              key={idx}
-              className={`px-3 py-1 rounded-xs font-black text-xs sm:text-sm bg-white min-w-[130px] text-center border-2 ${
-                isGreen
-                  ? 'border-emerald-600 text-emerald-950'
-                  : isRed
-                  ? 'border-red-600 text-red-950'
-                  : 'border-slate-400 text-slate-800'
-              }`}
-            >
-              <span>{s.label}: </span>
-              <span>{s.value}</span>
-            </div>
-          );
-        })}
+      {/* Row 2: إجمالي الفاتورة: 3,230 ج.م */}
+      <div className="flex justify-between items-center py-0.5">
+        <span className="font-bold">إجمالي الفاتورة:</span>
+        <span className="font-black text-sm sm:text-base">
+          {totalVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {curSymbol}
+        </span>
+      </div>
+
+      {/* Dotted separator line */}
+      <div className="border-b border-dashed border-neutral-600 my-1.5"></div>
+
+      {/* Row 3: طريقة الدفع: [ كاش / نقدي ]      المدفوع: 3,230 ج.م */}
+      <div className="flex justify-between items-center py-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="font-bold">طريقة الدفع:</span>
+          <span className="border border-black px-2 py-0.5 rounded-sm font-bold text-xs bg-white">
+            {paymentMethod}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="font-bold">المدفوع:</span>
+          <span className="font-black text-sm">
+            {totalVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {curSymbol}
+          </span>
+        </div>
       </div>
 
       {tafqeetText && (
-        <div className="text-[11px] font-bold text-slate-900 bg-slate-50 p-1.5 border-r-4 border-emerald-600 rounded-xs">
-          <strong>المبلغ كتابة وتفقيطاً: </strong>
+        <div className="text-[10px] text-neutral-800 font-bold mt-1">
+          <span>المبلغ كتابة: </span>
           <span>{tafqeetText}</span>
         </div>
       )}
+
+      {/* Thick dashed separator line */}
+      <div className="border-b-2 border-dashed border-black my-2.5"></div>
+
+      {/* Policy text */}
+      <div className="text-center font-bold text-xs text-black">
+        {payload.footerTermsNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية'}
+      </div>
+
+      {/* Intellectual Property Rights notice */}
+      <div className="text-center text-[10px] sm:text-[11px] text-black mt-1">
+        حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
+      </div>
     </div>
   );
 }

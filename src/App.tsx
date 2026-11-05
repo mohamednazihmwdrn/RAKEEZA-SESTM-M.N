@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppData } from './types';
 import { loadAppData, saveAppData, mergeAppDataMonotonically } from './utils/storage';
+import { loadFromIndexedDB } from './utils/indexedDbStorage';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
@@ -91,6 +92,20 @@ export default function App() {
   useEffect(() => {
     appDataRef.current = appData;
   }, [appData]);
+
+  // ⚡ Seamless IndexedDB Hydration on startup
+  useEffect(() => {
+    const compId = appDataRef.current?.companyId || 'COMP-000001';
+    loadFromIndexedDB(compId)
+      .then((idbData) => {
+        if (idbData && idbData.items && idbData.items.length > 0) {
+          setAppData((prev) => mergeAppDataMonotonically(prev, idbData, false));
+        }
+      })
+      .catch((err) => {
+        console.warn('[IndexedDB Initial Hydration Notice]', err);
+      });
+  }, []);
 
   const [currentPage, setCurrentPage] = useState<string>(() => {
     if (typeof window !== 'undefined') {

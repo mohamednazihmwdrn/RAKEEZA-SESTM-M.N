@@ -1,5 +1,6 @@
 import { Quotation, AppData, Settings, Item } from '../types';
 import { tafqeetArabic } from './tafqeet';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export function generateQuotationPrintHtml(
   quotation: Quotation,
@@ -796,18 +797,57 @@ export function printQuotationWindow(
   customSettings?: Settings,
   showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void
 ): void {
-  const printWin = window.open('', '_blank', 'width=900,height=950');
-  if (!printWin) {
-    if (showToast) {
-      showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-    } else {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    }
-    return;
+  const settings: Settings = customSettings || appData.settings || ({} as Settings);
+  const curSymbol = settings.currencySymbol || 'ج.م';
+  const grandTotal = Number(quotation.total || 0);
+
+  // 🖨️ Dispatch to Centralized Universal Print Modal
+  try {
+    const items = (quotation.items || []).map((it, idx) => ({
+      index: idx + 1,
+      code: (it as any).code || `ITEM-${idx + 1}`,
+      name: it.name || 'صنف',
+      unit: (it as any).unit || 'قطعة',
+      qty: it.qty,
+      price: it.price,
+      total: Number(it.qty) * Number(it.price),
+    }));
+
+    openUniversalPrint({
+      kind: 'sales_invoice',
+      title: quotation.type === 'purchase_order' ? 'طلب توريد وبضاعة' : 'عرض أسعار معتمد',
+      docNumber: quotation.id || (quotation as any).code || 1,
+      date: quotation.date || new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (settings as any).branchName || 'الفرع الرئيسي',
+      partyName: quotation.clientName || 'عميل نقدي',
+      partyLabel: 'السيد / الطرف',
+      partyPhone: (quotation as any).phone || '-',
+      items,
+      amount: grandTotal,
+      summaries: [
+        { label: 'عدد الأصناف', value: `${items.length} صنف` },
+        { label: 'إجمالي القيمة', value: `${grandTotal.toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings,
+      preferredPaperSize: 'a5-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching quotation print:', err);
   }
 
-  const html = generateQuotationPrintHtml(quotation, appData, customSettings);
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+  let printWin: Window | null = null;
+  try {
+    printWin = window.open('', '_blank', 'width=900,height=950');
+  } catch {
+    printWin = null;
+  }
+
+  if (printWin) {
+    const html = generateQuotationPrintHtml(quotation, appData, customSettings);
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+  }
 }
+

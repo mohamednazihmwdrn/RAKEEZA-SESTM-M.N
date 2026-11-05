@@ -1,5 +1,6 @@
 import { AppData, Settings } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface DailyTransactionItem {
   id: string | number;
@@ -393,22 +394,58 @@ export function printDailyTransactionsReportWindow(
   showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void
 ): void {
   try {
-    const htmlContent = generateDailyTransactionsReportHtml(appData, targetDate, branchName);
-    const printWindow = window.open('', '_blank', 'width=1100,height=850,menubar=no,toolbar=no,location=no,status=no');
+    const data = compileDailyTransactionsData(appData, targetDate, branchName);
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
 
-    if (!printWindow) {
-      if (showToast) {
-        showToast('يرجى السماح بالنوافذ المنبثقة لطباعة تقرير حركة العمليات اليومية', 'warning');
-      }
-      return;
+    const rows = data.items.map((item, idx) => [
+      idx + 1,
+      item.time,
+      item.txNumber,
+      item.party,
+      item.paymentMethod,
+      item.income > 0 ? item.income.toFixed(2) : '-',
+      item.expense > 0 ? item.expense.toFixed(2) : '-',
+      item.description,
+    ]);
+
+    openUniversalPrint({
+      kind: 'generic_report',
+      title: 'تقرير حركة العمليات اليومية',
+      docNumber: targetDate || new Date().toISOString().split('T')[0],
+      date: targetDate || new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: branchName || 'جميع الفروع',
+      partyName: 'المحاسبة العامة',
+      partyLabel: 'القسم المسؤول',
+      columns: ['م', 'الوقت', 'رقم الحركة', 'الطرف والعميل', 'طريقة الدفع', 'إيرادات (+)', 'مصروفات (-)', 'البيان'],
+      rows,
+      amount: Math.abs(data.netMovement),
+      summaries: [
+        { label: 'عدد العمليات', value: `${data.totalCount} حركة` },
+        { label: 'إجمالي المقبوضات', value: `${data.totalIncome.toFixed(2)} ${curSymbol}`, color: '#16a34a' },
+        { label: 'إجمالي المدفوعات', value: `${data.totalExpense.toFixed(2)} ${curSymbol}`, color: '#dc2626' },
+        { label: 'صافي الحركة اليومية', value: `${data.netMovement.toFixed(2)} ${curSymbol}`, isTotal: true },
+      ],
+      settings: appData.settings,
+      preferredPaperSize: 'a4-portrait',
+    });
+
+    let printWindow: Window | null = null;
+    try {
+      printWindow = window.open('', '_blank', 'width=1100,height=850,menubar=no,toolbar=no,location=no,status=no');
+    } catch {
+      printWindow = null;
     }
 
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    if (printWindow) {
+      const htmlContent = generateDailyTransactionsReportHtml(appData, targetDate, branchName);
+      printWindow.document.open();
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    }
 
     if (showToast) {
-      showToast('تم تجهيز وفتح تقرير حركة العمليات اليومية بنجاح للطباعة والمعاينة', 'success');
+      showToast('تم تجهيز وفتح تقرير حركة العمليات بنجاح للطباعة والمعاينة', 'success');
     }
   } catch (err) {
     console.error('Error printing daily transactions report:', err);
@@ -417,3 +454,4 @@ export function printDailyTransactionsReportWindow(
     }
   }
 }
+
