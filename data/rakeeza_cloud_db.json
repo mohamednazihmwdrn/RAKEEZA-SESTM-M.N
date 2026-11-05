@@ -75,7 +75,44 @@
   ],
   "trialRegistry": [],
   "licenses": [],
-  "sessions": {},
+  "sessions": {
+    "tok_owner_dd04edd62a8ec1a773abbc2e0b4786f5cdef235ae06d117b8f24b4c3131315f6": {
+      "token": "tok_owner_dd04edd62a8ec1a773abbc2e0b4786f5cdef235ae06d117b8f24b4c3131315f6",
+      "userId": "owner-mohamed-nazih",
+      "companyId": "OWNER",
+      "userName": "Mohamed Nazih (مالك المنظومة)",
+      "role": "owner",
+      "createdAt": "2026-11-05T09:55:29.402Z",
+      "expiresAt": "2026-11-05T21:55:29.402Z"
+    },
+    "tok_owner_315b709eef67694525db109b432b5d0adeaccc66bd8eab17a87246a6564c8649": {
+      "token": "tok_owner_315b709eef67694525db109b432b5d0adeaccc66bd8eab17a87246a6564c8649",
+      "userId": "owner-mohamed-nazih",
+      "companyId": "OWNER",
+      "userName": "Mohamed Nazih (مالك المنظومة)",
+      "role": "owner",
+      "createdAt": "2026-11-05T09:55:36.640Z",
+      "expiresAt": "2026-11-05T21:55:36.640Z"
+    },
+    "tok_owner_0851e968e2cb898d428c3905efdefff4978722fa4b32d37bebbf191c64d3fa7e": {
+      "token": "tok_owner_0851e968e2cb898d428c3905efdefff4978722fa4b32d37bebbf191c64d3fa7e",
+      "userId": "owner-mohamed-nazih",
+      "companyId": "OWNER",
+      "userName": "Mohamed Nazih (مالك المنظومة)",
+      "role": "owner",
+      "createdAt": "2026-11-05T09:55:41.226Z",
+      "expiresAt": "2026-11-05T21:55:41.226Z"
+    },
+    "tok_owner_78bc32e4-d22a-4c6d-874b-f610a1940347": {
+      "token": "tok_owner_78bc32e4-d22a-4c6d-874b-f610a1940347",
+      "userId": "owner-mohamed-nazih",
+      "companyId": "OWNER",
+      "userName": "Mohamed Nazih (مالك المنظومة)",
+      "role": "owner",
+      "createdAt": "2026-11-05T09:55:47.693Z",
+      "expiresAt": "2026-11-12T09:55:47.693Z"
+    }
+  },
   "tenantsData": {},
   "usedRegistrationLinks": [],
   "pendingVerifications": {},
