@@ -2,68 +2,248 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions for authentication and tenancy validation
-    function isAuthenticated() {
+    // 1. Global Safety Net: Default-Deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'nazihm338@gmail.com' ||
-        request.auth.token.role == 'owner' ||
-        (request.auth.token.firebase != null && request.auth.token.firebase.sign_in_provider == 'password')
+    function isVerifiedAdminEmail() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'nazihm338@gmail.com';
+    }
+
+    function isAdmin() {
+      return isVerifiedAdminEmail() ||
+        (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isTenantMember(companyId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/tenants/$(companyId)/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/tenants/$(companyId)/members/$(request.auth.uid)).data.status == 'active'
+        )
       );
     }
 
-    function isMemberOf(companyId) {
-      return isAuthenticated() && (
-        isOwner() ||
-        request.auth.token.companyId == companyId ||
-        request.auth.uid == companyId ||
-        (resource != null && resource.data.companyId == companyId)
+    function isTenantAdmin(companyId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/tenants/$(companyId)/members/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/tenants/$(companyId)/members/$(request.auth.uid)).data.status == 'active' &&
+          get(/databases/$(database)/documents/tenants/$(companyId)/members/$(request.auth.uid)).data.role in ['owner', 'company_admin', 'admin']
+        )
       );
     }
 
-    function isValidWrite(companyId) {
-      return isAuthenticated() && (
-        isOwner() ||
-        request.auth.token.companyId == companyId ||
-        (request.resource.data.companyId == companyId)
-      );
+    // 3. Entity Validation Blueprints
+    function isValidMembership(data, companyId, uid) {
+      return data.keys().hasAll(['uid', 'companyId', 'role', 'status']) &&
+        data.keys().hasOnly(['uid', 'companyId', 'role', 'status', 'createdAt']) &&
+        data.uid == uid &&
+        data.companyId == companyId &&
+        data.role in ['owner', 'company_admin', 'admin', 'accountant', 'cashier', 'warehouse_keeper', 'sales_rep', 'user'] &&
+        data.status in ['active', 'revoked'];
     }
 
-    // Health check endpoint for connection testing
+    function isValidCompany(data, companyId) {
+      return !('adminPassword' in data) &&
+        !('password' in data) &&
+        !('passwordHash' in data) &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$'))) &&
+        (!('code' in data) || (data.code is string && data.code.size() <= 32)) &&
+        (!('companyCode' in data) || (data.companyCode is string && data.companyCode.size() <= 32)) &&
+        (!('name' in data) || (data.name is string && data.name.size() <= 250)) &&
+        (!('status' in data) || data.status in ['trial', 'active', 'expired', 'suspended']) &&
+        (!('users' in data) || (data.users is list && data.users.size() <= 200)) &&
+        isValidId(companyId);
+    }
+
+    function isValidTenantDoc(data, companyId) {
+      return !('adminPassword' in data) &&
+        !('closedFiscalYears' in data) &&
+        data.keys().hasAll(['companyId', 'ownerUid']) &&
+        data.companyId is string &&
+        data.companyId == companyId &&
+        data.companyId.size() <= 128 &&
+        data.ownerUid is string &&
+        data.ownerUid.size() >= 1 &&
+        data.ownerUid.size() <= 128 &&
+        (!('lastModifiedBy' in data) || (data.lastModifiedBy is string && data.lastModifiedBy.size() <= 200)) &&
+        (!('lastModifiedDeviceId' in data) || (data.lastModifiedDeviceId is string && data.lastModifiedDeviceId.size() <= 128)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64)) &&
+        (!('users' in data) || (data.users is list && data.users.size() <= 200)) &&
+        (!('auditLogs' in data) || (data.auditLogs is list && data.auditLogs.size() <= 100));
+    }
+
+    function isValidFiscalYearDoc(data, fiscalYear) {
+      return data.keys().hasAll(['fiscalYear', 'invoicesCount']) &&
+        data.fiscalYear is string &&
+        data.fiscalYear.size() == 4 &&
+        data.fiscalYear == fiscalYear &&
+        data.fiscalYear.matches('^[0-9]{4}$') &&
+        data.invoicesCount is number &&
+        (!('lastUpdated' in data) || (data.lastUpdated is string && data.lastUpdated.size() <= 64));
+    }
+
+    function isValidShardedInvoice(data, companyId, fiscalYear) {
+      return data.keys().hasAll(['companyId', 'fiscalYear']) &&
+        data.companyId is string &&
+        data.companyId == companyId &&
+        data.companyId.size() <= 128 &&
+        data.fiscalYear is string &&
+        data.fiscalYear == fiscalYear &&
+        data.fiscalYear.size() == 4 &&
+        (!('date' in data) || (data.date is string && data.date.size() <= 32));
+    }
+
+    function isValidArchiveDoc(data, companyId, archiveId) {
+      return data.keys().hasAll(['id', 'companyId', 'fiscalYear', 'status']) &&
+        data.id == archiveId &&
+        data.companyId == companyId &&
+        data.fiscalYear is string &&
+        data.fiscalYear.size() == 4 &&
+        data.status in ['archived', 'restored'] &&
+        (!('title' in data) || (data.title is string && data.title.size() <= 300));
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['companyId', 'userId', 'action', 'module', 'timestamp']) &&
+        data.keys().hasOnly(['id', 'companyId', 'userId', 'userName', 'action', 'module', 'details', 'timestamp', 'recordId']) &&
+        isValidId(data.companyId) &&
+        data.userId is string &&
+        data.userId == request.auth.uid &&
+        data.userId.size() <= 128 &&
+        data.action is string &&
+        data.action.size() <= 120 &&
+        data.module is string &&
+        data.module.size() <= 120 &&
+        data.timestamp is string &&
+        data.timestamp.size() <= 64 &&
+        (!('details' in data) || (data.details is string && data.details.size() <= 1000));
+    }
+
+    // 4. Connection Health Probe (/test/connection only, read-only)
     match /test/{docId} {
-      allow read, write: if true;
+      allow get: if isSignedIn() && isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
     }
 
-    // Tenant-isolated business operations, invoices, inventory, sub-collections and archives
-    match /tenants/{companyId} {
-      allow read, write: if true;
-
-      match /{document=**} {
-        allow read, write: if true;
-      }
+    // 5. Admin Registry (Owner Bootstrap Only)
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list, create, update, delete: if false;
     }
 
-    // Registered tenant companies metadata and users catalog
-    match /companies/{companyId} {
-      allow read, write: if true;
-
-      match /{document=**} {
-        allow read, write: if true;
-      }
-    }
-
-    // Owner configuration, license keys, and trial registries
+    // 6. Owner Governance Settings (Strictly Admin Only)
     match /ownerSettings/{docId} {
-      allow read, write: if true;
+      allow get: if isAdmin() && isValidId(docId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(docId);
+      allow delete: if false;
     }
 
-    // Audit logs collection (append-only)
+    // 7. Tenant Company Directory (Sanitized - No Passwords)
+    match /companies/{companyId} {
+      allow get: if isSignedIn() && isValidId(companyId);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(companyId) && isValidCompany(incoming(), companyId);
+      allow update: if isValidId(companyId) && isValidCompany(incoming(), companyId) && isTenantMember(companyId);
+      allow delete: if isAdmin() && isValidId(companyId);
+    }
+
+    // 8. Tenant Isolated Live ERP Workspace & Subcollections
+    match /tenants/{companyId} {
+      allow get: if isSignedIn() && isValidId(companyId) && (isTenantMember(companyId) || resource == null);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() &&
+        isValidId(companyId) &&
+        isValidTenantDoc(incoming(), companyId) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(companyId) &&
+        isValidTenantDoc(incoming(), companyId) &&
+        incoming().companyId == existing().companyId &&
+        incoming().ownerUid == existing().ownerUid &&
+        isTenantMember(companyId);
+      allow delete: if isAdmin() && isValidId(companyId);
+
+      // Master Gate Membership Binding (blocks arbitrary self-enrollment into existing tenants)
+      match /members/{uid} {
+        allow get: if isSignedIn() && isValidId(companyId) && isValidId(uid) && (request.auth.uid == uid || isTenantAdmin(companyId));
+        allow list: if isTenantAdmin(companyId);
+        allow create: if isValidId(companyId) &&
+          isValidId(uid) &&
+          isValidMembership(incoming(), companyId, uid) &&
+          (
+            isAdmin() ||
+            isTenantAdmin(companyId) ||
+            (
+              isSignedIn() &&
+              request.auth.uid == uid &&
+              !exists(/databases/$(database)/documents/tenants/$(companyId)) &&
+              incoming().role in ['company_admin', 'user']
+            )
+          );
+        allow update: if isTenantAdmin(companyId) && isValidId(uid) && isValidMembership(incoming(), companyId, uid);
+        allow delete: if isTenantAdmin(companyId) && isValidId(uid);
+      }
+
+      // Sharded Fiscal Years Metadata
+      match /fiscal_years/{fiscalYear} {
+        allow get: if isValidId(companyId) && isValidId(fiscalYear) && isTenantMember(companyId);
+        allow list: if isTenantMember(companyId);
+        allow create, update: if isValidId(companyId) && isValidId(fiscalYear) && isTenantMember(companyId) && isValidFiscalYearDoc(incoming(), fiscalYear);
+        allow delete: if isTenantAdmin(companyId) && isValidId(fiscalYear);
+
+        match /sales_invoices/{invoiceId} {
+          allow get: if isValidId(companyId) && isValidId(fiscalYear) && isValidId(invoiceId) && isTenantMember(companyId);
+          allow list: if isTenantMember(companyId);
+          allow create, update: if isValidId(companyId) && isValidId(fiscalYear) && isValidId(invoiceId) && isTenantMember(companyId) && isValidShardedInvoice(incoming(), companyId, fiscalYear);
+          allow delete: if isTenantAdmin(companyId) && isValidId(invoiceId);
+        }
+
+        match /closing_snapshot/{snapshotId} {
+          allow get: if isValidId(companyId) && isValidId(fiscalYear) && isValidId(snapshotId) && isTenantMember(companyId);
+          allow list: if isTenantMember(companyId);
+          allow create, update: if isValidId(companyId) && isValidId(fiscalYear) && isValidId(snapshotId) && isTenantAdmin(companyId);
+          allow delete: if false;
+        }
+      }
+
+      // Cold Storage Archives
+      match /archives/{archiveId} {
+        allow get: if isValidId(companyId) && isValidId(archiveId) && isTenantMember(companyId);
+        allow list: if isTenantMember(companyId);
+        allow create, update: if isValidId(companyId) && isValidId(archiveId) && isTenantAdmin(companyId) && isValidArchiveDoc(incoming(), companyId, archiveId);
+        allow delete: if isAdmin() && isValidId(archiveId);
+      }
+    }
+
+    // 9. Append-Only Immutable Audit Logs
     match /auditLogs/{auditId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow get: if isSignedIn() && isValidId(auditId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(auditId) && isValidAuditLog(incoming());
       allow update, delete: if false;
     }
   }

@@ -10,7 +10,7 @@ import {
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, OperationType, handleFirestoreError, isFirestorePermissionError } from '../firebase';
 import {
   AppData,
   SaleInvoice,
@@ -111,6 +111,9 @@ export class FirestoreShardingService {
       await this.updateFiscalYearMetadata(cleanCompId, fiscalYear);
       return true;
     } catch (err) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.WRITE, `tenants/${cleanCompId}/fiscal_years/${fiscalYear}/sales_invoices/${invoiceId}`);
+      }
       console.error('[Sharding] Failed to shard invoice:', err);
       return false;
     }
@@ -246,6 +249,9 @@ export class FirestoreShardingService {
       });
       return invoices;
     } catch (err) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.LIST, `tenants/${cleanCompId}/fiscal_years/${fiscalYear}/sales_invoices`);
+      }
       console.error(`[Sharding] Error fetching sharded invoices for ${fiscalYear}:`, err);
       return [];
     }
@@ -313,6 +319,9 @@ export class FirestoreShardingService {
       );
       return true;
     } catch (err) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.WRITE, `tenants/${cleanCompId}/fiscal_years/${closingRecord.fiscalYear}/closing_snapshot/certified_summary`);
+      }
       console.warn('[Closing Snapshot] Failed to save closing snapshot in Firestore:', err);
       return false;
     }
@@ -634,6 +643,9 @@ export class FirestoreShardingService {
           fileSizeKB: archiveRecord.fileSizeKB,
         });
       } catch (archErr) {
+        if (isFirestorePermissionError(archErr)) {
+          handleFirestoreError(archErr, OperationType.WRITE, `tenants/${cleanCompId}/archives/${archiveId}`);
+        }
         console.warn('[Archiving] Could not save archive record to Firestore:', archErr);
       }
 
@@ -740,6 +752,9 @@ export class FirestoreShardingService {
         details: `تم تصفير وتطهير وثائق فايربيس والمجموعات الفرعية للشركة (${cleanCompId}) بنجاح`,
       };
     } catch (err: any) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.WRITE, `tenants/${cleanCompId}`);
+      }
       console.error('[Cleaner] Failed to clean Firestore tenant data:', err);
       return {
         success: false,

@@ -1,5 +1,6 @@
 import { AppData } from '../types';
 import { getScopedAppDataForBranch } from './branchIsolation';
+import { computeFinancialStatementsFromLedger } from './accountingEngine';
 
 export const vendorReports = [
   'بيانات ودليل الموردين',
@@ -901,15 +902,35 @@ export function generateReportData(
       return result;
     }
 
-    // Debt Aging Analysis
+    // Debt Aging Analysis (Real invoice-date aging buckets)
     if (reportName.includes('أعمار الديون')) {
       result.columns = ['العميل', 'رقم الهاتف', 'الرصيد القائم (0-30 يوم)', 'المتأخر (31-60 يوم)', 'المتأخر (أكثر من 60 يوم)', 'إجمالي الدين (ج.م)', 'كشف الحساب'];
+      const nowMs = today.getTime();
       customers.forEach((c) => {
-        const bal = c.balance || 0;
+        const bal = Number(c.balance) || 0;
         if (bal <= 0) return;
-        const current = bal * 0.6;
-        const mid = bal * 0.3;
-        const late = bal * 0.1;
+        let current = 0;
+        let mid = 0;
+        let late = 0;
+        const unpaidCustInvoices = (appData.salesInvoices || []).filter(
+          (inv) =>
+            inv.status !== 'cancelled' &&
+            !inv.type.startsWith('return_') &&
+            inv.customerName?.trim().toLowerCase() === c.name.trim().toLowerCase() &&
+            (inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0))) > 0
+        );
+        unpaidCustInvoices.forEach((inv) => {
+          const rem = inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0));
+          const invDate = new Date(inv.date || today);
+          const ageDays = Math.max(0, Math.floor((nowMs - invDate.getTime()) / (1000 * 3600 * 24)));
+          if (ageDays <= 30) current += rem;
+          else if (ageDays <= 60) mid += rem;
+          else late += rem;
+        });
+        const allocated = current + mid + late;
+        if (bal > allocated) {
+          current += bal - allocated;
+        }
         addRow(
           [
             c.name,
@@ -923,28 +944,42 @@ export function generateReportData(
           { customerName: c.name }
         );
       });
-      result.total = customers.reduce((s, x) => s + (x.balance || 0), 0);
+      result.total = customers.reduce((s, x) => s + ((x.balance || 0) > 0 ? x.balance : 0), 0);
       result.count = result.rows.length;
       result.title = 'تقرير تحليلي أعمار ديون العملاء والتأخيرات';
       return result;
     }
 
-    // Customer Profit Analysis
+    // Customer Profit Analysis (Real FIFO/weighted COGS)
     if (reportName.includes('أرباح')) {
-      result.columns = ['العميل', 'عدد الفواتير', 'إجمالي المبيعات (ج.م)', 'التكلفة التقديرية (ج.م)', 'صافي الربح (ج.م)', 'نسبة الربح %', 'التفاصيل'];
+      result.columns = ['العميل', 'عدد الفواتير', 'إجمالي المبيعات (ج.م)', 'التكلفة الفعلية (ج.م)', 'صافي الربح (ج.م)', 'نسبة الربح %', 'التفاصيل'];
+      let totalAllCustomerProfit = 0;
       customers.forEach((c) => {
-        const cInvoices = appData.salesInvoices.filter((i) => i.customerName === c.name);
+        const cInvoices = (appData.salesInvoices || []).filter(
+          (i) => i.status !== 'cancelled' && i.customerName?.trim().toLowerCase() === c.name.trim().toLowerCase()
+        );
         if (cInvoices.length === 0) return;
-        const salesTotal = cInvoices.reduce((s, i) => s + (i.total || 0), 0);
-        const estCost = salesTotal * 0.75;
-        const profit = salesTotal - estCost;
+        let salesTotal = 0;
+        let realCost = 0;
+        cInvoices.forEach((inv) => {
+          const sign = inv.type?.startsWith('return_') ? -1 : 1;
+          salesTotal += sign * (inv.total || 0);
+          const invCost = (inv.items || []).reduce((iSum, line) => {
+            const master = appData.items.find((x) => (line.itemId && x.id === line.itemId) || x.name === line.name);
+            const uCost = Number(line.costPrice ?? (master?.avgCost || master?.purchasePrice || master?.costPrice || 0));
+            return iSum + uCost * (Number(line.qty) || 0);
+          }, 0);
+          realCost += sign * invCost;
+        });
+        const profit = salesTotal - realCost;
+        totalAllCustomerProfit += profit;
         const margin = salesTotal > 0 ? (profit / salesTotal) * 100 : 0;
         addRow(
           [
             c.name,
             cInvoices.length.toString(),
             salesTotal.toFixed(2),
-            estCost.toFixed(2),
+            realCost.toFixed(2),
             profit.toFixed(2),
             `${margin.toFixed(1)}%`,
             '🔍 تحليل الربحية',
@@ -952,7 +987,7 @@ export function generateReportData(
           { customerName: c.name }
         );
       });
-      result.total = customers.reduce((s, c) => s + (appData.salesInvoices.filter((i) => i.customerName === c.name).reduce((sum, x) => sum + x.total, 0) * 0.25), 0);
+      result.total = totalAllCustomerProfit;
       result.count = result.rows.length;
       result.title = 'تقرير تحليل أرباح العملاء وصافي العائد';
       return result;
@@ -1742,14 +1777,15 @@ export function generateReportData(
     // 7. تقرير الأصناف الأكثر ربحية وحركة
     if (reportName.includes('ربحية') || reportName.includes('أكثر')) {
       const statsMap: Record<string, { qty: number; revenue: number; cost: number; profit: number }> = {};
-      appData.salesInvoices.forEach((inv) => {
+      (appData.salesInvoices || []).filter((inv) => inv.status !== 'cancelled').forEach((inv) => {
+        const sign = inv.type?.startsWith('return_') ? -1 : 1;
         inv.items.forEach((it) => {
           if (!statsMap[it.name]) statsMap[it.name] = { qty: 0, revenue: 0, cost: 0, profit: 0 };
-          const itemObj = appData.items.find((x) => x.name === it.name);
-          const cPrice = itemObj ? itemObj.purchasePrice : it.price * 0.75;
-          const rev = it.total || (it.qty * it.price);
-          const cst = it.qty * cPrice;
-          statsMap[it.name].qty += it.qty;
+          const itemObj = appData.items.find((x) => (it.itemId && x.id === it.itemId) || x.name === it.name);
+          const cPrice = Number(it.costPrice ?? (itemObj ? (itemObj.avgCost || itemObj.purchasePrice || 0) : 0));
+          const rev = sign * (it.total || (it.qty * it.price));
+          const cst = sign * (it.qty * cPrice);
+          statsMap[it.name].qty += sign * it.qty;
           statsMap[it.name].revenue += rev;
           statsMap[it.name].cost += cst;
           statsMap[it.name].profit += (rev - cst);
@@ -1904,26 +1940,44 @@ export function generateReportData(
   // FINANCIAL & PROFIT REPORTS (10 Specialized Reports)
   // -------------------------------------------------------------
   if (group === 'financial') {
-    const totalSales = appData.salesInvoices.filter((i) => new Date(i.date) >= from && new Date(i.date) <= to)
+    const statements = computeFinancialStatementsFromLedger(appData);
+    const totalSales = (appData.salesInvoices || [])
+      .filter((i) => i.status !== 'cancelled' && !i.type.startsWith('return_') && new Date(i.date) >= from && new Date(i.date) <= to)
       .reduce((s, i) => s + (i.total || 0), 0);
-    const totalPurchases = appData.purchaseInvoices.filter((i) => new Date(i.date) >= from && new Date(i.date) <= to)
+    const totalPurchases = (appData.purchaseInvoices || [])
+      .filter((i) => i.status !== 'cancelled' && !i.type.startsWith('return_') && new Date(i.date) >= from && new Date(i.date) <= to)
       .reduce((s, i) => s + (i.total || 0), 0);
-    const totalExpenses = appData.cashTransactions.filter((t) => (t.type === 'pay' || t.type === 'withdraw') && new Date(t.date) >= from && new Date(t.date) <= to)
+    const totalExpenses = (appData.cashTransactions || [])
+      .filter((t) => t.status !== 'cancelled' && (t.type === 'pay' || t.type === 'withdraw') && !t.supplierName && !t.invoiceId && new Date(t.date) >= from && new Date(t.date) <= to)
       .reduce((s, t) => s + (t.amount || 0), 0);
 
     // 1. تقرير الأرباح والخسائر الشامل P&L
     if (reportName.includes('أرباح وخسائر') || reportName.includes('P&L') || reportName.includes('الأرباح والخسائر')) {
-      const estCogs = totalPurchases > 0 ? totalPurchases * 0.85 : totalSales * 0.65;
-      const grossProfit = totalSales - estCogs;
+      const periodSales = (appData.salesInvoices || []).filter(
+        (i) => i.status !== 'cancelled' && new Date(i.date) >= from && new Date(i.date) <= to
+      );
+      let periodNetSales = 0;
+      let periodCogs = 0;
+      periodSales.forEach((inv) => {
+        const sign = inv.type?.startsWith('return_') ? -1 : 1;
+        periodNetSales += sign * ((inv.total || 0) - (inv.tax || 0));
+        const invCost = (inv.items || []).reduce((s, line) => {
+          const master = appData.items.find((x) => (line.itemId && x.id === line.itemId) || x.name === line.name);
+          const uCost = Number(line.costPrice ?? (master?.avgCost || master?.purchasePrice || 0));
+          return s + uCost * (Number(line.qty) || 0);
+        }, 0);
+        periodCogs += sign * invCost;
+      });
+      const grossProfit = periodNetSales - periodCogs;
       const netProfit = grossProfit - totalExpenses;
-      const profitMargin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
+      const profitMargin = periodNetSales > 0 ? (netProfit / periodNetSales) * 100 : 0;
 
       result.columns = ['بند قائمة الدخل والربحية', 'القيمة المحققة (ج.م)', 'النسبة المئوية % من المبيعات', 'التقييم المحاسبي'];
-      addRow(['1. إجمالي إيرادات المبيعات', totalSales.toFixed(2), '100.0%', 'إيرادات النشاط الرئيسي']);
-      addRow(['2. تكلفة البضاعة المباعة (COGS)', `(${estCogs.toFixed(2)})`, `${totalSales > 0 ? ((estCogs / totalSales) * 100).toFixed(1) : 0}%`, 'تكلفة النشاط']);
-      addRow(['3. إجمالي مجمل الربح (Gross Profit)', grossProfit.toFixed(2), `${totalSales > 0 ? ((grossProfit / totalSales) * 100).toFixed(1) : 0}%`, grossProfit >= 0 ? '🟢 فائض تجاري' : '🔴 عجز']);
-      addRow(['4. المصروفات التشغيلية والعمومية', `(${totalExpenses.toFixed(2)})`, `${totalSales > 0 ? ((totalExpenses / totalSales) * 100).toFixed(1) : 0}%`, 'أعباء تشغيلية']);
-      addRow(['5. صافي الربح التشغيلي قبل الضريبة', netProfit.toFixed(2), `${profitMargin.toFixed(1)}%`, netProfit >= 0 ? '✅ صافي أرباح' : '❌ صافي خسارة']);
+      addRow(['1. صافي إيرادات المبيعات (دون ضريبة)', periodNetSales.toFixed(2), '100.0%', 'إيرادات النشاط الرئيسي']);
+      addRow(['2. تكلفة البضاعة المباعة الفعلية (COGS)', `(${periodCogs.toFixed(2)})`, `${periodNetSales > 0 ? ((periodCogs / periodNetSales) * 100).toFixed(1) : 0}%`, 'تكلفة النشاط الفعلية FIFO']);
+      addRow(['3. إجمالي مجمل الربح (Gross Profit)', grossProfit.toFixed(2), `${periodNetSales > 0 ? ((grossProfit / periodNetSales) * 100).toFixed(1) : 0}%`, grossProfit >= 0 ? '🟢 فائض تجاري' : '🔴 عجز']);
+      addRow(['4. المصروفات التشغيلية والعمومية', `(${totalExpenses.toFixed(2)})`, `${periodNetSales > 0 ? ((totalExpenses / periodNetSales) * 100).toFixed(1) : 0}%`, 'أعباء تشغيلية (دون سداد الموردين)']);
+      addRow(['5. صافي الربح التشغيلي', netProfit.toFixed(2), `${profitMargin.toFixed(1)}%`, netProfit >= 0 ? '✅ صافي أرباح' : '❌ صافي خسارة']);
 
       result.total = netProfit;
       result.count = result.rows.length;
@@ -1935,20 +1989,20 @@ export function generateReportData(
     if (reportName.includes('ضريبة') || reportName.includes('VAT') || reportName.includes('القيمة المضافة')) {
       let outputVat = 0;
       let salesTaxable = 0;
-      appData.salesInvoices.forEach((inv) => {
-        const taxRate = inv.tax || 0;
-        const taxVal = taxRate > 0 ? inv.total - (inv.total / (1 + taxRate / 100)) : 0;
-        outputVat += taxVal;
-        salesTaxable += (inv.total - taxVal);
+      (appData.salesInvoices || []).filter((i) => i.status !== 'cancelled').forEach((inv) => {
+        const sign = inv.type?.startsWith('return_') ? -1 : 1;
+        const taxVal = Number(inv.tax || 0);
+        outputVat += sign * taxVal;
+        salesTaxable += sign * ((inv.total || 0) - taxVal);
       });
 
       let inputVat = 0;
       let purchasesTaxable = 0;
-      appData.purchaseInvoices.forEach((inv) => {
-        const taxRate = inv.tax || 0;
-        const taxVal = taxRate > 0 ? inv.total - (inv.total / (1 + taxRate / 100)) : 0;
-        inputVat += taxVal;
-        purchasesTaxable += (inv.total - taxVal);
+      (appData.purchaseInvoices || []).filter((i) => i.status !== 'cancelled').forEach((inv) => {
+        const sign = inv.type?.startsWith('return_') ? -1 : 1;
+        const taxVal = Number(inv.tax || 0);
+        inputVat += sign * taxVal;
+        purchasesTaxable += sign * ((inv.total || 0) - taxVal);
       });
 
       const netVatPayable = outputVat - inputVat;
@@ -1963,25 +2017,22 @@ export function generateReportData(
       return result;
     }
 
-    // 3. ميزان المراجعة وتوازن الحسابات
+    // 3. ميزان المراجعة وتوازن الحسابات (من دفتر الأستاذ العام الحقيقي)
     if (reportName.includes('ميزان') || reportName.includes('مراجعة') || reportName.includes('توازن')) {
       result.columns = ['كود الحساب', 'اسم الحساب في شجرة الدفاتر', 'مدين (ج.م)', 'دائن (ج.م)', 'الرصيد الصافي', 'حالة الاتزان'];
-      const customerReceivables = appData.customers.reduce((s, c) => s + (c.balance || 0), 0);
-      const supplierPayables = appData.suppliers.reduce((s, su) => s + (su.balance || 0), 0);
-      const totalCash = (appData.cashBox?.drawer || 0) + (appData.cashBox?.vodafone || 0) + (appData.cashBox?.instapay || 0) + (appData.cashBox?.bank || 0);
-      const inventoryVal = appData.items.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0);
+      statements.trialBalanceRows.forEach((row) => {
+        if (row.debit === 0 && row.credit === 0 && row.balance === 0) return;
+        addRow([
+          row.code,
+          row.name,
+          row.debit.toFixed(2),
+          row.credit.toFixed(2),
+          row.balance.toFixed(2),
+          statements.isTrialBalanced ? '✅ متوازن' : '⚠️ مراجعة',
+        ]);
+      });
 
-      addRow(['101', 'الصندوق والخزائن النقدية والبنوك', totalCash.toFixed(2), '0.00', `+${totalCash.toFixed(2)}`, 'متزن']);
-      addRow(['102', 'العملاء والمدينون التجاريون', customerReceivables.toFixed(2), '0.00', `+${customerReceivables.toFixed(2)}`, 'متزن']);
-      addRow(['103', 'مخزون البضاعة بالمستودعات', inventoryVal.toFixed(2), '0.00', `+${inventoryVal.toFixed(2)}`, 'متزن']);
-      addRow(['201', 'الموردون والدائنون التجاريون', '0.00', supplierPayables.toFixed(2), `-${supplierPayables.toFixed(2)}`, 'متزن']);
-      addRow(['401', 'إيرادات المبيعات المحققة', '0.00', totalSales.toFixed(2), `-${totalSales.toFixed(2)}`, 'متزن']);
-      addRow(['501', 'مشتريات وتكاليف البضاعة', totalPurchases.toFixed(2), '0.00', `+${totalPurchases.toFixed(2)}`, 'متزن']);
-      addRow(['502', 'المصروفات العمومية والتشغيلية', totalExpenses.toFixed(2), '0.00', `+${totalExpenses.toFixed(2)}`, 'متزن']);
-
-      const totalDebit = totalCash + customerReceivables + inventoryVal + totalPurchases + totalExpenses;
-
-      result.total = totalDebit;
+      result.total = statements.trialTotalDebit;
       result.count = result.rows.length;
       result.title = 'ميزان المراجعة وتوازن الحسابات المالية';
       return result;
@@ -1989,9 +2040,9 @@ export function generateReportData(
 
     // 4. التدفق النقدي والسيولة المتاحة
     if (reportName.includes('تدفق') || reportName.includes('سيولة') || reportName.includes('السيولة')) {
-      const collections = appData.cashTransactions.filter((t) => t.type === 'receive' || t.type === 'deposit')
+      const collections = appData.cashTransactions.filter((t) => t.status !== 'cancelled' && (t.type === 'receive' || t.type === 'deposit'))
         .reduce((s, t) => s + (t.amount || 0), 0);
-      const disbursements = appData.cashTransactions.filter((t) => t.type === 'pay' || t.type === 'withdraw')
+      const disbursements = appData.cashTransactions.filter((t) => t.status !== 'cancelled' && (t.type === 'pay' || t.type === 'withdraw'))
         .reduce((s, t) => s + (t.amount || 0), 0);
       const netCashFlow = collections - disbursements;
 
@@ -2006,29 +2057,21 @@ export function generateReportData(
       return result;
     }
 
-    // 5. قائمة المركز المالي والميزانية العمومية
+    // 5. قائمة المركز المالي والميزانية العمومية (من القيود والأرصدة الحقيقية)
     if (reportName.includes('مركز مالي') || reportName.includes('ميزانية') || reportName.includes('الميزانية')) {
-      const customerReceivables = appData.customers.reduce((s, c) => s + (c.balance || 0), 0);
-      const supplierPayables = appData.suppliers.reduce((s, su) => s + (su.balance || 0), 0);
-      const totalCash = (appData.cashBox?.drawer || 0) + (appData.cashBox?.vodafone || 0) + (appData.cashBox?.instapay || 0) + (appData.cashBox?.bank || 0);
-      const inventoryVal = appData.items.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0);
-      const fixedAssetsVal = (appData.fixedAssets || []).reduce((s, a) => s + (a.netBookValue || a.purchasePrice || 0), 0);
+      const totalAssets = statements.totalAssets;
 
-      const totalAssets = totalCash + customerReceivables + inventoryVal + fixedAssetsVal;
-      const totalLiabilities = supplierPayables;
-      const netEquity = totalAssets - totalLiabilities;
-
-      result.columns = ['بند المركز المالي / الميزانية', 'التبويب المحاسبي', 'القيمة التقديرية (ج.م)', 'النسبة من إجمالي الأصول'];
-      addRow(['النقدية وما في حكمها (خزائن وبنوك)', 'أصول متداولة', totalCash.toFixed(2), `${totalAssets > 0 ? ((totalCash / totalAssets) * 100).toFixed(1) : 0}%`]);
-      addRow(['العملاء وأوراق القبض (مدينون)', 'أصول متداولة', customerReceivables.toFixed(2), `${totalAssets > 0 ? ((customerReceivables / totalAssets) * 100).toFixed(1) : 0}%`]);
-      addRow(['المخزون السلعي والبضاعة', 'أصول متداولة', inventoryVal.toFixed(2), `${totalAssets > 0 ? ((inventoryVal / totalAssets) * 100).toFixed(1) : 0}%`]);
-      addRow(['الأصول الثابتة والمعدات', 'أصول غير متداولة', fixedAssetsVal.toFixed(2), `${totalAssets > 0 ? ((fixedAssetsVal / totalAssets) * 100).toFixed(1) : 0}%`]);
-      addRow(['الموردون وأوراق الدفع (التزامات)', 'خصوم متداولة', `(${supplierPayables.toFixed(2)})`, '-']);
-      addRow(['صافي حقوق الملكية ورأس المال العامل', 'حقوق الملكية', netEquity.toFixed(2), '100%']);
+      result.columns = ['بند المركز المالي / الميزانية', 'التبويب المحاسبي', 'القيمة المحاسبية (ج.م)', 'النسبة من إجمالي الأصول'];
+      addRow(['النقدية وما في حكمها (خزائن وبنوك)', 'أصول متداولة', statements.totalCashBank.toFixed(2), `${totalAssets > 0 ? ((statements.totalCashBank / totalAssets) * 100).toFixed(1) : 0}%`]);
+      addRow(['العملاء وأوراق القبض (مدينون)', 'أصول متداولة', statements.totalReceivables.toFixed(2), `${totalAssets > 0 ? ((statements.totalReceivables / totalAssets) * 100).toFixed(1) : 0}%`]);
+      addRow(['المخزون السلعي والبضاعة', 'أصول متداولة', statements.totalInventoryVal.toFixed(2), `${totalAssets > 0 ? ((statements.totalInventoryVal / totalAssets) * 100).toFixed(1) : 0}%`]);
+      addRow(['الأصول الثابتة والمعدات', 'أصول غير متداولة', statements.totalFixedAssets.toFixed(2), `${totalAssets > 0 ? ((statements.totalFixedAssets / totalAssets) * 100).toFixed(1) : 0}%`]);
+      addRow(['الموردون والالتزامات والضرائب', 'خصوم متداولة', `(${statements.totalLiabilities.toFixed(2)})`, '-']);
+      addRow(['صافي حقوق الملكية ورأس المال والأرباح', 'حقوق الملكية', statements.totalEquity.toFixed(2), `${statements.isBalanceSheetBalanced ? '✅ متوازن' : 'قيد المراجعة'}`]);
 
       result.total = totalAssets;
       result.count = result.rows.length;
-      result.title = 'قائمة المركز المالي والميزانية العمومية التقديرية';
+      result.title = 'قائمة المركز المالي والميزانية العمومية المعتمدة';
       return result;
     }
 
@@ -2318,15 +2361,17 @@ export function generateReportData(
     if (reportName.includes('هوامش الربحية') || reportName.includes('الربحية الإجمالية')) {
       result.columns = ['الشهر / الفترة', 'إجمالي المبيعات (ج.م)', 'تكلفة البضاعة المباعة (ج.م)', 'إجمالي الربح (ج.م)', 'هامش الربح %'];
       const monthlyData: Record<string, { rev: number; cost: number }> = {};
-      appData.salesInvoices.forEach((i) => {
+      (appData.salesInvoices || []).filter((i) => i.status !== 'cancelled').forEach((i) => {
+        const sign = i.type?.startsWith('return_') ? -1 : 1;
         const ym = i.date.substring(0, 7);
         monthlyData[ym] = monthlyData[ym] || { rev: 0, cost: 0 };
-        monthlyData[ym].rev += (i.total || 0);
+        monthlyData[ym].rev += sign * (i.total || 0);
         const invCost = i.items.reduce((s, it) => {
-          const itObj = appData.items.find((x) => x.name === it.name);
-          return s + (it.qty * (itObj ? itObj.purchasePrice : it.price * 0.75));
+          const itObj = appData.items.find((x) => (it.itemId && x.id === it.itemId) || x.name === it.name);
+          const uCost = Number(it.costPrice ?? (itObj ? (itObj.avgCost || itObj.purchasePrice || 0) : 0));
+          return s + it.qty * uCost;
         }, 0);
-        monthlyData[ym].cost += invCost;
+        monthlyData[ym].cost += sign * invCost;
       });
 
       let totalGrossProfit = 0;

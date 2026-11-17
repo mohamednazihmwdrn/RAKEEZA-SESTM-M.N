@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { initializeFirestore, getFirestore, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, setLogLevel, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Silence Firestore internal logger before initialization to prevent 10s timeout warnings in console
@@ -47,10 +47,22 @@ try {
 export const db = firestoreDb; /* CRITICAL: The app will break without this line */
 export const auth = getAuth(app);
 
+export async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+
 if (typeof window !== 'undefined') {
-  signInAnonymously(auth).catch((e) => {
-    console.debug('Firebase Auth notice:', e?.message);
-  });
+  signInAnonymously(auth)
+    .then(() => testConnection())
+    .catch((e) => {
+      console.debug('Firebase Auth notice:', e?.message);
+    });
 }
 
 export enum OperationType {
@@ -79,6 +91,16 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function isFirestorePermissionError(error: unknown): boolean {
+  const code = (error as any)?.code || '';
+  const msg = error instanceof Error ? error.message : String(error || '');
+  return (
+    code === 'permission-denied' ||
+    msg.toLowerCase().includes('missing or insufficient permissions') ||
+    msg.toLowerCase().includes('permission-denied')
+  );
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -102,4 +124,3 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export default db;
-

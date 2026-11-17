@@ -9,8 +9,8 @@ import { LayoutGrid, List, Sparkles, X, Image as ImageIcon, GitBranch } from 'lu
 import {
   getBranchItems,
   getMainBranchId,
-  updateBranchCashBoxDelta,
 } from '../utils/branchIsolation';
+import { processSaleInvoice } from '../utils/accountingEngine';
 
 interface PosViewProps {
   appData: AppData;
@@ -351,6 +351,15 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     const currentUserObj = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
 
     const totalPaidAll = saleType === 'split' ? effectivePaidCash + effectivePaidDigital : effectivePaidCash;
+    const paymentSplits =
+      saleType === 'split'
+        ? [
+            ...(effectivePaidCash > 0 ? [{ method: 'drawer', amount: effectivePaidCash }] : []),
+            ...(effectivePaidDigital > 0 ? [{ method: splitDigitalMethod, amount: effectivePaidDigital }] : []),
+          ]
+        : totalPaidAll > 0
+        ? [{ method: paymentMethod, amount: totalPaidAll }]
+        : undefined;
 
     const newInvoice: SaleInvoice = {
       id: nextId,
@@ -367,6 +376,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       fees: 0,
       total: finalTotal,
       paymentMethod: saleType === 'split' ? 'split' : paymentMethod,
+      paymentSplits,
       type: saleType === 'ajel' ? 'ajel' : 'nagdi',
       salesType: pricingTier,
       paidAmount: totalPaidAll,
@@ -379,229 +389,22 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       createdByUserCode: currentUserObj?.code || 1,
     };
 
-    // Update Items Quantities strictly for this branch's items
-    const updatedItems = appData.items.map((item) => {
-      const isTargetBranchItem =
-        item.branchId === activeBranchId ||
-        (!item.branchId && activeBranchId === mainBranchId);
-
-      if (!isTargetBranchItem) return item;
-
-      const sold = cart.find(
-        (c) => (c.itemId && c.itemId === item.id) || c.name === item.name
+    try {
+      let updatedData = processSaleInvoice(appData, newInvoice, false);
+      updatedData = addAuditLog(
+        updatedData,
+        'create',
+        'نقطة البيع (POS)',
+        `تم إتمام فاتورة POS #${nextId} (${saleType === 'ajel' ? 'آجل' : 'نقدي'}) بقيمة ${finalTotal.toFixed(2)} ج.م`
       );
-      if (sold) {
-        return {
-          ...item,
-          quantity: item.quantity - sold.qty,
-          movements: [
-            ...(item.movements || []),
-            {
-              date: today,
-              type: 'sale' as const,
-              qty: sold.qty,
-              price: sold.price,
-              total: sold.total,
-              note: `نقطة بيع POS فرع [${currentBranch?.name || activeBranchId}] فاتورة ${saleType === 'ajel' ? 'آجلة' : 'نقدية'} #${nextId}`,
-            },
-          ],
-        };
-      }
-      return item;
-    });
 
-    // Update Cash Box & Ledger
-    const updatedCashBox = { ...appData.cashBox };
-    const updatedCashTransactions = [...(appData.cashTransactions || [])];
-    let nextCashId = appData.nextCashId || 1;
-
-    const nowIso = new Date().toISOString();
-    const activeCompId = appData.companyId || 'COMP-000001';
-    const activeBrId = appData.activeBranchId || 'main';
-
-    if (saleType === 'nagdi') {
-      updatedCashBox[paymentMethod] = (updatedCashBox[paymentMethod] || 0) + finalTotal;
-      updatedCashTransactions.unshift({
-        id: nextCashId++,
-        companyId: activeCompId,
-        branchId: activeBrId,
-        date: today,
-        type: 'receive' as const,
-        method: paymentMethod,
-        amount: finalTotal,
-        note: `إيراد نقطة بيع POS فاتورة مبيعات نقدية #${nextId}`,
-        customerName: selectedCustomer,
-        invoiceId: nextId,
-        status: 'approved',
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        createdBy: currentUserObj?.name,
-        createdByUserId: currentUserObj?.id,
-        createdByUserCode: currentUserObj?.code || 1,
-      });
-    } else if (saleType === 'ajel') {
-      if (effectivePaidCash > 0) {
-        updatedCashBox[paymentMethod] = (updatedCashBox[paymentMethod] || 0) + effectivePaidCash;
-        updatedCashTransactions.unshift({
-          id: nextCashId++,
-          companyId: activeCompId,
-          branchId: activeBrId,
-          date: today,
-          type: 'receive' as const,
-          method: paymentMethod,
-          amount: effectivePaidCash,
-          note: `دفعة نقدية مع فاتورة POS آجل #${nextId} (${getMethodLabel(paymentMethod)}) - العميل: ${selectedCustomer}`,
-          customerName: selectedCustomer,
-          invoiceId: nextId,
-          status: 'approved',
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          createdBy: currentUserObj?.name,
-          createdByUserId: currentUserObj?.id,
-          createdByUserCode: currentUserObj?.code || 1,
-        });
-      }
-      // Customer Ledger
-      const updatedCustomers = [...appData.customers];
-      const custIdx = updatedCustomers.findIndex(
-        (c) => c.name.trim().toLowerCase() === selectedCustomer.trim().toLowerCase()
-      );
-      if (custIdx !== -1) {
-        updatedCustomers[custIdx].balance = (updatedCustomers[custIdx].balance || 0) + effectiveRemainingCredit;
-        updatedCustomers[custIdx].updatedAt = nowIso;
-        updatedCustomers[custIdx].updatedBy = currentUserObj?.name;
-      } else {
-        updatedCustomers.push({
-          id: 'c' + Date.now(),
-          companyId: activeCompId,
-          branchId: activeBrId,
-          name: selectedCustomer.trim(),
-          phone: customerPhone.trim(),
-          balance: effectiveRemainingCredit,
-          transactions: [],
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          createdBy: currentUserObj?.name,
-          createdByUserId: currentUserObj?.id,
-          createdByUserCode: currentUserObj?.code || 1,
-        });
-      }
-    } else if (saleType === 'split') {
-      if (effectivePaidCash > 0) {
-        updatedCashBox['drawer'] = (updatedCashBox['drawer'] || 0) + effectivePaidCash;
-        updatedCashTransactions.unshift({
-          id: nextCashId++,
-          companyId: activeCompId,
-          branchId: activeBrId,
-          date: today,
-          type: 'receive' as const,
-          method: 'drawer',
-          amount: effectivePaidCash,
-          note: `جزء نقدي من فاتورة POS مجزأة #${nextId} - العميل: ${selectedCustomer}`,
-          customerName: selectedCustomer,
-          invoiceId: nextId,
-          status: 'approved',
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          createdBy: currentUserObj?.name,
-          createdByUserId: currentUserObj?.id,
-          createdByUserCode: currentUserObj?.code || 1,
-        });
-      }
-      if (effectivePaidDigital > 0) {
-        updatedCashBox[splitDigitalMethod] = (updatedCashBox[splitDigitalMethod] || 0) + effectivePaidDigital;
-        updatedCashTransactions.unshift({
-          id: nextCashId++,
-          companyId: activeCompId,
-          branchId: activeBrId,
-          date: today,
-          type: 'receive' as const,
-          method: splitDigitalMethod,
-          amount: effectivePaidDigital,
-          note: `جزء إلكتروني (${getMethodLabel(splitDigitalMethod)}) من فاتورة POS #${nextId} - العميل: ${selectedCustomer}`,
-          customerName: selectedCustomer,
-          invoiceId: nextId,
-          status: 'approved',
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          createdBy: currentUserObj?.name,
-          createdByUserId: currentUserObj?.id,
-          createdByUserCode: currentUserObj?.code || 1,
-        });
-      }
-      if (effectiveRemainingCredit > 0) {
-        const updatedCustomers = [...appData.customers];
-        const custIdx = updatedCustomers.findIndex(
-          (c) => c.name.trim().toLowerCase() === selectedCustomer.trim().toLowerCase()
-        );
-        if (custIdx !== -1) {
-          updatedCustomers[custIdx].balance = (updatedCustomers[custIdx].balance || 0) + effectiveRemainingCredit;
-          updatedCustomers[custIdx].updatedAt = nowIso;
-          updatedCustomers[custIdx].updatedBy = currentUserObj?.name;
-        } else {
-          updatedCustomers.push({
-            id: 'c' + Date.now(),
-            companyId: activeCompId,
-            branchId: activeBrId,
-            name: selectedCustomer.trim(),
-            phone: customerPhone.trim(),
-            balance: effectiveRemainingCredit,
-            transactions: [],
-            createdAt: nowIso,
-            updatedAt: nowIso,
-            createdBy: currentUserObj?.name,
-            createdByUserId: currentUserObj?.id,
-            createdByUserCode: currentUserObj?.code || 1,
-          });
-        }
-      }
+      onUpdateData(updatedData);
+      showToast(`تم إصدار فاتورة POS #${nextId} بنجاح`, 'success');
+      printInvoiceWindow(newInvoice, true, updatedData.settings, showToast);
+    } catch (err: any) {
+      showToast(err?.message || 'حدث خطأ أثناء ترحيل فاتورة نقطة البيع', 'error');
+      return;
     }
-
-    let updatedBranchCashBoxes = { ...(appData.branchCashBoxes || {}) };
-    if (saleType === 'nagdi') {
-      updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, paymentMethod, finalTotal);
-    } else if (saleType === 'ajel' && effectivePaidCash > 0) {
-      updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, paymentMethod, effectivePaidCash);
-    } else if (saleType === 'split') {
-      if (effectivePaidCash > 0) {
-        updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, 'drawer', effectivePaidCash);
-      }
-      if (effectivePaidDigital > 0) {
-        updatedBranchCashBoxes = updateBranchCashBoxDelta(appData, activeBrId, splitDigitalMethod, effectivePaidDigital);
-      }
-    }
-
-    let updatedData: AppData = {
-      ...appData,
-      salesInvoices: [newInvoice, ...(appData.salesInvoices || [])],
-      items: updatedItems,
-      cashBox: updatedCashBox,
-      branchCashBoxes: updatedBranchCashBoxes,
-      cashTransactions: updatedCashTransactions,
-      customers:
-        saleType === 'ajel' || (saleType === 'split' && effectiveRemainingCredit > 0)
-          ? appData.customers.map((c) =>
-              c.name.trim().toLowerCase() === selectedCustomer.trim().toLowerCase()
-                ? { ...c, balance: (c.balance || 0) + effectiveRemainingCredit }
-                : c
-            )
-          : appData.customers,
-      nextInvoiceNumber: nextId + 1,
-      nextCashId: nextCashId,
-    };
-
-    updatedData = addAuditLog(
-      updatedData,
-      'create',
-      'نقطة البيع (POS)',
-      `تم إتمام فاتورة POS #${nextId} (${saleType === 'ajel' ? 'آجل' : 'نقدي'}) بقيمة ${finalTotal.toFixed(2)} ج.م`
-    );
-
-    onUpdateData(updatedData);
-    showToast(`تم إصدار فاتورة POS #${nextId} بنجاح`, 'success');
-
-    // Print
-    printInvoiceWindow(newInvoice, true, updatedData.settings, showToast);
 
     // Reset Cart
     setCart([]);

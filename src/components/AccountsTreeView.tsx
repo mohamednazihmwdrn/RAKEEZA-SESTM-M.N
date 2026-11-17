@@ -5,6 +5,7 @@ import { addAuditLog } from '../utils/storage';
 import { printAccountsTreeWindow, printCostCentersWindow } from '../utils/printAccounts';
 import { exportToExcel } from '../utils/excelExport';
 import { printStatementWindow, StatementData } from '../utils/printStatement';
+import { computeFinancialStatementsFromLedger, resolveCanonicalAccountCode } from '../utils/accountingEngine';
 
 interface AccountsTreeViewProps {
   appData: AppData;
@@ -53,51 +54,48 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
     setExpandedNodes((prev) => ({ ...prev, [code]: !prev[code] }));
   };
 
-  // Calculate live balances from Journal Entries
+  // Calculate live balances strictly from Double-Entry General Ledger (or subledger truth only if no GL entries exist)
   const computeAccountBalance = (accountCode: string) => {
+    const hasGl = (appData.journalEntries || []).length > 0;
+    const acc = appData.accounts.find((a) => a.code === accountCode);
+    const isDebitNature = acc?.type === 'asset' || acc?.type === 'expense' || accountCode.startsWith('1') || accountCode.startsWith('5');
+
+    if (hasGl) {
+      let totalDebit = 0;
+      let totalCredit = 0;
+      (appData.journalEntries || []).forEach((entry) => {
+        (entry.lines || []).forEach((line) => {
+          const canonical = resolveCanonicalAccountCode(line.accountCode, line.accountName);
+          if (canonical === accountCode || canonical.startsWith(accountCode)) {
+            totalDebit += Number(line.debit) || 0;
+            totalCredit += Number(line.credit) || 0;
+          }
+        });
+      });
+      const balance = isDebitNature ? totalDebit - totalCredit : totalCredit - totalDebit;
+      return { totalDebit, totalCredit, balance };
+    }
+
+    // Fallback only when no GL entries exist at all
+    const statements = computeFinancialStatementsFromLedger(appData);
     let totalDebit = 0;
     let totalCredit = 0;
 
-    (appData.journalEntries || []).forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (line.accountCode === accountCode || line.accountCode.startsWith(accountCode)) {
-          totalDebit += line.debit || 0;
-          totalCredit += line.credit || 0;
-        }
-      });
-    });
+    if (accountCode === '1101') totalDebit = appData.cashBox?.drawer || 0;
+    else if (accountCode === '1102') totalDebit = appData.cashBox?.vodafone || 0;
+    else if (accountCode === '1103') totalDebit = appData.cashBox?.instapay || 0;
+    else if (accountCode === '1104') totalDebit = appData.cashBox?.bank || 0;
+    else if (accountCode === '1105') totalDebit = statements.totalReceivables;
+    else if (accountCode === '1106') totalDebit = statements.totalInventoryVal;
+    else if (accountCode === '11' || accountCode === '1') totalDebit = statements.totalAssets;
+    else if (accountCode === '2101') totalCredit = statements.totalPayables;
+    else if (accountCode === '2102') totalCredit = Math.max(0, statements.totalVatPayable);
+    else if (accountCode === '21' || accountCode === '2') totalCredit = statements.totalLiabilities;
+    else if (accountCode === '4101') totalCredit = statements.grossSales;
+    else if (accountCode === '5101') totalDebit = statements.totalCOGS;
+    else if (accountCode === '5204') totalDebit = statements.operatingExpenses;
 
-    // Also include cash transactions & sales & purchases in balance
-    if (accountCode === '1101') {
-      totalDebit += appData.cashBox?.drawer || 0;
-    } else if (accountCode === '1102') {
-      totalDebit += appData.cashBox?.vodafone || 0;
-    } else if (accountCode === '1103') {
-      totalDebit += appData.cashBox?.instapay || 0;
-    } else if (accountCode === '1104') {
-      totalDebit += appData.cashBox?.bank || 0;
-    } else if (accountCode === '1105') {
-      totalDebit += appData.customers.reduce((sum, c) => sum + (c.balance > 0 ? c.balance : 0), 0);
-    } else if (accountCode === '1106') {
-      totalDebit += appData.items.reduce((sum, i) => sum + (i.quantity * i.purchasePrice), 0);
-    } else if (accountCode === '2101') {
-      totalCredit += appData.suppliers.reduce((sum, s) => sum + (s.balance > 0 ? s.balance : 0), 0);
-    } else if (accountCode === '4101') {
-      totalCredit += appData.salesInvoices.reduce((sum, inv) => sum + inv.total, 0);
-    } else if (accountCode === '5101') {
-      totalDebit += appData.salesInvoices.reduce((sum, inv) => {
-        const cost = inv.items.reduce((iSum, item) => {
-          const original = appData.items.find((i) => i.name === item.name);
-          return iSum + ((original?.purchasePrice || item.price * 0.75) * item.qty);
-        }, 0);
-        return sum + cost;
-      }, 0);
-    }
-
-    const acc = appData.accounts.find((a) => a.code === accountCode);
-    const isDebitNature = acc?.type === 'asset' || acc?.type === 'expense';
     const balance = isDebitNature ? totalDebit - totalCredit : totalCredit - totalDebit;
-
     return { totalDebit, totalCredit, balance };
   };
 
@@ -217,7 +215,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
     const acc = appData.accounts.find((a) => a.code === selectedAccCode) || appData.accounts[0];
     const txs = (appData.journalEntries || []).flatMap((entry) =>
       entry.lines
-        .filter((l) => l.accountCode === selectedAccCode)
+        .filter((l) => resolveCanonicalAccountCode(l.accountCode, l.accountName) === selectedAccCode)
         .map((l) => ({
           date: entry.date,
           entryNumber: entry.entryNumber,
@@ -262,7 +260,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
     const acc = appData.accounts.find((a) => a.code === selectedAccCode) || appData.accounts[0];
     const txs = (appData.journalEntries || []).flatMap((entry) =>
       entry.lines
-        .filter((l) => l.accountCode === selectedAccCode)
+        .filter((l) => resolveCanonicalAccountCode(l.accountCode, l.accountName) === selectedAccCode)
         .map((l) => ({
           date: entry.date,
           refNo: entry.entryNumber,
@@ -291,51 +289,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
     printStatementWindow(stData);
   };
 
-  const getAccountCalculatedBalance = (accountCode: string) => {
-    let totalDebit = 0;
-    let totalCredit = 0;
-
-    (appData.journalEntries || []).forEach((entry) => {
-      entry.lines.forEach((line) => {
-        if (line.accountCode === accountCode) {
-          totalDebit += line.debit || 0;
-          totalCredit += line.credit || 0;
-        }
-      });
-    });
-
-    if (accountCode === '1101') {
-      totalDebit += appData.cashBox?.drawer || 0;
-    } else if (accountCode === '1102') {
-      totalDebit += appData.cashBox?.vodafone || 0;
-    } else if (accountCode === '1103') {
-      totalDebit += appData.cashBox?.instapay || 0;
-    } else if (accountCode === '1104') {
-      totalDebit += appData.cashBox?.bank || 0;
-    } else if (accountCode === '1105') {
-      totalDebit += appData.customers.reduce((sum, c) => sum + (c.balance > 0 ? c.balance : 0), 0);
-    } else if (accountCode === '1106') {
-      totalDebit += appData.items.reduce((sum, i) => sum + (i.quantity * i.purchasePrice), 0);
-    } else if (accountCode === '2101') {
-      totalCredit += appData.suppliers.reduce((sum, s) => sum + (s.balance > 0 ? s.balance : 0), 0);
-    } else if (accountCode === '4101') {
-      totalCredit += appData.salesInvoices.reduce((sum, inv) => sum + inv.total, 0);
-    } else if (accountCode === '5101') {
-      totalDebit += appData.salesInvoices.reduce((sum, inv) => {
-        const cost = inv.items.reduce((iSum, item) => {
-          const original = appData.items.find((i) => i.name === item.name);
-          return iSum + ((original?.purchasePrice || item.price * 0.75) * item.qty);
-        }, 0);
-        return sum + cost;
-      }, 0);
-    }
-
-    const acc = appData.accounts.find((a) => a.code === accountCode);
-    const isDebitNature = acc?.type === 'asset' || acc?.type === 'expense';
-    const balance = isDebitNature ? totalDebit - totalCredit : totalCredit - totalDebit;
-
-    return { totalDebit, totalCredit, balance };
-  };
+  const getAccountCalculatedBalance = (accountCode: string) => computeAccountBalance(accountCode);
 
   const handleOpenEditAccount = (acc: AccountNode) => {
     setEditingAccountCode(acc.code);
@@ -921,7 +875,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
           <div className="block md:hidden space-y-2.5">
             {((appData.journalEntries || []).flatMap((entry) =>
               entry.lines
-                .filter((l) => l.accountCode === selectedAccCode)
+                .filter((l) => resolveCanonicalAccountCode(l.accountCode, l.accountName) === selectedAccCode)
                 .map((line, idx) => ({ entry, line, idx }))
             ).length === 0) ? (
               <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl">
@@ -930,7 +884,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
             ) : (
               (appData.journalEntries || []).flatMap((entry) =>
                 entry.lines
-                  .filter((l) => l.accountCode === selectedAccCode)
+                  .filter((l) => resolveCanonicalAccountCode(l.accountCode, l.accountName) === selectedAccCode)
                   .map((line, idx) => (
                     <div key={`${entry.id}-${idx}`} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-2">
                       <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5">
@@ -981,7 +935,7 @@ export const AccountsTreeView: React.FC<AccountsTreeViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {(appData.journalEntries || []).flatMap((entry) =>
                   entry.lines
-                    .filter((l) => l.accountCode === selectedAccCode)
+                    .filter((l) => resolveCanonicalAccountCode(l.accountCode, l.accountName) === selectedAccCode)
                     .map((line, idx) => (
                       <tr key={`${entry.id}-${idx}`} className="hover:bg-slate-50">
                         <td className="p-3 font-mono">{entry.date}</td>

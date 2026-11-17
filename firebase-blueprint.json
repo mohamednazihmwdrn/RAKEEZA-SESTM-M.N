@@ -1,82 +1,238 @@
 {
   "entities": {
-    "tenants": {
-      "description": "Tenant isolated business data including invoices, items, accounts, and transactions for real-time multi-device sync",
-      "fields": {
-        "companyId": { "type": "string", "description": "Unique identifier for the tenant company" },
-        "companyName": { "type": "string", "description": "Commercial name of the business" },
-        "salesInvoices": { "type": "array", "description": "Real-time list of sales invoices" },
-        "purchaseInvoices": { "type": "array", "description": "Real-time list of purchase invoices" },
-        "cashTransactions": { "type": "array", "description": "Real-time cash in and out transactions" },
-        "items": { "type": "array", "description": "Real-time inventory products and quantities" },
-        "customers": { "type": "array", "description": "Customers registry and balances" },
-        "suppliers": { "type": "array", "description": "Suppliers registry and balances" },
-        "accounts": { "type": "array", "description": "Chart of accounts and general ledger balances" },
-        "cashBox": { "type": "object", "description": "Live drawer, vodafone cash, instapay, and bank balances" },
-        "bankAccounts": { "type": "array", "description": "Bank accounts with current balances" },
-        "employees": { "type": "array", "description": "Employees directory and salaries" },
-        "auditLogs": { "type": "array", "description": "System activity logs" },
-        "journalEntries": { "type": "array", "description": "Daily double-entry journal records" },
-        "nextInvoiceNumber": { "type": "number", "description": "Auto-increment sales invoice counter" },
-        "nextPurchaseNumber": { "type": "number", "description": "Auto-increment purchase invoice counter" },
-        "updatedAt": { "type": "string", "description": "ISO timestamp of the most recent change" },
-        "lastModifiedBy": { "type": "string", "description": "User or device who performed the last write" }
-      }
+    "TenantMembership": {
+      "title": "TenantMembership",
+      "description": "Maps a Firebase Auth UID to a specific tenant company and role for Zero-Trust multi-device isolation",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "Parent tenant company ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "description": "Member role within the tenant",
+          "enum": ["owner", "company_admin", "admin", "accountant", "cashier", "warehouse_keeper", "sales_rep", "user"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Membership status",
+          "enum": ["active", "revoked"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of membership binding",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "companyId", "role", "status"]
     },
-    "companies": {
-      "description": "Registered organizations and tenant accounts in the system",
-      "fields": {
-        "id": { "type": "string", "description": "Company ID" },
-        "code": { "type": "string", "description": "Company unique 3-4 digit code" },
-        "name": { "type": "string", "description": "Company name" },
-        "phone": { "type": "string", "description": "Admin phone number" },
-        "planId": { "type": "string", "description": "Active subscription plan id" },
-        "status": { "type": "string", "description": "Subscription status (trial, active, expired)" },
-        "operationsCount": { "type": "number", "description": "Total operation count" },
-        "createdAt": { "type": "string", "description": "Creation timestamp" }
-      }
+    "TenantDocument": {
+      "title": "TenantDocument",
+      "description": "Tenant-isolated live operational ERP workspace (no plaintext passwords or hashes allowed)",
+      "type": "object",
+      "properties": {
+        "companyId": {
+          "type": "string",
+          "description": "Unique tenant company identifier",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase UID of the last authenticated writer",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Firebase UID of the writer",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "companyUid": {
+          "type": "string",
+          "description": "Company UID tag",
+          "maxLength": 160
+        },
+        "version": {
+          "type": "number",
+          "description": "Monotonic sync version number"
+        },
+        "salesInvoices": { "type": "array", "description": "Active sales invoices" },
+        "purchaseInvoices": { "type": "array", "description": "Active purchase invoices" },
+        "cashTransactions": { "type": "array", "description": "Cash receipts and payments" },
+        "items": { "type": "array", "description": "Inventory catalog items and balances" },
+        "customers": { "type": "array", "description": "Customers ledger" },
+        "suppliers": { "type": "array", "description": "Suppliers ledger" },
+        "accounts": { "type": "array", "description": "Chart of accounts" },
+        "cashBox": { "type": "object", "description": "Treasury balances" },
+        "branchCashBoxes": { "type": "object", "description": "Per-branch treasury balances" },
+        "bankAccounts": { "type": "array", "description": "Bank accounts" },
+        "journalEntries": { "type": "array", "description": "Double-entry journal records" },
+        "cheques": { "type": "array", "description": "Receivable and payable cheques" },
+        "quotations": { "type": "array", "description": "Quotations and web orders" },
+        "users": { "type": "array", "description": "Sanitized tenant user directory (passwords stripped)" },
+        "branches": { "type": "array", "description": "Company branches" },
+        "auditLogs": { "type": "array", "description": "Bounded recent audit log entries" },
+        "settings": { "type": "object", "description": "Tenant configuration and branding" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update", "maxLength": 64 },
+        "lastModifiedBy": { "type": "string", "description": "Actor display name", "maxLength": 200 },
+        "lastModifiedDeviceId": { "type": "string", "description": "Device UUID", "maxLength": 128 }
+      },
+      "required": ["companyId"]
     },
-    "ownerSettings": {
-      "description": "Global settings, license codes, and trials registry",
-      "fields": {
-        "licenses": { "type": "array", "description": "Generated activation license codes" },
-        "trialRegistry": { "type": "array", "description": "Trial phone records and device fingerprints" },
-        "plans": { "type": "array", "description": "Available subscription plans" },
-        "updatedAt": { "type": "string", "description": "Last update timestamp" }
-      }
+    "CompanyRegistry": {
+      "title": "CompanyRegistry",
+      "description": "Public/shared company directory record without secret credentials",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Company document ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "code": { "type": "string", "description": "Short company code", "maxLength": 32 },
+        "companyCode": { "type": "string", "description": "Alias company code", "maxLength": 32 },
+        "name": { "type": "string", "description": "Company legal name", "maxLength": 250 },
+        "status": {
+          "type": "string",
+          "description": "Subscription status",
+          "enum": ["trial", "active", "expired", "suspended"]
+        },
+        "users": { "type": "array", "description": "Sanitized user roster" },
+        "createdAt": { "type": "string", "description": "Creation date", "maxLength": 64 }
+      },
+      "required": ["id", "name", "status"]
     },
-    "salesShards": {
-      "description": "Sharded sales invoices partitioned by tenant companyId and fiscalYear in sub-collections (tenants/{companyId}/fiscal_years/{fiscalYear}/sales_invoices)",
-      "fields": {
-        "invoiceId": { "type": "string", "description": "Unique sales invoice identifier" },
-        "companyId": { "type": "string", "description": "Tenant company identifier" },
-        "fiscalYear": { "type": "string", "description": "Fiscal year partitioning key (e.g. 2024, 2025, 2026)" },
-        "invoiceNumber": { "type": "number", "description": "Fiscal year sequence number" },
-        "date": { "type": "string", "description": "Invoice issuance date" },
-        "customerId": { "type": "string", "description": "Customer reference" },
-        "customerName": { "type": "string", "description": "Customer display name" },
-        "items": { "type": "array", "description": "Invoice line items" },
-        "total": { "type": "number", "description": "Net invoice total" },
-        "paid": { "type": "number", "description": "Amount paid" },
-        "remaining": { "type": "number", "description": "Outstanding balance" },
-        "paymentType": { "type": "string", "description": "Cash or credit payment method" },
-        "shardedAt": { "type": "string", "description": "Timestamp when invoice was sharded" }
-      }
+    "ShardedFiscalYear": {
+      "title": "ShardedFiscalYear",
+      "description": "Aggregated metadata for a tenant fiscal year partition",
+      "type": "object",
+      "properties": {
+        "fiscalYear": { "type": "string", "description": "4-digit year", "pattern": "^[0-9]{4}$", "maxLength": 4 },
+        "invoicesCount": { "type": "number", "description": "Count of sharded invoices" },
+        "totalSalesAmount": { "type": "number", "description": "Sum of sharded invoice totals" },
+        "totalPaidAmount": { "type": "number", "description": "Sum of paid amounts" },
+        "lastUpdated": { "type": "string", "description": "ISO timestamp", "maxLength": 64 }
+      },
+      "required": ["fiscalYear", "invoicesCount"]
     },
-    "archives": {
-      "description": "Historical cold storage manifests for data older than 2 years stored in Google Cloud Storage (tenants/{companyId}/archives)",
-      "fields": {
-        "id": { "type": "string", "description": "Archive unique identifier" },
-        "companyId": { "type": "string", "description": "Tenant company ID" },
-        "fiscalYear": { "type": "string", "description": "Archived fiscal year" },
-        "recordsCount": { "type": "number", "description": "Count of archived records" },
-        "storageBucket": { "type": "string", "description": "Google Cloud Storage bucket name" },
-        "storagePath": { "type": "string", "description": "Path in Google Cloud Storage" },
-        "downloadUrl": { "type": "string", "description": "Direct download / manifest reference URL" },
-        "checksum": { "type": "string", "description": "SHA-256 or MD5 integrity hash" },
-        "archivedAt": { "type": "string", "description": "ISO timestamp when archiving executed" },
-        "archivedBy": { "type": "string", "description": "User or service who triggered archive" }
+    "ShardedSaleInvoice": {
+      "title": "ShardedSaleInvoice",
+      "description": "Sales invoice sharded by tenant and fiscal year",
+      "type": "object",
+      "properties": {
+        "companyId": { "type": "string", "description": "Tenant ID", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "fiscalYear": { "type": "string", "description": "Fiscal year", "pattern": "^[0-9]{4}$", "maxLength": 4 },
+        "date": { "type": "string", "description": "Invoice date", "maxLength": 32 },
+        "total": { "type": "number", "description": "Invoice total" },
+        "paid": { "type": "number", "description": "Amount paid" }
+      },
+      "required": ["companyId", "fiscalYear"]
+    },
+    "ColdStorageArchive": {
+      "title": "ColdStorageArchive",
+      "description": "Manifest for historical fiscal archives older than 2 years",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Archive ID", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "companyId": { "type": "string", "description": "Tenant ID", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "fiscalYear": { "type": "string", "description": "Fiscal year", "pattern": "^[0-9]{4}$", "maxLength": 4 },
+        "title": { "type": "string", "description": "Archive title", "maxLength": 300 },
+        "recordsCount": { "type": "number", "description": "Archived records count" },
+        "status": { "type": "string", "description": "Archive state", "enum": ["archived", "restored"] },
+        "archivedAt": { "type": "string", "description": "ISO timestamp", "maxLength": 64 }
+      },
+      "required": ["id", "companyId", "fiscalYear", "status"]
+    },
+    "AuditLogRecord": {
+      "title": "AuditLogRecord",
+      "description": "Immutable system audit log record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log ID", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "companyId": { "type": "string", "description": "Tenant ID", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "userId": { "type": "string", "description": "Actor user ID", "maxLength": 128 },
+        "action": { "type": "string", "description": "Operation verb", "maxLength": 120 },
+        "module": { "type": "string", "description": "ERP module name", "maxLength": 120 },
+        "details": { "type": "string", "description": "Human readable summary", "maxLength": 1000 },
+        "timestamp": { "type": "string", "description": "Event timestamp", "maxLength": 64 }
+      },
+      "required": ["companyId", "action", "module", "timestamp"]
+    },
+    "OwnerSettings": {
+      "title": "OwnerSettings",
+      "description": "Global platform owner settings, subscription plans, and licenses",
+      "type": "object",
+      "properties": {
+        "licenses": { "type": "array", "description": "Activation keys" },
+        "trialRegistry": { "type": "array", "description": "Trial registry" },
+        "plans": { "type": "array", "description": "Subscription tiers" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp", "maxLength": 64 }
+      },
+      "required": ["updatedAt"]
+    },
+    "ConnectionCheck": {
+      "title": "ConnectionCheck",
+      "description": "Connectivity probe document read by getDocFromServer on app startup",
+      "type": "object",
+      "properties": {
+        "ok": { "type": "boolean", "description": "Probe status" }
       }
+    }
+  },
+  "firestore": {
+    "/test/{docId}": {
+      "schema": { "$ref": "#/entities/ConnectionCheck" },
+      "description": "Read-only startup connection probe path (/test/connection)"
+    },
+    "/companies/{companyId}": {
+      "schema": { "$ref": "#/entities/CompanyRegistry" },
+      "description": "Tenant company directory and sanitized metadata"
+    },
+    "/tenants/{companyId}": {
+      "schema": { "$ref": "#/entities/TenantDocument" },
+      "description": "Tenant-isolated live ERP workspace document"
+    },
+    "/tenants/{companyId}/members/{uid}": {
+      "schema": { "$ref": "#/entities/TenantMembership" },
+      "description": "Master gate membership records linking authenticated UIDs to tenant companies"
+    },
+    "/tenants/{companyId}/fiscal_years/{fiscalYear}": {
+      "schema": { "$ref": "#/entities/ShardedFiscalYear" },
+      "description": "Fiscal year summary documents"
+    },
+    "/tenants/{companyId}/fiscal_years/{fiscalYear}/sales_invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/ShardedSaleInvoice" },
+      "description": "Sharded sales invoices partitioned by company and fiscal year"
+    },
+    "/tenants/{companyId}/archives/{archiveId}": {
+      "schema": { "$ref": "#/entities/ColdStorageArchive" },
+      "description": "Cold storage fiscal archives"
+    },
+    "/auditLogs/{auditId}": {
+      "schema": { "$ref": "#/entities/AuditLogRecord" },
+      "description": "Append-only immutable audit log collection"
+    },
+    "/ownerSettings/{docId}": {
+      "schema": { "$ref": "#/entities/OwnerSettings" },
+      "description": "Owner-restricted platform configuration and license ledger"
     }
   }
 }

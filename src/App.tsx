@@ -377,8 +377,9 @@ export default function App() {
           userCode: session.user?.code,
         }).catch(() => {});
 
-        // Authoritative Cloud Backend persistence
-        saveTenantDataCloud(newData, compId, actionInfo)
+        // Authoritative Cloud Backend persistence with deterministic operationId
+        const opId = `op-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        saveTenantDataCloud(newData, compId, actionInfo, opId, appDataRef.current?.version)
           .then((res) => {
             if (res.success && res.data) {
               setAppData((prev) => {
@@ -387,6 +388,9 @@ export default function App() {
                 return merged;
               });
               offlineSyncManager.markSynchronized();
+            } else if (res.code === 'device_revoked') {
+              showToast(res.error || 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.', 'error');
+              handleLogout();
             } else {
               offlineSyncManager.queueMutation(compId, newData, {
                 action: actionInfo?.action,
@@ -465,6 +469,10 @@ export default function App() {
       companyId: session.company.id,
       currentUserCode: currentCode,
       currentUserName: currentName,
+      onForceLogout: (reason) => {
+        showToast(reason || 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.', 'error');
+        handleLogout();
+      },
       onDataUpdated: (incomingData, meta) => {
         if (!incomingData || typeof incomingData !== 'object') return;
         setAppData((prev) => {
@@ -478,7 +486,15 @@ export default function App() {
       },
     });
 
+    const onDeviceRevoked = (ev: Event) => {
+      const msg = (ev as CustomEvent)?.detail;
+      showToast(msg || 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.', 'error');
+      handleLogout();
+    };
+    window.addEventListener('rakeeza_device_revoked', onDeviceRevoked);
+
     return () => {
+      window.removeEventListener('rakeeza_device_revoked', onDeviceRevoked);
       realtimeSync.stop();
     };
   }, [session?.company?.id, session?.user?.code, session?.user?.name]);
@@ -491,6 +507,8 @@ export default function App() {
 
     const timer5s = setInterval(async () => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      // Pause background overwrite while local offline mutations wait to flush
+      if (offlineSyncManager.getQueue(session.company.id).length > 0) return;
 
       try {
         const cloudRes = await fetchTenantDataCloud(session.company.id, session.user?.uid);

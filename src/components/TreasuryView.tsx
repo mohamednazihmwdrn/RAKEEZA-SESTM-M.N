@@ -5,7 +5,8 @@ import { printCashClosingWindow } from '../utils/printCashClosing';
 import { printCashBalancesReportWindow, compileCashBalancesData, formatEnNumber } from '../utils/printCashBalancesReport';
 import { printDailyTransactionsReportWindow } from '../utils/printDailyTransactionsReport';
 import { exportToExcel } from '../utils/excelExport';
-import { calculateBranchCashBox, updateBranchCashBoxDelta, getMainBranchId } from '../utils/branchIsolation';
+import { calculateBranchCashBox, getMainBranchId } from '../utils/branchIsolation';
+import { saveTreasuryMovement, deleteCashVoucher } from '../utils/accountingEngine';
 
 interface TreasuryViewProps {
   appData: AppData;
@@ -104,42 +105,17 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       return;
     }
 
-    const currentBox = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
-    const newCashBox: CashBox = {
-      drawer: currentBox.drawer || 0,
-      vodafone: currentBox.vodafone || 0,
-      instapay: currentBox.instapay || 0,
-      bank: currentBox.bank || 0,
-      [depMethod]: (currentBox[depMethod] || 0) + amt,
-    };
-    const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, depMethod, amt);
-
-    let updatedBankAccounts = appData.bankAccounts || [];
-    if (depMethod === 'bank' && depBankId) {
-      updatedBankAccounts = updatedBankAccounts.map((b) =>
-        b.id === depBankId ? { ...b, balance: (b.balance || 0) + amt } : b
-      );
-    }
-
-    const newTx: CashTransaction = {
-      id: appData.nextCashId,
-      branchId: targetBranchId,
-      companyId: appData.companyId || 'COMP-000001',
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    const updatedData = saveTreasuryMovement(appData, {
+      action: 'deposit',
       date: depDate || new Date().toISOString().split('T')[0],
-      type: 'deposit',
-      method: depMethod,
       amount: amt,
+      method: depMethod,
+      branchId: targetBranchId,
+      bankId: depBankId || undefined,
       note: depNote.trim() || `إيداع نقدية مباشر في ${getMethodName(depMethod)}`,
-    };
-
-    const updatedData: AppData = {
-      ...appData,
-      cashBox: newCashBox,
-      branchCashBoxes: newBranchBoxes,
-      bankAccounts: updatedBankAccounts,
-      cashTransactions: [...appData.cashTransactions, newTx],
-      nextCashId: appData.nextCashId + 1,
-    };
+      user: currentUserObj,
+    });
 
     onUpdateData(updatedData);
     setIsDepositOpen(false);
@@ -171,51 +147,17 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       );
     }
 
-    const currentBox = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
-    const newCashBox: CashBox = {
-      drawer: currentBox.drawer || 0,
-      vodafone: currentBox.vodafone || 0,
-      instapay: currentBox.instapay || 0,
-      bank: currentBox.bank || 0,
-      [trFrom]: (currentBox[trFrom] || 0) - amt,
-      [trTo]: (currentBox[trTo] || 0) + amt,
-    };
-
-    let newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, trFrom, -amt);
-    newBranchBoxes = updateBranchCashBoxDelta({ ...appData, branchCashBoxes: newBranchBoxes }, targetBranchId, trTo, amt);
-
-    const txDate = trDate || new Date().toISOString().split('T')[0];
-    const userNote = trNote.trim() ? ` (${trNote.trim()})` : '';
-
-    const txWithdraw: CashTransaction = {
-      id: appData.nextCashId,
-      branchId: targetBranchId,
-      companyId: appData.companyId || 'COMP-000001',
-      date: txDate,
-      type: 'withdraw',
-      method: trFrom,
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    const updatedData = saveTreasuryMovement(appData, {
+      action: 'transfer',
+      date: trDate || new Date().toISOString().split('T')[0],
       amount: amt,
-      note: `تحويل إلى ${getMethodName(trTo)}${userNote}`,
-    };
-
-    const txDeposit: CashTransaction = {
-      id: appData.nextCashId + 1,
+      fromMethod: trFrom,
+      toMethod: trTo,
       branchId: targetBranchId,
-      companyId: appData.companyId || 'COMP-000001',
-      date: txDate,
-      type: 'deposit',
-      method: trTo,
-      amount: amt,
-      note: `تحويل من ${getMethodName(trFrom)}${userNote}`,
-    };
-
-    const updatedData: AppData = {
-      ...appData,
-      cashBox: newCashBox,
-      branchCashBoxes: newBranchBoxes,
-      cashTransactions: [...appData.cashTransactions, txWithdraw, txDeposit],
-      nextCashId: appData.nextCashId + 2,
-    };
+      note: trNote.trim() || undefined,
+      user: currentUserObj,
+    });
 
     onUpdateData(updatedData);
     setIsTransferOpen(false);
@@ -243,35 +185,16 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
       );
     }
 
-    const currentBoxWth = appData.cashBox || { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };
-    const newCashBox: CashBox = {
-      drawer: currentBoxWth.drawer || 0,
-      vodafone: currentBoxWth.vodafone || 0,
-      instapay: currentBoxWth.instapay || 0,
-      bank: currentBoxWth.bank || 0,
-      [wthMethod]: Math.max(0, (currentBoxWth[wthMethod] || 0) - amt),
-    };
-
-    const newBranchBoxes = updateBranchCashBoxDelta(appData, targetBranchId, wthMethod, -amt);
-
-    const newTx: CashTransaction = {
-      id: appData.nextCashId,
-      branchId: targetBranchId,
-      companyId: appData.companyId || 'COMP-000001',
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    const updatedData = saveTreasuryMovement(appData, {
+      action: 'withdraw',
       date: wthDate || new Date().toISOString().split('T')[0],
-      type: 'withdraw',
-      method: wthMethod,
       amount: amt,
+      method: wthMethod,
+      branchId: targetBranchId,
       note: wthNote.trim() || `سحب/مصروفات من ${getMethodName(wthMethod)}`,
-    };
-
-    const updatedData: AppData = {
-      ...appData,
-      cashBox: newCashBox,
-      branchCashBoxes: newBranchBoxes,
-      cashTransactions: [...appData.cashTransactions, newTx],
-      nextCashId: appData.nextCashId + 1,
-    };
+      user: currentUserObj,
+    });
 
     onUpdateData(updatedData);
     setIsWithdrawOpen(false);
@@ -288,43 +211,16 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const initAmt = Number(bankInitial) || 0;
-    const newBank = {
-      id: 'b' + Date.now(),
-      name: bankName.trim(),
-      accountNumber: bankAccountNum.trim(),
-      balance: initAmt,
-    };
-
-    const newCashBox = {
-      ...cash,
-      bank: (cash.bank || 0) + initAmt,
-    };
-
-    let newTransactions = appData.cashTransactions;
-    let nextId = appData.nextCashId;
-
-    if (initAmt > 0) {
-      newTransactions = [
-        ...newTransactions,
-        {
-          id: nextId,
-          date: new Date().toISOString().split('T')[0],
-          type: 'deposit',
-          method: 'bank',
-          amount: initAmt,
-          note: `رصيد افتتاحي لحساب بنك ${bankName.trim()} (${bankAccountNum.trim()})`,
-        },
-      ];
-      nextId++;
-    }
-
-    const updatedData: AppData = {
-      ...appData,
-      bankAccounts: [...(appData.bankAccounts || []), newBank],
-      cashBox: newCashBox,
-      cashTransactions: newTransactions,
-      nextCashId: nextId,
-    };
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    const updatedData = saveTreasuryMovement(appData, {
+      action: 'bank_opening',
+      date: new Date().toISOString().split('T')[0],
+      amount: initAmt,
+      branchId: targetBranchId,
+      bankName: bankName.trim(),
+      bankAccountNumber: bankAccountNum.trim(),
+      user: currentUserObj,
+    });
 
     onUpdateData(updatedData);
     setIsBankOpen(false);
@@ -344,18 +240,9 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
   const handleDeleteTransaction = (id: number) => {
     if (!confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) return;
-    const updatedData = { ...appData };
-    const idx = updatedData.cashTransactions.findIndex((t) => t.id === id);
-    if (idx !== -1) {
-      const t = updatedData.cashTransactions[idx];
-      const delta = (t.type === 'receive' || t.type === 'deposit') ? -t.amount : t.amount;
-      updatedData.cashBox[t.method] = Math.max(0, (updatedData.cashBox[t.method] || 0) + delta);
-      const transBranch = t.branchId || targetBranchId;
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, t.method, delta);
-      updatedData.cashTransactions.splice(idx, 1);
-      onUpdateData(updatedData);
-      showToast('تم حذف الحركة النقدية وتعديل رصيد الخزينة بنجاح', 'success');
-    }
+    const updatedData = deleteCashVoucher(appData, id);
+    onUpdateData(updatedData);
+    showToast('تم حذف الحركة النقدية وتعديل رصيد الخزينة والقيود بنجاح', 'success');
   };
 
   // Filter Transactions

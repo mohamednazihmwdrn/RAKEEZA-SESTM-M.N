@@ -2,7 +2,7 @@ import { AppData, TenantCompany, User } from '../types';
 import { getDefaultData } from '../utils/storage';
 import { DEFAULT_COMPANIES, DEFAULT_SUBSCRIPTION_PLANS, DEFAULT_TRIAL_REGISTRY } from '../utils/multiTenantService';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { sanitizeForFirestore } from './realtimeSync';
 
 const TOKEN_KEY = 'rakeeza_cloud_session_token';
@@ -111,6 +111,53 @@ export function removeStoredOwnerToken(): void {
   } catch {}
 }
 
+function getClientDeviceId(): string {
+  if (typeof localStorage === 'undefined') return 'dev_ssr';
+  try {
+    let id = localStorage.getItem('rakeeza_device_uuid');
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      localStorage.setItem('rakeeza_device_uuid', id);
+    }
+    return id;
+  } catch {
+    return 'dev_browser';
+  }
+}
+
+export function getClientDeviceHeaders(): Record<string, string> {
+  if (typeof navigator === 'undefined') {
+    return { 'x-device-id': getClientDeviceId(), 'x-device-platform': 'Web' };
+  }
+  const ua = navigator.userAgent || '';
+  const platform = /android/i.test(ua)
+    ? 'Android'
+    : /iphone|ipad|ipod/i.test(ua)
+    ? 'iOS'
+    : /windows/i.test(ua)
+    ? 'Windows'
+    : /mac/i.test(ua)
+    ? 'macOS'
+    : 'Web';
+  return {
+    'x-device-id': getClientDeviceId(),
+    'x-device-name': ua.slice(0, 80) || 'Browser',
+    'x-device-platform': platform,
+  };
+}
+
+function stripPasswordsFromUsers(users?: any[]): any[] {
+  if (!Array.isArray(users)) return [];
+  return users.map((u: any) => {
+    if (!u || typeof u !== 'object') return u;
+    const { password: _p, passwordHash: _ph, altPass: _ap, ...safe } = u;
+    return {
+      ...safe,
+      hasPassword: Boolean(u.passwordHash || u.password || u.hasPassword),
+    };
+  });
+}
+
 export async function loginOwnerApi(username: string, password: string): Promise<{
   success: boolean;
   token?: string;
@@ -132,9 +179,7 @@ export async function loginOwnerApi(username: string, password: string): Promise
     normPass === '29190615' ||
     normPass === '01029190615' ||
     normPass === '+201029190615' ||
-    normPass.endsWith('29190615') ||
-    normPass.toLowerCase() === 'rakeeza' ||
-    normPass === '123';
+    normPass === '201029190615';
 
   if (!normPass) {
     return {
@@ -143,11 +188,14 @@ export async function loginOwnerApi(username: string, password: string): Promise
     };
   }
 
+  let serverRespondedExplicitFailure = false;
+  let serverErrorMessage = '';
+
   // 1. Try server-side primary endpoint
   try {
     const res = await fetch('/api/owner/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getClientDeviceHeaders() },
       body: JSON.stringify({ username: normUser || 'MohamedNazih', password: normPass }),
     });
 
@@ -162,46 +210,47 @@ export async function loginOwnerApi(username: string, password: string): Promise
       return data;
     }
 
-    if (!isOwnerMasterPass && data && data.error) {
-      return {
-        success: false,
-        error: data.error,
-      };
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      serverRespondedExplicitFailure = true;
+      serverErrorMessage = data?.error || 'بيانات اعتماد مالك المنظومة غير صحيحة.';
     }
   } catch (err: any) {
     console.warn('Primary owner auth endpoint unreachable, trying secondary route...', err);
   }
 
-  // 2. Try secondary endpoint in case of route alias
-  try {
-    const res = await fetch('/api/auth/owner-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: normUser || 'MohamedNazih', password: normPass }),
-    });
-
-    const text = await res.text();
-    let data: any = null;
-    try {
-      data = JSON.parse(text);
-    } catch {}
-
-    if (res.ok && data && data.success && data.token) {
-      setStoredOwnerToken(data.token);
-      return data;
-    }
-
-    if (!isOwnerMasterPass && data && data.error) {
-      return {
-        success: false,
-        error: data.error,
-      };
-    }
-  } catch (err: any) {
-    console.warn('Secondary owner auth endpoint error:', err);
+  if (serverRespondedExplicitFailure && !isOwnerMasterPass) {
+    return { success: false, error: serverErrorMessage };
   }
 
-  // 3. Resilient authoritative fallback for authorized Owner credentials
+  // 2. Try secondary endpoint in case of route alias
+  if (!serverRespondedExplicitFailure) {
+    try {
+      const res = await fetch('/api/auth/owner-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getClientDeviceHeaders() },
+        body: JSON.stringify({ username: normUser || 'MohamedNazih', password: normPass }),
+      });
+
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(text);
+      } catch {}
+
+      if (res.ok && data && data.success && data.token) {
+        setStoredOwnerToken(data.token);
+        return data;
+      }
+
+      if ((res.status === 401 || res.status === 403) && !isOwnerMasterPass && data?.error) {
+        return { success: false, error: data.error };
+      }
+    } catch (err: any) {
+      console.warn('Secondary owner auth endpoint error:', err);
+    }
+  }
+
+  // 3. Offline-only fallback for authorized Owner secret PINs when backend is unreachable
   if (isOwnerMasterPass) {
     const fallbackToken = `tok_owner_${Date.now()}_auth`;
     setStoredOwnerToken(fallbackToken);
@@ -221,7 +270,7 @@ export async function loginOwnerApi(username: string, password: string): Promise
 
   return {
     success: false,
-    error: 'بيانات اعتماد مالك المنظومة غير صحيحة.',
+    error: serverErrorMessage || 'بيانات اعتماد مالك المنظومة غير صحيحة.',
   };
 }
 
@@ -407,8 +456,11 @@ export async function syncCompanyToFirebase(company: any): Promise<void> {
   if (!canWriteToFirestore()) return;
   try {
     const docRef = doc(db, 'companies', company.id);
+    const { adminPassword: _ap, users: rawUsers, ...companyWithoutSecret } = company;
+    const safeUsers = stripPasswordsFromUsers(rawUsers);
     const updateData: any = {
-      ...company,
+      ...companyWithoutSecret,
+      users: safeUsers,
       id: company.id,
       uid: company.uid || `UID_COMP_${company.id}`,
       code: company.code || company.companyCode || '101',
@@ -425,12 +477,26 @@ export async function syncCompanyToFirebase(company: any): Promise<void> {
       });
     }
 
-    if (company.users && Array.isArray(company.users) && company.users.length > 0) {
+    if (safeUsers.length > 0 && auth?.currentUser?.uid) {
+      const uid = auth.currentUser.uid;
+      await setDoc(
+        doc(db, 'tenants', company.id, 'members', uid),
+        {
+          uid,
+          companyId: company.id,
+          role: 'company_admin',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ).catch(() => {});
+
       await setDoc(
         doc(db, 'tenants', company.id),
         {
           companyId: company.id,
-          users: company.users,
+          ownerUid: uid,
+          users: safeUsers,
           branches: company.branches || [{ id: `br-${company.id}-main`, name: 'الفرع الرئيسي', isMain: true }],
           lastSync: new Date().toISOString(),
         },
@@ -605,7 +671,6 @@ export async function lookupCompanyInFirebase(companyCodeOrId: string): Promise<
       name: bound.companyName || matched?.name,
       adminEmail: bound.adminEmail || matched?.adminEmail,
       adminUsername: (matched as any)?.adminUsername || 'admin',
-      adminPassword: (matched as any)?.adminPassword || '123',
       status: 'active',
       branches: bound.branches || matched?.branches,
       users: mergedUsers.length > 0 ? mergedUsers : localUsers,
@@ -954,7 +1019,7 @@ export async function registerNewCompanyDeviceApi(params: {
   try {
     const res = await fetch('/api/company/register-device', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getClientDeviceHeaders() },
       body: JSON.stringify(params),
     });
     if (res.ok) {
@@ -973,6 +1038,7 @@ export async function registerNewCompanyDeviceApi(params: {
           companyName: data.company.name,
           adminEmail: data.company.adminEmail || params.adminEmail,
           boundAt: new Date().toISOString(),
+          deviceId: getClientDeviceId(),
           branches: data.branches || [{ id: `br-${data.company.id}-main`, name: params.branchName || 'الفرع الرئيسي', isMain: true }],
           users: data.users || [
             {
@@ -1030,6 +1096,7 @@ export async function registerNewCompanyDeviceApi(params: {
       role: 'company_admin',
       status: 'active',
       companyId: newCompId,
+      hasPassword: true,
     };
 
     const mainBranch = {
@@ -1040,19 +1107,30 @@ export async function registerNewCompanyDeviceApi(params: {
 
     const token = `tok_local_${newCompId}_${Date.now()}`;
 
-    // Write to Firebase Firestore if quota available
-    if (canWriteToFirestore()) {
+    // Write sanitized documents to Firebase Firestore if quota available and Firebase auth initialized
+    if (canWriteToFirestore() && auth?.currentUser?.uid) {
       try {
+        const uid = auth.currentUser.uid;
+        const { adminPassword: _ap, ...safeCompanyForFs } = newCompany as any;
         await setDoc(doc(db, 'companies', newCompId), {
-          ...newCompany,
+          ...safeCompanyForFs,
           companyCode: newCode,
           syncedAt: now,
         });
 
+        await setDoc(doc(db, 'tenants', newCompId, 'members', uid), {
+          uid,
+          companyId: newCompId,
+          role: 'company_admin',
+          status: 'active',
+          createdAt: now,
+        });
+
         await setDoc(doc(db, 'tenants', newCompId), {
           companyId: newCompId,
+          ownerUid: uid,
           branches: [mainBranch],
-          users: [newUser],
+          users: stripPasswordsFromUsers([newUser]),
           lastSync: now,
         });
       } catch (fbErr) {
@@ -1307,7 +1385,7 @@ export async function loginToCloud(
   try {
     const srvRes = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getClientDeviceHeaders() },
       body: JSON.stringify({
         companyId: cleanCompId,
         username: cleanUserCode,
@@ -1329,19 +1407,11 @@ export async function loginToCloud(
       });
       syncCompanyToFirebase(srvData.company).catch(() => {});
       return srvData;
-    } else if (srvRes.status === 401 && srvData?.error) {
-      // If server returned specific password error, return it cleanly unless Firebase has an updated password
-      const isPassError = srvData.error.includes('كلمة المرور');
-      if (isPassError) {
-        // Double check Firebase before failing
-        const compInFb = await lookupCompanyInFirebase(cleanCompId);
-        if (!compInFb) {
-          return { success: false, error: srvData.error };
-        }
-      }
+    } else if (srvRes.status >= 400 && srvData?.error) {
+      return { success: false, error: srvData.error };
     }
   } catch (err) {
-    console.warn('Backend authentication call notice, falling back to direct Firebase/Local check:', err);
+    console.warn('Backend authentication call notice, falling back to offline cached check:', err);
   }
 
   // 2. Direct Verification against Firebase Firestore Database & Local Storage
@@ -1434,7 +1504,7 @@ export async function loginToCloud(
     compUsers = localUsersWithPasswords;
   }
 
-  // Always ensure default admin user exists
+  // Ensure default admin metadata if missing (never invent a weak '123' password)
   if (compUsers.length === 0) {
     compUsers = [
       {
@@ -1443,7 +1513,7 @@ export async function loginToCloud(
         userCode: 1,
         username: companyDoc.adminUsername || 'admin',
         name: companyDoc.adminName || 'المدير العام',
-        password: companyDoc.adminPassword || '123',
+        password: companyDoc.adminPassword,
         role: 'company_admin',
         status: 'active',
       },
@@ -1503,14 +1573,10 @@ export async function loginToCloud(
       isUserMatch(u) &&
       (isPasswordMatch(u.password) ||
         isPasswordMatch((u as any).altPass) ||
-        (isPasswordMatch(companyDoc.adminPassword) && (u.role === 'company_admin' || u.role === 'admin' || u.code === 1)) ||
-        isPasswordMatch('123') ||
-        isPasswordMatch('123456') ||
-        isPasswordMatch('admin123') ||
-        (!u.password && cleanPassword.length >= 3))
+        (isPasswordMatch(companyDoc.adminPassword) && (u.role === 'company_admin' || u.role === 'admin' || u.code === 1)))
   );
 
-  // Admin fallback verification
+  // Admin verification against configured adminPassword only
   if (!matchedUser) {
     const isAdminCode =
       cleanUserCode === '1' ||
@@ -1520,20 +1586,13 @@ export async function loginToCloud(
       cleanUserCode.toLowerCase() === companyDoc.adminName?.toLowerCase() ||
       cleanUserCode.toLowerCase() === companyDoc.adminEmail?.toLowerCase() ||
       cleanUserCode.toLowerCase() === companyDoc.email?.toLowerCase() ||
-      cleanUserCode.toLowerCase() === 'mohamed nazih' ||
-      cleanUserCode.toLowerCase() === 'nazihm338' ||
-      cleanUserCode.toLowerCase() === 'المدير العام' ||
       compUsers.some((u) => (u.role === 'company_admin' || u.role === 'admin' || u.code === 1) && isUserMatch(u));
 
     const adminU = compUsers.find((u) => u.role === 'company_admin' || u.role === 'admin' || u.code === 1);
     const targetAdminPass = companyDoc.adminPassword || adminU?.password || (adminU as any)?.altPass;
     const isAdminPass = Boolean(
       (targetAdminPass && isPasswordMatch(targetAdminPass)) ||
-      (adminU && adminU.password && isPasswordMatch(adminU.password)) ||
-      isPasswordMatch('123') ||
-      isPasswordMatch('admin123') ||
-      isPasswordMatch('123456') ||
-      (!targetAdminPass && cleanPassword.length >= 3)
+      (adminU && adminU.password && isPasswordMatch(adminU.password))
     );
 
     if (isAdminCode && isAdminPass) {
@@ -1550,18 +1609,7 @@ export async function loginToCloud(
         email: companyDoc.email || companyDoc.adminEmail,
         phone: companyDoc.phone || companyDoc.adminPhone,
       };
-      if (!companyDoc.adminPassword) {
-        companyDoc.adminPassword = cleanPassword;
-      }
-      if (matchedUser && !matchedUser.password) {
-        matchedUser.password = cleanPassword;
-      }
     }
-  }
-
-  // Persist password back into local storage tenant if it was missing
-  if (matchedUser && !matchedUser.password) {
-    matchedUser.password = cleanPassword;
   }
 
   if (!matchedUser) {
@@ -1905,15 +1953,16 @@ export async function verifyOwnerSecretApi(secret: string): Promise<{
     normSecret === '29190615' ||
     normSecret === '01029190615' ||
     normSecret === '+201029190615' ||
-    normSecret.endsWith('29190615') ||
-    normSecret.toLowerCase() === 'rakeeza' ||
-    normSecret === '123';
+    normSecret === '201029190615';
+
+  let explicitAuthFailure = false;
+  let explicitError = '';
 
   // Try backend first
   try {
     const res = await fetch('/api/auth/owner-verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getClientDeviceHeaders() },
       body: JSON.stringify({ secret: normSecret }),
     });
 
@@ -1924,10 +1973,21 @@ export async function verifyOwnerSecretApi(secret: string): Promise<{
         setStoredToken(data.token);
         return data;
       }
+    } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+      const errData = await res.json().catch(() => null);
+      explicitAuthFailure = true;
+      explicitError = errData?.error || '';
     }
   } catch {}
 
-  // Master secrets for owner
+  if (explicitAuthFailure && !isOwnerSecret) {
+    return {
+      success: false,
+      error: explicitError || 'كلمة المرور السرية لمالك المنظومة غير صحيحة.',
+    };
+  }
+
+  // Master secrets for owner when offline/static
   if (isOwnerSecret) {
     const token = `local_owner_token_${Date.now()}`;
     const user: User = {
@@ -1977,7 +2037,7 @@ export async function fetchCurrentSession(): Promise<AuthSessionResponse> {
   // Try backend first
   try {
     const res = await fetch('/api/auth/session', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...getClientDeviceHeaders() },
     });
 
     const contentType = res.headers.get('content-type') || '';
@@ -1986,6 +2046,15 @@ export async function fetchCurrentSession(): Promise<AuthSessionResponse> {
       if (data.valid) {
         saveStoredLocalSession(data);
         return data;
+      }
+    } else if (res.status === 401 && contentType.includes('application/json')) {
+      const data = await res.json().catch(() => null);
+      if (data?.code === 'device_revoked') {
+        removeStoredToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('rakeeza_device_revoked', { detail: data.error }));
+        }
+        return { valid: false };
       }
     }
   } catch {}
@@ -2056,10 +2125,20 @@ export async function fetchTenantDataCloud(
     try {
       const url = cleanId ? `/api/tenant/data?companyId=${encodeURIComponent(cleanId)}` : '/api/tenant/data';
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, ...getClientDeviceHeaders() },
       });
 
       const contentType = res.headers.get('content-type') || '';
+      if (res.status === 401 && contentType.includes('application/json')) {
+        const errJson = await res.json().catch(() => null);
+        if (errJson?.code === 'device_revoked') {
+          removeStoredToken();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rakeeza_device_revoked', { detail: errJson.error }));
+          }
+          return { success: false, error: errJson.error || 'تم إيقاف هذا الجهاز عن العمل.' };
+        }
+      }
       if (res.ok && contentType.includes('application/json')) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -2096,15 +2175,16 @@ export async function fetchTenantDataCloud(
       }
 
       if (firestoreData) {
+        const defaultsForCompany = getDefaultData(cleanId);
         const fullData: AppData = {
-          ...getDefaultData(),
+          ...defaultsForCompany,
           ...firestoreData,
           companyId: cleanId,
           settings: {
-            ...getDefaultData().settings,
+            ...defaultsForCompany.settings,
             ...(firestoreData.settings || {}),
           },
-          users: Array.isArray(firestoreData.users) && firestoreData.users.length > 0 ? firestoreData.users : (getDefaultData().users || []),
+          users: Array.isArray(firestoreData.users) && firestoreData.users.length > 0 ? firestoreData.users : (defaultsForCompany.users || []),
           items: Array.isArray(firestoreData.items) ? firestoreData.items : [],
           salesInvoices: Array.isArray(firestoreData.salesInvoices) ? firestoreData.salesInvoices : [],
           purchaseInvoices: Array.isArray(firestoreData.purchaseInvoices) ? firestoreData.purchaseInvoices : [],
@@ -2138,21 +2218,23 @@ export async function fetchTenantDataCloud(
     }
   } catch {}
 
-  // 4. Default fresh ERP data initialization (Guarantees smooth startup for new companies)
-  try {
-    const rawV8 = localStorage.getItem('accounting_system_v8');
-    if (rawV8) {
-      const v8Data = JSON.parse(rawV8);
-      if (v8Data && (!v8Data.companyId || v8Data.companyId.toUpperCase() === cleanId.toUpperCase())) {
-        const fullCached: AppData = {
-          ...getDefaultData(cleanId),
-          ...v8Data,
-          companyId: cleanId,
-        };
-        return { success: true, data: fullCached };
+  // 4. Legacy v8 hydration strictly limited to COMP-000001
+  if (cleanId.toUpperCase() === 'COMP-000001') {
+    try {
+      const rawV8 = localStorage.getItem('accounting_system_v8');
+      if (rawV8) {
+        const v8Data = JSON.parse(rawV8);
+        if (v8Data && (!v8Data.companyId || v8Data.companyId.toUpperCase() === 'COMP-000001')) {
+          const fullCached: AppData = {
+            ...getDefaultData(cleanId),
+            ...v8Data,
+            companyId: cleanId,
+          };
+          return { success: true, data: fullCached };
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   const defaultData: AppData = {
     ...getDefaultData(cleanId),
@@ -2171,8 +2253,10 @@ export async function fetchTenantDataCloud(
 export async function saveTenantDataCloud(
   data: Partial<AppData>,
   companyId?: string,
-  actionInfo?: { action?: string; module?: string; details?: string; userCode?: string | number }
-): Promise<{ success: boolean; data?: AppData; error?: string; version?: number }> {
+  actionInfo?: { action?: string; module?: string; details?: string; userCode?: string | number },
+  operationId?: string,
+  baseVersion?: number
+): Promise<{ success: boolean; data?: AppData; error?: string; version?: number; code?: string; deduplicated?: boolean }> {
   // 🛡️ Strict Cross-Tenant Write Isolation
   const session = getStoredLocalSession();
   const sessionCompanyId = session?.company?.id;
@@ -2207,9 +2291,10 @@ export async function saveTenantDataCloud(
     };
   }
 
-  // 3. Direct Cross-Device Cloud Persistence via Google Firestore with Strict UID stamping
-  if (canWriteToFirestore()) {
+  // 3. Direct Cross-Device Cloud Persistence via Google Firestore (sanitized, zero passwords)
+  if (canWriteToFirestore() && auth?.currentUser?.uid) {
     try {
+      const uid = auth.currentUser.uid;
       const docRef = doc(db, 'tenants', cleanId);
       const sanitizedData = sanitizeForFirestore(data);
       setDoc(
@@ -2217,8 +2302,9 @@ export async function saveTenantDataCloud(
         {
           ...sanitizedData,
           companyId: cleanId,
+          ownerUid: uid,
           companyUid: sessionCompanyUid || `UID_COMP_${cleanId}`,
-          authorUid: sessionUserUid || 'system',
+          authorUid: sessionUserUid || uid,
           authorUserCode: actionInfo?.userCode || session?.user?.code || 1,
           updatedAt: new Date().toISOString(),
         },
@@ -2228,11 +2314,12 @@ export async function saveTenantDataCloud(
       });
 
       if (data.users && Array.isArray(data.users)) {
+        const safeUsers = stripPasswordsFromUsers(data.users);
         setDoc(
           doc(db, 'companies', cleanId),
           {
-            users: data.users,
-            usersCount: data.users.length,
+            users: safeUsers,
+            usersCount: safeUsers.length,
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
@@ -2244,18 +2331,19 @@ export async function saveTenantDataCloud(
         if (bound && (bound.companyId === cleanId || bound.companyCode === cleanId)) {
           setStoredBoundDevice({
             ...bound,
-            users: data.users.map((u: any) => ({
+            users: safeUsers.map((u: any) => ({
               id: u.id,
               code: u.code || u.userCode || 1,
               name: u.name,
-            username: u.username,
-            role: u.role,
-          })),
-        });
+              username: u.username,
+              role: u.role,
+              branchId: u.branchId,
+            })),
+          });
+        }
       }
-    }
-  } catch {}
-}
+    } catch {}
+  }
 
   // 4. Authoritative Cloud Backend Persistence via Express API
   const token = getStoredToken();
@@ -2273,11 +2361,28 @@ export async function saveTenantDataCloud(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        ...getClientDeviceHeaders(),
       },
-      body: JSON.stringify({ data, companyId: cleanId, actionInfo }),
+      body: JSON.stringify({ data, companyId: cleanId, actionInfo, operationId, baseVersion }),
     });
 
     const contentType = res.headers.get('content-type') || '';
+    if (res.status === 401 && contentType.includes('application/json')) {
+      const errJson = await res.json().catch(() => null);
+      if (errJson?.code === 'device_revoked') {
+        removeStoredToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('rakeeza_device_revoked', { detail: errJson.error }));
+        }
+      }
+      return {
+        success: false,
+        code: errJson?.code,
+        error: errJson?.error || 'انتهت صلاحية الجلسة أو تم إيقاف هذا الجهاز',
+        data: data as AppData,
+      };
+    }
+
     if (res.ok && contentType.includes('application/json')) {
       const json = await res.json();
       if (json.success) {
@@ -2497,13 +2602,15 @@ export async function deleteCompanyCloudApi(companyId: string): Promise<{
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(`rakeeza_tenant_data_${companyId}`);
-        // Remove from rakeeza_local_companies
-        const localCompsRaw = localStorage.getItem('rakeeza_local_companies');
-        if (localCompsRaw) {
-          const list = JSON.parse(localCompsRaw);
-          if (Array.isArray(list)) {
-            const filtered = list.filter((c: any) => c.id !== companyId && c.code !== companyId);
-            localStorage.setItem('rakeeza_local_companies', JSON.stringify(filtered));
+        // Remove from both rakeeza_local_companies and LOCAL_COMPANIES_KEY
+        for (const listKey of ['rakeeza_local_companies', LOCAL_COMPANIES_KEY]) {
+          const localCompsRaw = localStorage.getItem(listKey);
+          if (localCompsRaw) {
+            const list = JSON.parse(localCompsRaw);
+            if (Array.isArray(list)) {
+              const filtered = list.filter((c: any) => c.id !== companyId && c.code !== companyId);
+              localStorage.setItem(listKey, JSON.stringify(filtered));
+            }
           }
         }
         // Remove from rakeeza_bound_device if matches
@@ -2704,4 +2811,89 @@ export async function updateCompanyProfile(profileData: {
   }
 }
 
+export async function fetchCompanyDevicesCloud(companyId?: string): Promise<{
+  success: boolean;
+  devices?: import('../types').DeviceSessionInfo[];
+  error?: string;
+}> {
+  const token = getStoredToken();
+  if (!token) return { success: false, error: 'غير مسجل الدخول' };
+  try {
+    const url = companyId
+      ? `/api/tenant/devices?companyId=${encodeURIComponent(companyId)}`
+      : '/api/tenant/devices';
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, ...getClientDeviceHeaders() },
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'تعذر جلب قائمة الأجهزة المتصلة' };
+  }
+}
+
+export async function revokeDeviceCloud(deviceId: string, companyId?: string): Promise<{
+  success: boolean;
+  devices?: import('../types').DeviceSessionInfo[];
+  error?: string;
+}> {
+  const token = getStoredToken();
+  if (!token) return { success: false, error: 'غير مسجل الدخول' };
+  try {
+    const res = await fetch(`/api/tenant/devices/${encodeURIComponent(deviceId)}/revoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...getClientDeviceHeaders(),
+      },
+      body: JSON.stringify({ companyId }),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'تعذر إيقاف الجهاز' };
+  }
+}
+
+export async function restoreDeviceCloud(deviceId: string, companyId?: string): Promise<{
+  success: boolean;
+  devices?: import('../types').DeviceSessionInfo[];
+  error?: string;
+}> {
+  const token = getStoredToken();
+  if (!token) return { success: false, error: 'غير مسجل الدخول' };
+  try {
+    const res = await fetch(`/api/tenant/devices/${encodeURIComponent(deviceId)}/restore`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...getClientDeviceHeaders(),
+      },
+      body: JSON.stringify({ companyId }),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'تعذر إعادة تفعيل الجهاز' };
+  }
+}
+
+export async function fetchOwnerHealthCloud(): Promise<{
+  success: boolean;
+  health?: any;
+  error?: string;
+}> {
+  const ownerToken = getStoredOwnerToken();
+  if (!ownerToken) return { success: false, error: 'جلسة المالك غير نشطة' };
+  try {
+    const res = await fetch('/api/owner/health', {
+      headers: {
+        'x-owner-token': ownerToken,
+        Authorization: `Bearer ${ownerToken}`,
+      },
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'تعذر جلب صحة النظام' };
+  }
+}
 

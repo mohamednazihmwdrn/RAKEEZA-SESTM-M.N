@@ -7,6 +7,7 @@ import { exportToExcel } from '../utils/excelExport';
 import { playOrderAlertChime } from '../utils/audioChime';
 import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 import { TableActionButtons } from './TableActionButtons';
+import { processSaleInvoice } from '../utils/accountingEngine';
 
 interface WebOrdersInboxViewProps {
   appData: AppData;
@@ -366,31 +367,15 @@ export const WebOrdersInboxView: React.FC<WebOrdersInboxViewProps> = ({
         remainingAmount: 0,
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
         createdBy: 'النظام (تحويل طلب أونلاين)',
-        companyId: order.companyId,
+        companyId: order.companyId || appData.companyId,
+        branchId: appData.activeBranchId || 'main',
         status: 'approved',
       };
 
-      // Deduct inventory
-      const updatedItems = [...appData.items].map((invItem) => {
-        const orderLine = order.items.find((line) => line.itemId === invItem.id || line.name === invItem.name);
-        if (orderLine) {
-          const newQty = Math.max(0, (invItem.quantity || 0) - (orderLine.qty || 0));
-          return {
-            ...invItem,
-            quantity: newQty,
-          };
-        }
-        return invItem;
-      });
-
-      // Update cash drawer
-      const newCashBox = {
-        ...appData.cashBox,
-        drawer: (appData.cashBox?.drawer || 0) + order.total,
-      };
+      let updatedData = processSaleInvoice(appData, newInvoice, false);
 
       // Mark order as converted
-      const updatedQuotes = (appData.quotations || []).map((q) => {
+      const updatedQuotes = (updatedData.quotations || []).map((q) => {
         if (q.id === order.id) {
           return {
             ...q,
@@ -402,12 +387,8 @@ export const WebOrdersInboxView: React.FC<WebOrdersInboxViewProps> = ({
         return q;
       });
 
-      let updatedData: AppData = {
-        ...appData,
-        salesInvoices: [newInvoice, ...(appData.salesInvoices || [])],
-        nextInvoiceNumber: nextInvId + 1,
-        items: updatedItems,
-        cashBox: newCashBox,
+      updatedData = {
+        ...updatedData,
         quotations: updatedQuotes,
       };
 

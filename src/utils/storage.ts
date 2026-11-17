@@ -55,8 +55,141 @@ export const defaultAccountsTree: AccountNode[] = [
   { code: '5206', name: 'عجز وفاقد تسوية المخزون (Inventory Shrinkage & Loss)', type: 'expense', parentCode: '5', isParent: false, debit: 0, credit: 0, balance: 0 },
 ];
 
+export function getCleanCompanyData(
+  companyId: string,
+  meta?: {
+    companyName?: string;
+    address?: string;
+    phone?: string;
+    taxNumber?: string;
+    commercialReg?: string;
+    activityCode?: string;
+    adminName?: string;
+  }
+): AppData {
+  const cleanId = (companyId || 'COMP-NEW').trim().toUpperCase();
+  const mainBranchId = `br-${cleanId}-main`;
+  return {
+    companyId: cleanId,
+    version: 1,
+    settings: {
+      companyName: meta?.companyName || 'منشأة جديدة',
+      address: meta?.address || 'المقر الرئيسي',
+      phone1: meta?.phone || '',
+      phone2: '',
+      phone3: '',
+      taxNumber: meta?.taxNumber || '',
+      commercialReg: meta?.commercialReg || '',
+      activityCode: meta?.activityCode || 'تجارة عامة وخدمات',
+      notes: meta?.companyName ? `شكراً لتعاملكم مع ${meta.companyName}` : 'شكراً لتعاملكم معنا',
+      defaultTaxRate: 14,
+      withholdingTaxRate: 0,
+      currencySymbol: 'ج.م',
+      fiscalYear: String(new Date().getFullYear()),
+    },
+    users: [],
+    currentUser: '',
+    customers: [],
+    suppliers: [],
+    items: [],
+    salesInvoices: [],
+    purchaseInvoices: [],
+    cashTransactions: [],
+    backups: [],
+    nextInvoiceNumber: 1,
+    nextPurchaseNumber: 1,
+    nextCashId: 1,
+    cashBox: { drawer: 0, vodafone: 0, instapay: 0, bank: 0 },
+    salesReps: [],
+    bankAccounts: [],
+    physicalInventories: [],
+    inventoryAdjustments: [],
+    goodsIssueVouchers: [],
+    fiscalClosings: [],
+    nextStocktakeId: 1,
+    nextAdjustmentId: 1,
+    nextGoodsIssueId: 1,
+    nextClosingId: 1,
+    advancedSettings: {
+      categories: ['عام'],
+      itemGroups: ['عام'],
+      units: ['قطعة', 'كيلو', 'متر', 'علبة', 'كرتونة', 'طقم'],
+    },
+    accounts: defaultAccountsTree.map((a) => ({ ...a })),
+    journalEntries: [],
+    nextJournalId: 1,
+    costCenters: [
+      { id: `cc-${cleanId}-1`, code: 'CC-01', name: 'المركز الرئيسي', manager: meta?.adminName || 'المدير العام' },
+    ],
+    branches: [
+      {
+        id: mainBranchId,
+        code: 'HQ-01',
+        name: 'الفرع الرئيسي',
+        location: meta?.address || 'المقر الرئيسي',
+        phone: meta?.phone || '',
+        isMain: true,
+        manager: meta?.adminName || 'المدير العام',
+      },
+    ],
+    activeBranchId: mainBranchId,
+    stockTransfers: [],
+    quotations: [],
+    nextQuoteId: 1,
+    auditLogs: [
+      {
+        id: `log-init-${Date.now()}`,
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        userName: meta?.adminName || 'مدير النظام',
+        action: 'login',
+        module: 'النظام العام',
+        details: `تم إنشاء وتهيئة قاعدة بيانات مستقلة ومعزولة للشركة [${cleanId}] بنجاح.`,
+      },
+    ],
+    eInvoiceConfig: {
+      taxRegNumber: meta?.taxNumber || '',
+      commercialRegNumber: meta?.commercialReg || '',
+      branchCode: '0',
+      activityCode: meta?.activityCode || '4651',
+      posSerial: '',
+      isEtaConnected: false,
+      autoGenerateQr: true,
+    },
+    employees: [],
+    payrollSlips: [],
+    nextPayrollId: 1,
+    employeeAdvances: [],
+    fixedAssets: [],
+    depreciationLogs: [],
+    cheques: [],
+    nextChequeId: 1,
+    commissions: [],
+    boms: [],
+    productionOrders: [],
+    nextProductionId: 1,
+    bankStatements: [],
+    approvalRequests: [],
+    autoBackupConfig: {
+      enabled: true,
+      intervalMinutes: 720,
+      autoDownloadFile: false,
+      maxSnapshotsToKeep: 15,
+      lastBackupTimestamp: new Date().toISOString(),
+      backupLocation: 'browser_storage',
+      notifyOnBackup: true,
+    },
+    companies: [],
+    companyCatalogConfigs: {},
+    deletedRecords: {},
+  };
+}
+
 export function getDefaultData(companyId?: string): AppData {
-  const targetCompanyId = companyId || 'COMP-000001';
+  const targetCompanyId = (companyId || 'COMP-000001').trim().toUpperCase();
+  // 🛡️ Strict Isolation: Only legacy COMP-000001 gets legacy default branches/demo items; ALL other companies start 100% clean!
+  if (targetCompanyId !== 'COMP-000001') {
+    return getCleanCompanyData(targetCompanyId);
+  }
   return {
     companyId: targetCompanyId,
     settings: {
@@ -384,116 +517,82 @@ export function loadAppData(companyId?: string): AppData {
         loaded.companyCatalogConfigs['COMP-000001'].storeName = 'شركة ركيزة للمحاسبة والتجارة RAKEEZA';
       }
 
-      // 🏢 Migrate branches: Ensure "فرع الاخوة" and "فرع الموان" are distinct and properly configured
-      if (!loaded.branches || loaded.branches.length === 0) {
-        loaded.branches = defaults.branches;
-      } else {
-        let hasMowan = false;
-        loaded.branches = loaded.branches.map((b, idx) => {
-          if (b.id === 'br-main' || b.isMain || idx === 0) {
-            return {
-              ...b,
-              id: 'br-main',
-              isMain: true,
-              name: 'فرع الاخوة',
-            };
-          }
-          if (b.id === 'br-branch2' || b.id === 'br-mowan' || idx === 1 || b.name.includes('الموان') || b.name.includes('الجيزة')) {
-            hasMowan = true;
-            return {
-              ...b,
-              id: 'br-mowan',
-              isMain: false,
-              name: 'فرع الموان',
-            };
-          }
-          return b;
-        });
+      const resolvedCompId = (loaded.companyId || cleanCompId || 'COMP-000001').trim().toUpperCase();
+      const isLegacyComp1 = resolvedCompId === 'COMP-000001';
 
-        if (!hasMowan) {
-          loaded.branches.push({
-            id: 'br-mowan',
-            code: 'BR-02',
-            name: 'فرع الموان',
-            location: 'فرع الموان',
-            phone: '01100000000',
-            isMain: false,
-            manager: 'محمود سعيد',
-          });
-        }
-      }
-
-      if (loaded.activeBranchId === 'br-branch2') {
-        loaded.activeBranchId = 'br-mowan';
-      } else if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
-        loaded.activeBranchId = 'br-main';
-      }
-
-      // Ensure all users have strict branchId assignment:
-      // user1, user2, user3 -> 'br-main' (فرع الاخوة)
-      // user4, user5, user6 -> 'br-mowan' (فرع الموان)
-      if (loaded.users && Array.isArray(loaded.users)) {
-        loaded.users = loaded.users.map((u) => {
-          let targetBranch = u.branchId;
-          if (targetBranch === 'br-branch2') targetBranch = 'br-mowan';
-
-          if (u.id === 'user1' || u.id === 'user2' || u.id === 'user3' || u.username === 'admin' || u.username === 'cashier' || u.username === 'warehouse') {
-            targetBranch = 'br-main';
-          } else if (u.id === 'user4' || u.id === 'user5' || u.id === 'user6' || u.username?.includes('mowan') || u.name?.includes('الموان')) {
-            targetBranch = 'br-mowan';
-          } else if (!targetBranch) {
-            targetBranch = 'br-main';
-          }
-
-          return {
-            ...u,
-            branchId: targetBranch,
-          };
-        });
-
-        // Ensure all default users exist
-        for (const defaultUser of defaults.users) {
-          const exists = loaded.users.some(
-            (u) => u.id === defaultUser.id || u.username?.toLowerCase() === defaultUser.username?.toLowerCase()
-          );
-          if (!exists) {
-            loaded.users.push(defaultUser);
-          }
-        }
-      } else {
-        loaded.users = defaults.users;
-      }
-
-      // 📦 Always guarantee the master PDF catalog items (1,001 items) are restored and accessible
-      if (loaded.deletedRecords?.['items_all_cleared']) {
-        delete loaded.deletedRecords['items_all_cleared'];
-      }
-
-      if (!loaded.items || loaded.items.length === 0) {
-        // Prune any legacy tombstone keys that block catalog items from appearing
-        if (loaded.deletedRecords) {
-          Object.keys(loaded.deletedRecords).forEach((key) => {
-            if (key.startsWith('items_')) {
-              delete loaded.deletedRecords[key];
+      if (isLegacyComp1) {
+        // 🏢 Legacy COMP-000001 branch & user & PDF catalog restoration (never touches other companies!)
+        if (!loaded.branches || loaded.branches.length === 0) {
+          loaded.branches = defaults.branches;
+        } else {
+          let hasMowan = false;
+          loaded.branches = loaded.branches.map((b, idx) => {
+            if (b.id === 'br-main' || b.isMain || idx === 0) {
+              return { ...b, id: 'br-main', isMain: true, name: b.name || 'فرع الاخوة' };
             }
+            if (b.id === 'br-branch2' || b.id === 'br-mowan' || idx === 1 || b.name.includes('الموان') || b.name.includes('الجيزة')) {
+              hasMowan = true;
+              return { ...b, id: 'br-mowan', isMain: false, name: b.name || 'فرع الموان' };
+            }
+            return b;
           });
+          if (!hasMowan) {
+            loaded.branches.push({
+              id: 'br-mowan',
+              code: 'BR-02',
+              name: 'فرع الموان',
+              location: 'فرع الموان',
+              phone: '01100000000',
+              isMain: false,
+              manager: 'محمود سعيد',
+            });
+          }
         }
-        loaded.items = PDF_CATALOG_ITEMS_1001.map((it) => ({
-          ...it,
-          companyId: loaded.companyId || 'COMP-000001',
-          branchId: loaded.activeBranchId || 'br-main',
-        }));
+
+        if (loaded.activeBranchId === 'br-branch2') {
+          loaded.activeBranchId = 'br-mowan';
+        } else if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
+          loaded.activeBranchId = loaded.branches[0]?.id || 'br-main';
+        }
+
+        if (loaded.users && Array.isArray(loaded.users)) {
+          loaded.users = loaded.users.map((u) => {
+            let targetBranch = u.branchId;
+            if (targetBranch === 'br-branch2') targetBranch = 'br-mowan';
+            if (!targetBranch) targetBranch = loaded.branches[0]?.id || 'br-main';
+            return { ...u, branchId: targetBranch };
+          });
+        } else {
+          loaded.users = defaults.users;
+        }
+
+        if (!loaded.deletedRecords?.['items_all_cleared'] && (!loaded.items || loaded.items.length === 0)) {
+          loaded.items = PDF_CATALOG_ITEMS_1001.map((it) => ({
+            ...it,
+            companyId: 'COMP-000001',
+            branchId: loaded.activeBranchId || 'br-main',
+          }));
+        }
       } else {
-        const existingNames = new Set(loaded.items.map((i) => i.name.trim().toLowerCase()));
-        const missingPdfItems = PDF_CATALOG_ITEMS_1001.filter(
-          (pdfItem) => !existingNames.has(pdfItem.name.trim().toLowerCase())
-        ).map((it) => ({
-          ...it,
-          companyId: loaded.companyId || 'COMP-000001',
-          branchId: loaded.activeBranchId || 'br-main',
-        }));
-        if (missingPdfItems.length > 0) {
-          loaded.items = [...loaded.items, ...missingPdfItems];
+        // 🛡️ Strict Multi-Tenant Company Isolation: ZERO demo leakage onto non-COMP-000001 tenants
+        if (!loaded.branches || loaded.branches.length === 0) {
+          loaded.branches = [
+            {
+              id: `br-${resolvedCompId}-main`,
+              code: 'HQ-01',
+              name: loaded.settings?.companyName ? `الفرع الرئيسي - ${loaded.settings.companyName}` : 'الفرع الرئيسي',
+              location: loaded.settings?.address || 'المقر الرئيسي',
+              phone: loaded.settings?.phone1 || '',
+              isMain: true,
+              manager: 'المدير العام',
+            },
+          ];
+        }
+        if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
+          loaded.activeBranchId = loaded.branches[0].id;
+        }
+        if (!Array.isArray(loaded.items)) {
+          loaded.items = [];
         }
       }
 
@@ -502,7 +601,7 @@ export function loadAppData(companyId?: string): AppData {
       if (loaded.items && loaded.items.length > 0) {
         loaded.items = loaded.items.map((it) => ({
           ...it,
-          companyId: it.companyId || 'COMP-000001',
+          companyId: it.companyId || resolvedCompId,
           branchId: it.branchId || mainId,
         }));
       }
@@ -521,7 +620,7 @@ export function loadAppData(companyId?: string): AppData {
   } catch (e) {
     console.error('Failed to load data:', e);
   }
-  const fallbackDef = getDefaultData();
+  const fallbackDef = getDefaultData(companyId);
   const fallbackSync = syncMissingBranchItems(fallbackDef);
   fallbackDef.items = fallbackSync.items;
   return ensureProductPricesSynced(fallbackDef);
@@ -776,12 +875,9 @@ function getItemDeduplicationKey(item: any, collectionKey?: string): string | nu
       return `cash_tx_${item.date}_${item.type}_${normAmt}_${String(item.customerName || item.supplierName || '').trim()}_${String(item.note || '').trim()}`;
     }
   } else if (collectionKey === 'salesInvoices' || collectionKey === 'purchaseInvoices') {
-    const party = String(item.customerName || item.supplierName || '').trim().toLowerCase();
-    const date = String(item.date || '').trim();
-    const total = Number(item.total || 0).toFixed(2);
-    const count = Array.isArray(item.items) ? item.items.length : 0;
-    if (party && date && total) {
-      return `inv_sig_${date}_${party}_${total}_${count}`;
+    // Only deduplicate invoices by explicit sync/idempotency keys or exact id+timestamp — NEVER merge distinct invoices that happen to share date & total!
+    if (item.id !== undefined && item.id !== null && item.createdAt) {
+      return `inv_id_${item.id}_${String(item.createdAt).trim()}`;
     }
   }
   return null;

@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth, OperationType, handleFirestoreError, isFirestorePermissionError } from '../firebase';
 import { AppData } from '../types';
 import { firestoreShardingService } from './firestoreShardingService';
 
@@ -84,6 +84,9 @@ class FirebaseRealtimeService {
           console.warn('[Firebase Realtime] Listener error:', error);
           this.isConnected = false;
           this.notifyStatusListeners(false);
+          if (isFirestorePermissionError(error)) {
+            handleFirestoreError(error, OperationType.GET, `tenants/${cleanId}`);
+          }
           if (onError) onError(error);
         }
       );
@@ -110,6 +113,7 @@ class FirebaseRealtimeService {
 
     const payload: any = {
       companyId: cleanId,
+      ownerUid: auth?.currentUser?.uid || 'system',
       updatedAt: new Date().toISOString(),
       serverUpdatedAt: serverTimestamp(),
       lastModifiedDeviceId: this.getDeviceId(),
@@ -155,6 +159,9 @@ class FirebaseRealtimeService {
 
       return true;
     } catch (err) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.WRITE, `tenants/${cleanId}`);
+      }
       console.warn('[Firebase Realtime] Instant push failed:', err);
       return false;
     }
@@ -188,6 +195,9 @@ class FirebaseRealtimeService {
         return snap.data() as Partial<AppData>;
       }
     } catch (err) {
+      if (isFirestorePermissionError(err)) {
+        handleFirestoreError(err, OperationType.GET, `tenants/${cleanId}`);
+      }
       console.warn('[Firebase Realtime] Fetch once error:', err);
     }
     return null;

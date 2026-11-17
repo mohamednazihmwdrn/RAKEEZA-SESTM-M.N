@@ -274,13 +274,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return getBranchItems(appData.items, activeBranchId, mainBranchId);
   }, [appData.items, activeBranchId, mainBranchId]);
 
-  // Map raw Item array into Workspace DB format
+  // Map raw Item array into Workspace DB format (no fabricated fallback multipliers)
   const mapRawItemsToDb = (itemsList: Item[]) => {
     return itemsList.map((i, idx) => {
-      const bPrice = Number(i.purchasePrice || i.costPrice || 0);
-      const cPrice = Number(i.salePrice || i.price || (bPrice > 0 ? bPrice * 1.25 : 10));
-      const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || (cPrice > 0 ? cPrice * 0.90 : bPrice * 1.15));
-      const wbPrice = Number((i as any).wholesalePurchasePrice || (i as any).wholesaleBuyPrice || (bPrice > 0 ? bPrice * 0.95 : bPrice));
+      const bPrice = Number(i.avgCost || i.purchasePrice || i.costPrice || 0);
+      const cPrice = Number(i.salePrice || i.price || 0);
+      const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || 0);
+      const wbPrice = Number((i as any).wholesalePurchasePrice || (i as any).wholesaleBuyPrice || bPrice || 0);
       return {
         code: i.code || `ITM-${String(idx + 1).padStart(3, '0')}`,
         name: i.name,
@@ -297,12 +297,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     });
   };
 
-  // Safe fallback guarantees 1,001 catalog items are never 0
+  // Multi-company isolation: only legacy default company (COMP-000001) falls back to legacy catalog if missing
+  const isDefaultLegacyCompany = !appData.companyId || appData.companyId === 'COMP-000001';
+
   const rawAvailableItems = useMemo(() => {
     if (scopedBranchItems && scopedBranchItems.length > 0) return scopedBranchItems;
     if (appData.items && appData.items.length > 0) return appData.items;
-    return PDF_CATALOG_ITEMS_1001;
-  }, [scopedBranchItems, appData.items]);
+    return isDefaultLegacyCompany ? PDF_CATALOG_ITEMS_1001 : [];
+  }, [scopedBranchItems, appData.items, isDefaultLegacyCompany]);
 
   // ⚡ Stable items database state synced with memoized rawAvailableItems
   const [localItemsDatabase, setLocalItemsDatabase] = useState(() => mapRawItemsToDb(rawAvailableItems));
@@ -311,10 +313,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     setLocalItemsDatabase(mapRawItemsToDb(rawAvailableItems));
   }, [rawAvailableItems]);
 
-  // Auto-healing guard: run at most once if items was completely missing
+  // Auto-healing guard: run ONLY for legacy default company (never inject sample items into new companies)
   const hasRestoredItemsRef = useRef(false);
   useEffect(() => {
-    if ((!appData.items || appData.items.length === 0) && !hasRestoredItemsRef.current) {
+    if (isDefaultLegacyCompany && (!appData.items || appData.items.length === 0) && !hasRestoredItemsRef.current) {
       hasRestoredItemsRef.current = true;
       const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
         ...it,
@@ -326,7 +328,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         { action: 'restore_items', module: 'الأصناف', details: 'استعادة الأصناف التلقائية (1001 صنف)' }
       );
     }
-  }, [appData.items, activeBranchId]);
+  }, [appData.items, activeBranchId, isDefaultLegacyCompany]);
 
   // 🔍 Quick Search Bar on-screen state
   const [workspaceItemSearch, setWorkspaceItemSearch] = useState('');
@@ -358,48 +360,26 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return [];
   });
 
-  // Helper to extract item price based on active pricing tier
+  // Helper to extract item price based on active pricing tier (zero fabricated margins)
   const getItemPriceForTier = (dbItem: any, tier: 'cash' | 'wholesale' | 'buy'): number => {
     if (!dbItem) return 0;
     const cPrice = Number(dbItem.cashPrice || dbItem.salePrice || dbItem.normalSellingPrice || dbItem.price || 0);
-    const bPrice = Number(dbItem.buyPrice || dbItem.purchasePrice || dbItem.costPrice || 0);
+    const bPrice = Number(dbItem.buyPrice || dbItem.avgCost || dbItem.purchasePrice || dbItem.costPrice || 0);
     const wPrice = Number(dbItem.wholesalePrice || dbItem.wholesaleSellingPrice || 0);
 
     if (tier === 'cash') {
-      if (cPrice > 0) return cPrice;
-      if (bPrice > 0) return Math.round(bPrice * 1.25 * 100) / 100;
-      return 10;
+      return cPrice;
     }
 
     if (tier === 'wholesale') {
-      // If explicit wholesale price exists and differs from cash price, use it
-      if (wPrice > 0 && Math.abs(wPrice - cPrice) > 0.01) {
-        return wPrice;
-      }
-      // Otherwise calculate realistic wholesale price (10% discount from cash price, or 15% margin over cost)
-      if (cPrice > 0) {
-        return Math.round(cPrice * 0.90 * 100) / 100;
-      }
-      if (bPrice > 0) {
-        return Math.round(bPrice * 1.15 * 100) / 100;
-      }
-      return 9;
+      return wPrice > 0 ? wPrice : cPrice;
     }
 
     if (tier === 'buy') {
-      // If purchase price exists and differs from cash price, use it
-      if (bPrice > 0 && Math.abs(bPrice - cPrice) > 0.01) {
-        return bPrice;
-      }
-      // Otherwise estimate standard purchase cost (approx 75% of cash price)
-      if (cPrice > 0) {
-        return Math.round(cPrice * 0.75 * 100) / 100;
-      }
-      if (bPrice > 0) return bPrice;
-      return 7.5;
+      return bPrice;
     }
 
-    return cPrice || 10;
+    return cPrice;
   };
 
   // 🔄 تغيير نظام التسعير (سعر نقدي / سعر جملة / سعر شراء) يُحدث أسعار كافة الأصناف فوراً
@@ -449,15 +429,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           }
         }
 
-        // 3. الحساب التلقائي الواقعي في حال عدم وجود الصنف في القاعدة
+        // 3. الحفاظ على السعر الحالي أو الفعلي المسجل بدون نسب مصطنعة
         if (newPrice <= 0) {
           const baseP = Number(invItem.cashPrice || invItem.price || 0);
-          if (newTier === 'wholesale') {
-            newPrice = Math.round(baseP * 0.90 * 100) / 100;
-          } else if (newTier === 'buy') {
-            newPrice = Number(invItem.costPrice || Math.round(baseP * 0.75 * 100) / 100);
+          if (newTier === 'buy') {
+            newPrice = Number(invItem.costPrice || invItem.buyPrice || 0);
           } else {
-            newPrice = baseP > 0 ? baseP : 10;
+            newPrice = baseP;
           }
         }
 
@@ -821,10 +799,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         price: p,
         total: finalItemTotal,
         itemId: cardItem.itemId,
-        costPrice: cardItem.buyPrice,
-        cashPrice: cPrice > 0 ? cPrice : (p > 0 ? p : 10),
-        wholesalePrice: wPrice > 0 ? wPrice : Math.round((cPrice || p || 10) * 0.90 * 100) / 100,
-        buyPrice: bPrice > 0 ? bPrice : Math.round((cPrice || p || 10) * 0.75 * 100) / 100,
+        costPrice: cardItem.buyPrice || 0,
+        cashPrice: cPrice > 0 ? cPrice : p,
+        wholesalePrice: wPrice > 0 ? wPrice : (cPrice > 0 ? cPrice : p),
+        buyPrice: bPrice > 0 ? bPrice : 0,
       };
       return [...prev, newRow];
     });
@@ -1003,8 +981,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
 
     const buyP = parseFloat(hierBuyPrice) || 0;
-    const cashP = parseFloat(hierCashPrice) || (buyP > 0 ? buyP * 1.25 : 10);
-    const wholesaleP = parseFloat(hierWholesalePrice) || (cashP > 0 ? cashP * 0.90 : buyP * 1.15);
+    const cashP = parseFloat(hierCashPrice) || buyP;
+    const wholesaleP = parseFloat(hierWholesalePrice) || cashP;
     const qtyP = parseFloat(hierStock) || 0;
 
     const newItem = {
@@ -1017,7 +995,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       buyPrice: buyP,
       cashPrice: cashP,
       wholesalePrice: wholesaleP,
-      wholesaleBuyPrice: Number((buyP * 0.95).toFixed(2)),
+      wholesaleBuyPrice: buyP,
       itemId: `item_${Date.now()}`,
     };
 
@@ -1071,21 +1049,21 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
 
     const buyP = parseFloat(editBuyPrice) || 0;
-    const cashP = parseFloat(editCashPriceManual) || (buyP * 1.15);
-    const wholesaleP = parseFloat(editWholesalePriceManual) || (cashP * 0.95);
+    const cashP = parseFloat(editCashPriceManual) || buyP;
+    const wholesaleP = parseFloat(editWholesalePriceManual) || cashP;
     const qtyP = parseFloat(editQty) || 0;
 
     const newItem = {
       code,
       name,
-      group: editItemCategory || 'بويات',
+      group: editItemCategory || 'عام',
       company: 'عام',
       typeName: 'عام',
       stock: qtyP,
       buyPrice: buyP,
       cashPrice: cashP,
       wholesalePrice: wholesaleP,
-      wholesaleBuyPrice: Number((buyP * 0.95).toFixed(2)),
+      wholesaleBuyPrice: buyP,
       itemId: `item_${Date.now()}`,
     };
 
@@ -1140,6 +1118,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       ? 'split'
       : mapPaymentMethodToKey(finalPayments[0]?.method);
 
+    const paymentSplits = finalPayments
+      .filter((r) => (Number(r.amount) || 0) > 0)
+      .map((r) => ({
+        method: mapPaymentMethodToKey(r.method),
+        label: r.method,
+        amount: Number(r.amount) || 0,
+      }));
+
     if (isSale) {
       const invoiceData: SaleInvoice = {
         id: editingInvoice?.id || invoiceId,
@@ -1172,6 +1158,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         paidAmount: totals.paid,
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
+        paymentSplits,
         status: 'approved',
         branchId: activeBranchId,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
@@ -1220,6 +1207,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         paidAmount: totals.paid,
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
+        paymentSplits,
         status: 'approved',
         branchId: activeBranchId,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),

@@ -756,6 +756,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
         method: payMethod,
         branchId: selectedInvoice.branchId || selectedBranchId || appData.activeBranchId || 'main',
         user: currentUserObj,
+        syncId: `vouch_sale_${selectedInvoice.id}_inst_${Date.now()}`,
       });
 
       onUpdateData(updatedData, {

@@ -8,6 +8,7 @@ import {
   exportIncomeStatementToExcel,
   exportBalanceSheetToExcel,
 } from '../utils/excelExport';
+import { computeFinancialStatementsFromLedger } from '../utils/accountingEngine';
 
 interface OperationsViewProps {
   appData: AppData;
@@ -241,41 +242,32 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
     setJournalRef('');
   };
 
-  // Compile Financial Statements Calculations
-  const allSales = appData.salesInvoices.reduce((s, inv) => s + (inv.total || 0), 0);
-  const allSalesReturns = appData.salesInvoices.filter((i) => i.type.includes('return')).reduce((s, inv) => s + (inv.total || 0), 0);
-  const netSalesRevenue = allSales - allSalesReturns;
-
-  const totalCOGS = appData.salesInvoices.reduce((sum, inv) => {
-    const cost = inv.items.reduce((iSum, item) => {
-      const original = appData.items.find((i) => i.name === item.name);
-      return iSum + ((original?.purchasePrice || item.price * 0.75) * item.qty);
-    }, 0);
-    return sum + (inv.type.includes('return') ? -cost : cost);
-  }, 0);
-
-  const grossProfit = netSalesRevenue - totalCOGS;
-
-  const operatingExpenses = appData.cashTransactions
-    .filter((c) => c.type === 'pay' && !c.supplierName)
-    .reduce((sum, c) => sum + c.amount, 0);
-
-  const netIncome = grossProfit - operatingExpenses;
+  // Compile Real Ledger Financial Statements Calculations (zero fabricated fallbacks)
+  const statements = computeFinancialStatementsFromLedger(appData);
+  const allSales = statements.grossSales;
+  const allSalesReturns = statements.salesReturns;
+  const netSalesRevenue = statements.netSalesRevenue;
+  const totalCOGS = statements.totalCOGS;
+  const grossProfit = statements.grossProfit;
+  const operatingExpenses = statements.operatingExpenses;
+  const netIncome = statements.netIncome;
 
   // Balance Sheet Metrics
-  const totalCashBank = (appData.cashBox?.drawer || 0) + (appData.cashBox?.vodafone || 0) + (appData.cashBox?.instapay || 0) + (appData.cashBox?.bank || 0);
-  const totalReceivables = appData.customers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
-  const totalInventoryVal = appData.items.reduce((s, i) => s + (i.quantity * i.purchasePrice), 0);
-  const totalCurrentAssets = totalCashBank + totalReceivables + totalInventoryVal;
-  const totalFixedAssets = 35000; // estimated equipment/furniture
-  const totalAssets = totalCurrentAssets + totalFixedAssets;
+  const totalCashBank = statements.totalCashBank;
+  const totalReceivables = statements.totalReceivables;
+  const totalInventoryVal = statements.totalInventoryVal;
+  const totalCurrentAssets = statements.totalCurrentAssets;
+  const totalFixedAssets = statements.totalFixedAssets;
+  const totalAssets = statements.totalAssets;
 
-  const totalPayables = appData.suppliers.reduce((s, sObj) => s + (sObj.balance > 0 ? sObj.balance : 0), 0);
-  const totalVatPayable = appData.salesInvoices.reduce((s, i) => s + (i.tax || 0), 0) - appData.purchaseInvoices.reduce((s, i) => s + (i.tax || 0), 0);
-  const totalLiabilities = totalPayables + (totalVatPayable > 0 ? totalVatPayable : 0);
+  const totalPayables = statements.totalPayables;
+  const totalVatPayable = statements.totalVatPayable;
+  const totalLiabilities = statements.totalLiabilities;
 
-  const capital = 100000;
-  const totalEquity = capital + netIncome;
+  const capital = statements.capital;
+  const retainedEarnings = statements.retainedEarnings;
+  const partnerCurrent = statements.partnerCurrent;
+  const totalEquity = statements.totalEquity;
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col space-y-6">
@@ -742,61 +734,48 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
 
           {/* Mobile Trial Balance Cards (< md) */}
           <div className="block md:hidden space-y-3">
-            {appData.accounts
-              .filter((a) => !a.isParent)
-              .map((acc) => {
-                let d = 0;
-                let c = 0;
-                if (acc.code === '1101') d = appData.cashBox?.drawer || 0;
-                if (acc.code === '1102') d = appData.cashBox?.vodafone || 0;
-                if (acc.code === '1103') d = appData.cashBox?.instapay || 0;
-                if (acc.code === '1104') d = appData.cashBox?.bank || 0;
-                if (acc.code === '1105') d = totalReceivables;
-                if (acc.code === '1106') d = totalInventoryVal;
-                if (acc.code === '2101') c = totalPayables;
-                if (acc.code === '4101') c = allSales;
-                if (acc.code === '5101') d = totalCOGS;
-                if (acc.code === '5204') d = operatingExpenses;
+            {statements.trialBalanceRows.map((row) => {
+              const d = row.debit;
+              const c = row.credit;
+              const bal = row.balance;
 
-                const bal = (acc.type === 'asset' || acc.type === 'expense') ? d - c : c - d;
+              return (
+                <div key={row.code} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-indigo-900 bg-white border border-slate-200 px-2 py-0.5 rounded text-xs">
+                        {row.code}
+                      </span>
+                      <span className="font-bold text-slate-900">{row.name}</span>
+                    </div>
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold">
+                      {row.type}
+                    </span>
+                  </div>
 
-                return (
-                  <div key={acc.code} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold text-indigo-900 bg-white border border-slate-200 px-2 py-0.5 rounded text-xs">
-                          {acc.code}
-                        </span>
-                        <span className="font-bold text-slate-900">{acc.name}</span>
-                      </div>
-                      <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold">
-                        {acc.type}
+                  <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-lg border border-slate-200 text-center">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">مدين:</span>
+                      <span className="font-mono font-semibold text-emerald-700">
+                        {d > 0 ? d.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
                       </span>
                     </div>
-
-                    <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-lg border border-slate-200 text-center">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">مدين:</span>
-                        <span className="font-mono font-semibold text-emerald-700">
-                          {d > 0 ? d.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">دائن:</span>
-                        <span className="font-mono font-semibold text-rose-700">
-                          {c > 0 ? c.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">الرصيد:</span>
-                        <span className="font-mono font-bold text-slate-900">
-                          {bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">دائن:</span>
+                      <span className="font-mono font-semibold text-rose-700">
+                        {c > 0 ? c.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">الرصيد:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
           </div>
 
           {/* Desktop Trial Balance Table (>= md) */}
@@ -813,46 +792,49 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {appData.accounts
-                  .filter((a) => !a.isParent)
-                  .map((acc) => {
-                    let d = 0;
-                    let c = 0;
-                    if (acc.code === '1101') d = appData.cashBox?.drawer || 0;
-                    if (acc.code === '1102') d = appData.cashBox?.vodafone || 0;
-                    if (acc.code === '1103') d = appData.cashBox?.instapay || 0;
-                    if (acc.code === '1104') d = appData.cashBox?.bank || 0;
-                    if (acc.code === '1105') d = totalReceivables;
-                    if (acc.code === '1106') d = totalInventoryVal;
-                    if (acc.code === '2101') c = totalPayables;
-                    if (acc.code === '4101') c = allSales;
-                    if (acc.code === '5101') d = totalCOGS;
-                    if (acc.code === '5204') d = operatingExpenses;
+                {statements.trialBalanceRows.map((row) => {
+                  const d = row.debit;
+                  const c = row.credit;
+                  const bal = row.balance;
 
-                    const bal = (acc.type === 'asset' || acc.type === 'expense') ? d - c : c - d;
-
-                    return (
-                      <tr key={acc.code} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono font-bold text-indigo-900">{acc.code}</td>
-                        <td className="p-3 font-semibold">{acc.name}</td>
-                        <td className="p-3">
-                          <span className="text-[11px] bg-slate-100 px-2 py-0.5 rounded font-bold">
-                            {acc.type}
-                          </span>
-                        </td>
-                        <td className="p-3 font-mono font-semibold text-emerald-700">
-                          {d > 0 ? d.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                        <td className="p-3 font-mono font-semibold text-rose-700">
-                          {c > 0 ? c.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
-                        </td>
-                        <td className="p-3 font-mono font-bold text-slate-900">
-                          {bal.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  return (
+                    <tr key={row.code} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-indigo-900">{row.code}</td>
+                      <td className="p-3 font-semibold">{row.name}</td>
+                      <td className="p-3">
+                        <span className="text-[11px] bg-slate-100 px-2 py-0.5 rounded font-bold">
+                          {row.type}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono font-semibold text-emerald-700">
+                        {d > 0 ? d.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                      </td>
+                      <td className="p-3 font-mono font-semibold text-rose-700">
+                        {c > 0 ? c.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '-'}
+                      </td>
+                      <td className="p-3 font-mono font-bold text-slate-900">
+                        {bal.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                <tr>
+                  <td colSpan={3} className="p-3">
+                    إجمالي ميزان المراجعة ({statements.isTrialBalanced ? '✅ متوازن' : '⚠️ فرق تسوية'})
+                  </td>
+                  <td className="p-3 font-mono text-emerald-800">
+                    {statements.trialTotalDebit.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                  </td>
+                  <td className="p-3 font-mono text-rose-800">
+                    {statements.trialTotalCredit.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                  </td>
+                  <td className="p-3 font-mono text-slate-900">
+                    {(statements.trialTotalDebit - statements.trialTotalCredit).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -1042,7 +1024,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                 </div>
                 <div className="flex justify-between pr-3 text-slate-500">
                   <span>• التزامات ضريبية مستحقة</span>
-                  <span>{(totalVatPayable > 0 ? totalVatPayable : 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>
+                  <span>{totalVatPayable.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>
                 </div>
 
                 <div className="flex justify-between font-bold text-purple-900 pt-2">
@@ -1053,6 +1035,18 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                   <span>• رأس المال المستثمر</span>
                   <span>{capital.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>
                 </div>
+                {retainedEarnings !== 0 && (
+                  <div className="flex justify-between pr-3 text-slate-500">
+                    <span>• الأرباح والخسائر المرحلة</span>
+                    <span>{retainedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>
+                  </div>
+                )}
+                {partnerCurrent !== 0 && (
+                  <div className="flex justify-between pr-3 text-slate-500">
+                    <span>• جاري الشركاء</span>
+                    <span>{partnerCurrent.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>
+                  </div>
+                )}
                 <div className="flex justify-between pr-3 text-slate-500">
                   <span>• أرباح العام الحالي</span>
                   <span>{netIncome.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span>

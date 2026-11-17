@@ -1,6 +1,7 @@
 import { AppData } from '../types';
 import { saveTenantDataCloud } from './cloudApi';
 import { realtimeSync } from './realtimeSync';
+import { loadAppData, mergeAppDataMonotonically } from '../utils/storage';
 
 export interface OfflineMutation {
   id: string;
@@ -246,23 +247,31 @@ class OfflineSyncManager {
     this.notifySubscribers();
 
     try {
-      // Find latest combined state
-      let combinedData: Partial<AppData> = forcedData || {};
-      if (!forcedData && queue.length > 0) {
-        // Sequentially fold all queued mutations from oldest to newest
+      // Fold queued mutations monotonically so offline invoices/vouchers/customers never overwrite each other
+      let combinedData: AppData = loadAppData(cleanId);
+      if (forcedData) {
+        combinedData = mergeAppDataMonotonically(combinedData, forcedData, false);
+      } else if (queue.length > 0) {
         for (const mut of queue) {
           if (mut.data) {
-            combinedData = { ...combinedData, ...mut.data };
+            combinedData = mergeAppDataMonotonically(combinedData, mut.data, false, mut.actionInfo);
           }
         }
       }
 
-      // 1. Sync to Authoritative Express Cloud Backend
-      const saveRes = await saveTenantDataCloud(combinedData, cleanId, {
-        action: 'مزامنة تلقائية للعمليات دون اتصال',
-        module: 'المزامنة السحابية',
-        details: `مزامنة ${queue.length} عملية مخزنة محلياً بعد استعادة الاتصال`,
-      });
+      const operationId = queue[queue.length - 1]?.id || `flush-${Date.now()}`;
+
+      // 1. Sync to Authoritative Express Cloud Backend with idempotency operationId
+      const saveRes = await saveTenantDataCloud(
+        combinedData,
+        cleanId,
+        {
+          action: 'مزامنة تلقائية للعمليات دون اتصال',
+          module: 'المزامنة السحابية',
+          details: `مزامنة ${queue.length} عملية مخزنة محلياً بعد استعادة الاتصال`,
+        },
+        operationId
+      );
 
       if (!saveRes.success) {
         throw new Error(saveRes.error || 'فشلت المزامنة مع الخادم السحابي');

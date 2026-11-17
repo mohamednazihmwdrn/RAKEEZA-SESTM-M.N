@@ -29,6 +29,14 @@ import {
   regenerateCompanyApiKey,
   updateCompanyProfileCloud,
   findCompanyByAnyIdentifier,
+  sanitizeCompanyForClient,
+  sanitizeAppDataForClient,
+  getPersistedCompanyVersion,
+  upsertDeviceSession,
+  listCompanyDevices,
+  revokeDeviceSession,
+  restoreDeviceSession,
+  getOwnerSystemHealth,
 } from './server/cloudDb';
 
 async function startServer() {
@@ -51,7 +59,7 @@ async function startServer() {
     } else {
       res.header(
         'Access-Control-Allow-Headers',
-        'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key, x-apk-key, x-owner-token, x-owner-authorization'
+        'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key, x-apk-key, x-owner-token, x-owner-authorization, x-device-id, x-device-name, x-device-platform'
       );
     }
     if (req.method === 'OPTIONS') {
@@ -65,6 +73,13 @@ async function startServer() {
 
   // Initialize Cloud Database on boot
   initCloudDatabase();
+
+  const extractDeviceContext = (req: express.Request) => ({
+    deviceId: ((req.headers['x-device-id'] as string) || (req.body?.deviceId as string) || (req.query.deviceId as string) || '').trim() || undefined,
+    deviceName: ((req.headers['x-device-name'] as string) || (req.body?.deviceName as string) || (req.headers['user-agent'] as string)?.slice(0, 80) || '').trim() || undefined,
+    platform: ((req.headers['x-device-platform'] as string) || (req.body?.platform as string) || 'Web').trim(),
+    ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || undefined,
+  });
 
   // ----------------------------------------------------
   // Middleware: Extract & Verify Token or External API/APK Key
@@ -82,7 +97,7 @@ async function startServer() {
       if (company) {
         (req as any).auth = {
           valid: true,
-          company,
+          company: sanitizeCompanyForClient(company),
           session: {
             token: `api_${company.id}`,
             userId: `u-${company.id}-api`,
@@ -102,14 +117,40 @@ async function startServer() {
     // 2. Standard Session Token
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const devCtx = extractDeviceContext(req);
 
     if (!token) {
       return res.status(401).json({ success: false, error: 'غير مصرح: يرجى تسجيل الدخول أو إرسال مفتاح الـ API.' });
     }
 
-    const verification = validateSession(token);
+    const verification = validateSession(token, devCtx.deviceId);
     if (!verification.valid || !verification.session) {
-      return res.status(401).json({ success: false, error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.' });
+      return res.status(401).json({
+        success: false,
+        code: verification.revoked ? 'device_revoked' : 'session_invalid',
+        error: verification.error || 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.',
+      });
+    }
+
+    if (devCtx.deviceId && verification.session.companyId !== 'OWNER') {
+      const devCheck = upsertDeviceSession({
+        companyId: verification.session.companyId,
+        userId: verification.session.userId,
+        userName: verification.session.userName,
+        userCode: verification.session.userCode,
+        role: verification.session.role,
+        deviceId: devCtx.deviceId,
+        deviceName: devCtx.deviceName,
+        platform: devCtx.platform,
+        ip: devCtx.ip,
+      });
+      if (!devCheck.allowed) {
+        return res.status(401).json({
+          success: false,
+          code: 'device_revoked',
+          error: devCheck.error || 'تم إيقاف هذا الجهاز من قِبل مدير المنشأة.',
+        });
+      }
     }
 
     (req as any).auth = verification;
@@ -141,9 +182,13 @@ async function startServer() {
   };
 
   const broadcastSyncUpdate = (companyId: string, payload: any) => {
+    const safePayload =
+      payload && payload.data
+        ? { ...payload, data: sanitizeAppDataForClient(payload.data) }
+        : payload;
     const keys = getCompanySyncKeys(companyId);
     const sentResponses = new Set<express.Response>();
-    const msg = `data: ${JSON.stringify(payload)}\n\n`;
+    const msg = `data: ${JSON.stringify(safePayload)}\n\n`;
 
     keys.forEach((k) => {
       const clients = sseCompanyClients.get(k);
@@ -216,7 +261,7 @@ async function startServer() {
   // ----------------------------------------------------
   app.post('/api/auth/login', (req, res) => {
     const { companyId, username, password } = req.body;
-    const result = authenticateUser(companyId, username, password);
+    const result = authenticateUser(companyId, username, password, extractDeviceContext(req));
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -323,6 +368,7 @@ async function startServer() {
   // 📱 Register Device & New Company (First-time binding)
   app.post('/api/company/register-device', (req, res) => {
     const { companyName, adminEmail, adminUsername, adminPassword, branchName, registrationLink } = req.body;
+    const devCtx = extractDeviceContext(req);
     const result = registerDeviceAndCompany({
       companyName,
       adminEmail,
@@ -330,6 +376,10 @@ async function startServer() {
       adminPassword,
       branchName,
       registrationLink,
+      deviceId: devCtx.deviceId,
+      deviceName: devCtx.deviceName,
+      platform: devCtx.platform,
+      ip: devCtx.ip,
     });
 
     if (!result.success) {
@@ -418,14 +468,19 @@ async function startServer() {
   app.get('/api/auth/session', (req, res) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+    const devCtx = extractDeviceContext(req);
 
     if (!token) {
       return res.status(401).json({ valid: false, error: 'لا يوجد رمز مصادقة' });
     }
 
-    const sessionData = validateSession(token);
+    const sessionData = validateSession(token, devCtx.deviceId);
     if (!sessionData.valid) {
-      return res.status(401).json({ valid: false, error: 'رمز الجلسة غير صالح' });
+      return res.status(401).json({
+        valid: false,
+        code: sessionData.revoked ? 'device_revoked' : 'session_invalid',
+        error: sessionData.error || 'رمز الجلسة غير صالح',
+      });
     }
 
     res.json(sessionData);
@@ -447,20 +502,21 @@ async function startServer() {
     const auth = (req as any).auth;
     let targetCompanyId = auth.session.companyId;
 
-    // Owner can inspect any company via query param
     if (auth.session.role === 'owner' && req.query.companyId) {
       targetCompanyId = req.query.companyId as string;
     }
 
     if (targetCompanyId === 'OWNER') {
-      targetCompanyId = 'COMP-000001'; // Default viewing tenant for owner
+      targetCompanyId = 'COMP-000001';
     }
 
-    const data = getTenantDataStrict(targetCompanyId);
+    const data = sanitizeAppDataForClient(getTenantDataStrict(targetCompanyId));
+    const version = getPersistedCompanyVersion(targetCompanyId);
     res.json({
       success: true,
       companyId: targetCompanyId,
-      company: auth.company,
+      version,
+      company: sanitizeCompanyForClient(auth.company),
       subscription: auth.subscription,
       data,
     });
@@ -478,7 +534,6 @@ async function startServer() {
       });
     }
 
-    // Owner can edit any company
     if (auth.session.role === 'owner' && req.body.companyId) {
       targetCompanyId = req.body.companyId;
     }
@@ -494,15 +549,13 @@ async function startServer() {
       role: auth.session.role,
     };
 
-    // 🔒 Security Guard: Prevent privilege escalation by non-admins
     const isMasterAdmin =
       auth.session.role === 'owner' ||
       auth.session.role === 'company_admin' ||
       auth.session.role === 'admin';
 
-    const incomingData = req.body.data;
+    const incomingData = req.body.data || {};
     if (incomingData && !isMasterAdmin) {
-      // Non-admins cannot alter users list, roles, or security settings
       const currentData = getTenantDataStrict(targetCompanyId);
       if (currentData) {
         incomingData.users = currentData.users;
@@ -510,17 +563,20 @@ async function startServer() {
       }
     }
 
-    const saved = saveTenantDataStrict(targetCompanyId, incomingData, actorUser, req.body.actionInfo);
-    
-    // Increment version & record last action for instant synchronization
-    let curVer = 1;
-    const keys = getCompanySyncKeys(targetCompanyId);
-    keys.forEach((k) => {
-      const v = companyDataVersions.get(k) || 1;
-      if (v > curVer) curVer = v;
-    });
-    const nextVer = curVer + 1;
-    
+    const operationId = typeof req.body.operationId === 'string' ? req.body.operationId.trim() : undefined;
+    const baseVersion = typeof req.body.baseVersion === 'number' ? req.body.baseVersion : undefined;
+
+    const saveRes = saveTenantDataStrict(
+      targetCompanyId,
+      incomingData,
+      actorUser,
+      req.body.actionInfo,
+      { operationId, baseVersion }
+    );
+
+    const nextVer = saveRes.version;
+    const safeSaved = sanitizeAppDataForClient(saveRes.data);
+
     const lastAction = {
       version: nextVer,
       timestamp: new Date().toISOString(),
@@ -533,18 +589,94 @@ async function startServer() {
     };
     setCompanyVersion(targetCompanyId, nextVer, lastAction);
 
-    // Broadcast instant sync to all other users/codes of this company across all alias keys
-    broadcastSyncUpdate(targetCompanyId, {
-      type: 'REALTIME_SYNC',
+    if (!saveRes.deduplicated) {
+      broadcastSyncUpdate(targetCompanyId, {
+        type: 'REALTIME_SYNC',
+        companyId: targetCompanyId,
+        version: nextVer,
+        actorUser,
+        actionInfo: lastAction.actionInfo,
+        data: safeSaved,
+        timestamp: lastAction.timestamp,
+      });
+    }
+
+    res.json({
+      success: true,
       companyId: targetCompanyId,
       version: nextVer,
-      actorUser,
-      actionInfo: lastAction.actionInfo,
-      data: saved,
-      timestamp: lastAction.timestamp,
+      deduplicated: Boolean(saveRes.deduplicated),
+      data: safeSaved,
+    });
+  });
+
+  // ----------------------------------------------------
+  // Device & Active Sessions Management (Enterprise Multi-Device)
+  // ----------------------------------------------------
+  app.get('/api/tenant/devices', requireAuth, (req, res) => {
+    const auth = (req as any).auth;
+    let targetCompanyId = auth.session.companyId;
+    if (auth.session.role === 'owner' && req.query.companyId) {
+      targetCompanyId = req.query.companyId as string;
+    }
+    if (targetCompanyId === 'OWNER') targetCompanyId = 'COMP-000001';
+    const devices = listCompanyDevices(targetCompanyId);
+    res.json({ success: true, companyId: targetCompanyId, devices });
+  });
+
+  app.post('/api/tenant/devices/:deviceId/revoke', requireAuth, (req, res) => {
+    const auth = (req as any).auth;
+    const isAdmin =
+      auth.session.role === 'owner' ||
+      auth.session.role === 'company_admin' ||
+      auth.session.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'صلاحية إيقاف الأجهزة مخصصة لمدير المنشأة أو المالك فقط.' });
+    }
+    let targetCompanyId = auth.session.companyId;
+    if (auth.session.role === 'owner' && req.body?.companyId) {
+      targetCompanyId = req.body.companyId;
+    }
+    if (targetCompanyId === 'OWNER') targetCompanyId = 'COMP-000001';
+
+    const { deviceId } = req.params;
+    const result = revokeDeviceSession(targetCompanyId, decodeURIComponent(deviceId), auth.session.userName);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    broadcastSyncUpdate(targetCompanyId, {
+      type: 'FORCE_LOGOUT',
+      companyId: targetCompanyId,
+      deviceId: result.device?.deviceId,
+      reason: 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.',
+      timestamp: new Date().toISOString(),
     });
 
-    res.json({ success: true, companyId: targetCompanyId, version: nextVer, data: saved });
+    res.json({ success: true, device: result.device, devices: listCompanyDevices(targetCompanyId) });
+  });
+
+  app.post('/api/tenant/devices/:deviceId/restore', requireAuth, (req, res) => {
+    const auth = (req as any).auth;
+    const isAdmin =
+      auth.session.role === 'owner' ||
+      auth.session.role === 'company_admin' ||
+      auth.session.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'صلاحية تفعيل الأجهزة مخصصة لمدير المنشأة أو المالك فقط.' });
+    }
+    let targetCompanyId = auth.session.companyId;
+    if (auth.session.role === 'owner' && req.body?.companyId) {
+      targetCompanyId = req.body.companyId;
+    }
+    if (targetCompanyId === 'OWNER') targetCompanyId = 'COMP-000001';
+
+    const { deviceId } = req.params;
+    const result = restoreDeviceSession(targetCompanyId, decodeURIComponent(deviceId));
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    res.json({ success: true, device: result.device, devices: listCompanyDevices(targetCompanyId) });
   });
 
   // ----------------------------------------------------
@@ -603,15 +735,21 @@ async function startServer() {
   // ----------------------------------------------------
   app.get('/api/tenant/sync-stream', (req, res) => {
     const token = (req.query.token as string) || (req.headers.authorization || '').replace('Bearer ', '');
+    const deviceId = (req.query.deviceId as string) || (req.headers['x-device-id'] as string) || undefined;
     if (!token) {
       return res.status(401).end();
     }
-    const verification = validateSession(token);
+    const verification = validateSession(token, deviceId);
     if (!verification.valid || !verification.session) {
       return res.status(401).end();
     }
 
-    const rawCompanyId = verification.session.companyId === 'OWNER' ? 'COMP-000001' : verification.session.companyId;
+    let rawCompanyId = verification.session.companyId;
+    if (verification.session.role === 'owner' && req.query.companyId) {
+      rawCompanyId = req.query.companyId as string;
+    } else if (rawCompanyId === 'OWNER') {
+      rawCompanyId = 'COMP-000001';
+    }
     const keys = getCompanySyncKeys(rawCompanyId);
 
     // Setup SSE headers
@@ -628,7 +766,7 @@ async function startServer() {
       sseCompanyClients.get(k)!.add(res);
     });
 
-    let currentVersion = 1;
+    let currentVersion = getPersistedCompanyVersion(rawCompanyId);
     keys.forEach((k) => {
       const v = companyDataVersions.get(k) || 1;
       if (v > currentVersion) currentVersion = v;
@@ -636,7 +774,6 @@ async function startServer() {
 
     res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: currentVersion, companyId: rawCompanyId })}\n\n`);
 
-    // Keep-alive ping interval
     const keepAlive = setInterval(() => {
       try {
         res.write(': ping\n\n');
@@ -654,36 +791,21 @@ async function startServer() {
   });
 
   // ----------------------------------------------------
-  // Lightweight Polling Fallback for Real-time Synchronization
+  // Lightweight Polling Fallback for Real-time Synchronization (Authenticated)
   // ----------------------------------------------------
-  app.get('/api/tenant/sync-check', (req, res) => {
-    let companyId = '';
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.query.token as string);
+  app.get('/api/tenant/sync-check', requireAuth, (req, res) => {
+    const auth = (req as any).auth;
+    let companyId = auth.session.companyId;
 
-    if (token) {
-      const verification = validateSession(token);
-      if (verification.valid && verification.session) {
-        companyId = verification.session.companyId;
-      }
+    if (auth.session.role === 'owner' && req.query.companyId) {
+      companyId = req.query.companyId as string;
     }
-
-    if (!companyId && req.query.companyId) {
-      const db = getCloudDatabase();
-      const { company } = findCompanyByAnyIdentifier(db, req.query.companyId as string);
-      if (company) {
-        companyId = company.id;
-      }
-    }
-
-    if (!companyId) {
+    if (companyId === 'OWNER') {
       companyId = 'COMP-000001';
     }
 
-    if (companyId === 'OWNER') companyId = 'COMP-000001';
-
     const keys = getCompanySyncKeys(companyId);
-    let serverVersion = 1;
+    let serverVersion = getPersistedCompanyVersion(companyId);
     keys.forEach((k) => {
       const v = companyDataVersions.get(k) || 1;
       if (v > serverVersion) serverVersion = v;
@@ -693,7 +815,7 @@ async function startServer() {
     const lastAction = companyLastActions.get(companyId) || companyLastActions.get(keys[0]);
 
     if (serverVersion > clientVersion) {
-      const data = getTenantDataStrict(companyId);
+      const data = sanitizeAppDataForClient(getTenantDataStrict(companyId));
       return res.json({
         hasUpdate: true,
         version: serverVersion,
@@ -857,11 +979,11 @@ async function startServer() {
           details: `استلام طلب توريد جديد #${orderRef} بقيمة ${vSubtotal.toFixed(2)}`,
         };
 
-        saveTenantDataStrict(targetId, { quotations: updatedQuotations }, actor, actionInfo);
+        const saveRes = saveTenantDataStrict(targetId, { quotations: updatedQuotations }, actor, actionInfo);
 
         // Broadcast real-time SSE update so company cashiers/managers see and hear order alert immediately
-        const nextVer = (companyDataVersions.get(targetId) || 1) + 1;
-        companyDataVersions.set(targetId, nextVer);
+        const nextVer = saveRes.version;
+        setCompanyVersion(targetId, nextVer);
         broadcastSyncUpdate(targetId, {
           type: 'REALTIME_SYNC',
           companyId: targetId,
@@ -959,10 +1081,14 @@ async function startServer() {
   // ----------------------------------------------------
   // 6. Owner Panel Cloud APIs (Owner Only)
   // ----------------------------------------------------
+  app.get('/api/owner/health', requireOwner, (req, res) => {
+    res.json({ success: true, health: getOwnerSystemHealth() });
+  });
+
   app.get('/api/owner/companies', requireOwner, (req, res) => {
     const db = getCloudDatabase();
     res.json({
-      companies: db.companies,
+      companies: (db.companies || []).map((c) => sanitizeCompanyForClient(c)),
       plans: db.plans,
       trialRegistry: db.trialRegistry,
       licenses: db.licenses,
@@ -985,7 +1111,7 @@ async function startServer() {
     if (!updated) {
       return res.status(404).json({ success: false, error: 'الشركة غير موجودة' });
     }
-    res.json({ success: true, company: updated });
+    res.json({ success: true, company: sanitizeCompanyForClient(updated) });
   });
 
   app.delete('/api/owner/companies/:id', requireOwner, (req, res) => {
@@ -994,7 +1120,11 @@ async function startServer() {
     if (!result.success) {
       return res.status(400).json(result);
     }
-    res.json(result);
+    res.json({
+      ...result,
+      deletedCompany: result.deletedCompany ? sanitizeCompanyForClient(result.deletedCompany) : undefined,
+      remainingCompanies: result.remainingCompanies?.map((c) => sanitizeCompanyForClient(c)),
+    });
   });
 
   app.post('/api/owner/system-cleanup', requireOwner, (req, res) => {

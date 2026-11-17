@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { AccountNode, Item } from '../types';
+import { computeFinancialStatementsFromLedger } from './accountingEngine';
 
 export interface ExcelColumn<T = any> {
   header: string;
@@ -149,7 +150,7 @@ export function exportToExcel<T = any>({
  * Export Trial Balance (ميزان المراجعة) with standard accounting balance checks
  */
 export function exportTrialBalanceToExcel({
-  accounts,
+  accounts: _accounts,
   companyName = 'منظومة ركيزة RAKEEZA ERP',
   appData,
 }: {
@@ -158,20 +159,7 @@ export function exportTrialBalanceToExcel({
   appData: any;
 }) {
   const todayStr = new Date().toISOString().split('T')[0];
-
-  // Calculate totals
-  const allSales = (appData.salesInvoices || []).reduce((sum: number, inv: any) => sum + (inv.total || 0), 0);
-  const allPurchases = (appData.purchaseInvoices || []).reduce((sum: number, inv: any) => sum + (inv.total || 0), 0);
-  const totalReceivables = (appData.customers || []).reduce((sum: number, c: any) => sum + (c.balance || 0), 0);
-  const totalPayables = (appData.suppliers || []).reduce((sum: number, s: any) => sum + (s.balance || 0), 0);
-  const totalInventoryVal = (appData.items || []).reduce(
-    (sum: number, i: any) => sum + (i.quantity || 0) * (i.purchasePrice || 0),
-    0
-  );
-  const operatingExpenses = (appData.cashTransactions || [])
-    .filter((c: any) => c.type === 'pay' && !c.supplierName)
-    .reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
-  const totalCOGS = allPurchases * 0.85;
+  const statements = computeFinancialStatementsFromLedger(appData);
 
   const rows: any[][] = [];
   rows.push([companyName]);
@@ -182,42 +170,30 @@ export function exportTrialBalanceToExcel({
   // Header
   rows.push(['كود الحساب', 'اسم الحساب المحاسبي', 'طبيعة الحساب', 'مجموع المدين (Debit) ج.م', 'مجموع الدائن (Credit) ج.م', 'رصيد الحساب النهائي ج.م']);
 
-  let totalDebitSum = 0;
-  let totalCreditSum = 0;
-
-  const subAccounts = accounts.filter((a) => !a.isParent);
-  subAccounts.forEach((acc) => {
-    let d = 0;
-    let c = 0;
-    if (acc.code === '1101') d = appData.cashBox?.drawer || 0;
-    if (acc.code === '1102') d = appData.cashBox?.vodafone || 0;
-    if (acc.code === '1103') d = appData.cashBox?.instapay || 0;
-    if (acc.code === '1104') d = appData.cashBox?.bank || 0;
-    if (acc.code === '1105') d = totalReceivables;
-    if (acc.code === '1106') d = totalInventoryVal;
-    if (acc.code === '2101') c = totalPayables;
-    if (acc.code === '4101') c = allSales;
-    if (acc.code === '5101') d = totalCOGS;
-    if (acc.code === '5204') d = operatingExpenses;
-
-    const bal = acc.type === 'asset' || acc.type === 'expense' ? d - c : c - d;
-
-    totalDebitSum += d;
-    totalCreditSum += c;
-
+  statements.trialBalanceRows.forEach((row) => {
     rows.push([
-      acc.code,
-      acc.name,
-      acc.type === 'asset' ? 'أصول (Assets)' : acc.type === 'liability' ? 'خصوم (Liabilities)' : acc.type === 'equity' ? 'حقوق ملكية (Equity)' : acc.type === 'revenue' ? 'إيرادات (Revenue)' : 'مصروفات (Expenses)',
-      d > 0 ? d : 0,
-      c > 0 ? c : 0,
-      bal,
+      row.code,
+      row.name,
+      row.type === 'asset' ? 'أصول (Assets)' : row.type === 'liability' ? 'خصوم (Liabilities)' : row.type === 'equity' ? 'حقوق ملكية (Equity)' : row.type === 'revenue' ? 'إيرادات (Revenue)' : 'مصروفات (Expenses)',
+      row.debit > 0 ? row.debit : 0,
+      row.credit > 0 ? row.credit : 0,
+      row.balance,
     ]);
   });
 
   rows.push([]);
-  rows.push(['الإجمالي الكلي', 'توازن ميزان المراجعة المحاسبي', '', totalDebitSum, totalCreditSum, totalDebitSum - totalCreditSum]);
-  rows.push(['حالة التوازن:', Math.abs(totalDebitSum - totalCreditSum) < 1 ? '✅ ميزان المراجعة متوازن تماماً' : '⚠️ يوجد فرق تسوية قيد المراجعة']);
+  rows.push([
+    'الإجمالي الكلي',
+    'توازن ميزان المراجعة المحاسبي',
+    '',
+    statements.trialTotalDebit,
+    statements.trialTotalCredit,
+    statements.trialTotalDebit - statements.trialTotalCredit,
+  ]);
+  rows.push([
+    'حالة التوازن:',
+    statements.isTrialBalanced ? '✅ ميزان المراجعة متوازن تماماً' : '⚠️ يوجد فرق تسوية قيد المراجعة',
+  ]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   if (!ws['!views']) ws['!views'] = [];

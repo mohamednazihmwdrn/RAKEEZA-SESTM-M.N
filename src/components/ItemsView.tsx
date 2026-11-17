@@ -161,27 +161,26 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setCurrentPage(1);
   }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter, activeBranchId]);
 
-  // 🛡️ Auto-recovery: If appData.items is empty for any reason, restore all 1,001 items safely once
+  // 🛡️ Auto-recovery: Only restore legacy 1,001 PDF catalog items for the legacy COMP-000001 tenant if never cleared
   const hasRestoredPdfItemsRef = useRef(false);
   useEffect(() => {
-    if ((!appData.items || appData.items.length === 0) && !hasRestoredPdfItemsRef.current) {
+    const isLegacyComp1 = !appData.companyId || appData.companyId.trim().toUpperCase() === 'COMP-000001';
+    const isCleared = Boolean(appData.deletedRecords?.['items_all_cleared']);
+    if (isLegacyComp1 && !isCleared && (!appData.items || appData.items.length === 0) && !hasRestoredPdfItemsRef.current) {
       hasRestoredPdfItemsRef.current = true;
       const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
         ...it,
-        companyId: appData.companyId || 'COMP-000001',
+        companyId: 'COMP-000001',
         branchId: activeBranchId,
       }));
       const updatedData = { ...appData, items: restored };
-      if (updatedData.deletedRecords) {
-        delete updatedData.deletedRecords['items_all_cleared'];
-      }
       onUpdateData(updatedData, {
         action: 'auto_restore_pdf_items',
         module: 'الأصناف والمخزون',
-        details: 'استعادة تلقائية لكافة أصناف الـ PDF الـ 1,001 صنف',
+        details: 'استعادة تلقائية لأصناف الكتالوج المبدئية للشركة الأولى',
       });
     }
-  }, [appData.items, activeBranchId]);
+  }, [appData.items, appData.companyId, activeBranchId]);
 
   // Unique categories for the active branch items
   const uniqueCategories = useMemo(() => {

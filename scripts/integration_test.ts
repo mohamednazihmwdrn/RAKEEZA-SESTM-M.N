@@ -169,7 +169,7 @@ async function runEndToEndVerification() {
     action: 'create',
     module: 'المبيعات',
     details: `إنشاء فاتورة مبيعات #${saleInvoiceId} للعميل ${newCustomer.name}`,
-  });
+  }).data;
   console.log('✔ Step 1.5: Transaction successfully persisted to backend database.');
 
   // Simulate logging in from Device 2
@@ -284,7 +284,7 @@ async function runEndToEndVerification() {
     action: 'create',
     module: 'المشتريات',
     details: `تسجيل فاتورة توريد #${purchaseInvoiceId} من المورد ${newSupplier.name}`,
-  });
+  }).data;
   console.log('✔ Step 2.4: Purchase transaction successfully persisted to backend database.');
 
   // ===========================================================================
@@ -330,7 +330,7 @@ async function runEndToEndVerification() {
     action: 'create',
     module: 'الخزينة',
     details: `سند قبض نقدية #${receiptTxId} بقيمة ${receiptAmount} ج.م من ${newCustomer.name}`,
-  });
+  }).data;
 
   const latestAuditLog = appData.auditLogs?.[0];
   if (!latestAuditLog || !latestAuditLog.details.includes(String(receiptTxId))) {

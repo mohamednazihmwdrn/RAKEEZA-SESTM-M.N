@@ -27,12 +27,11 @@ import { exportToExcel } from '../utils/excelExport';
 import { calculateSupplierBalance } from '../utils/accounting';
 import {
   calculateBranchCashBox,
-  updateBranchCashBoxDelta,
   getMainBranchId,
   filterCashTransactionsByBranch,
   filterPurchaseInvoicesByBranch,
 } from '../utils/branchIsolation';
-import { reconcileTreasuryCashBox } from '../utils/accountingEngine';
+import { saveCashVoucher, deleteCashVoucher } from '../utils/accountingEngine';
 
 interface PaymentVouchersClassicProps {
   appData: AppData;
@@ -266,8 +265,7 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
     }
 
     const currentUserObj = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
-    const nowIso = new Date().toISOString();
-    const updatedData = { ...appData };
+    const transBranch = selectedBranchId || appData.activeBranchId || getMainBranchId(appData.branches);
 
     let generatedNote = note.trim();
     if (!generatedNote) {
@@ -282,158 +280,52 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
       }
     }
 
-    let savedTransaction: CashTransaction;
-
-    if (editingId) {
-      // ✏️ Edit Existing
-      const existingIdx = updatedData.cashTransactions.findIndex((t) => t.id === editingId);
-      if (existingIdx === -1) return;
-      const oldTrans = updatedData.cashTransactions[existingIdx];
-
-      // Revert old cashbox impact
-      updatedData.cashBox[oldTrans.method] = (updatedData.cashBox[oldTrans.method] || 0) + oldTrans.amount;
-      // Apply new cashbox deduction
-      updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) - val;
-      const transBranch = oldTrans.branchId || selectedBranchId || appData.activeBranchId || 'br-main';
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, oldTrans.method, oldTrans.amount);
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, -val);
-
-      savedTransaction = {
-        ...oldTrans,
+    try {
+      const { updatedData, voucher: savedTransaction } = saveCashVoucher(appData, {
+        id: editingId || undefined,
+        voucherType: 'pay',
         date: voucherDate,
         amount: val,
         method,
         note: generatedNote,
-        supplierName: paymentTargetType === 'supplier' ? partyName : undefined,
-        recipientName: partyName,
-        expenseCategory: paymentTargetType === 'expense' ? expenseCategory : undefined,
-        invoiceId: selectedInvoiceIds.length === 1 ? selectedInvoiceIds[0] : oldTrans.invoiceId,
-        updatedAt: nowIso,
-        updatedBy: currentUserObj?.name || 'مدير النظام',
-      };
-
-      updatedData.cashTransactions[existingIdx] = savedTransaction;
-      onUpdateData(updatedData, {
-        action: 'edit_payment',
-        module: 'سندات الصرف',
-        details: `تعديل سند صرف #${editingId} بقيمة ${val.toFixed(2)} ج.م`,
-      });
-      showToast(`تم تعديل سند الصرف #${editingId} بنجاح`, 'success');
-    } else {
-      // ➕ Create New
-      const nextId = updatedData.nextCashId || (updatedData.cashTransactions?.length || 0) + 1;
-      const voucherNo = `PAY-${String(nextId).padStart(4, '0')}`;
-
-      // Distribute payment if specific purchase invoices selected
-      if (paymentTargetType === 'supplier' && selectedInvoiceIds.length > 0) {
-        let remToAllocate = val;
-        updatedData.purchaseInvoices = (updatedData.purchaseInvoices || []).map((inv) => {
-          if (selectedInvoiceIds.includes(inv.id) && remToAllocate > 0) {
-            const currentRem = inv.remainingAmount ?? (inv.total - (inv.paidAmount || 0));
-            const payForThis = Math.min(currentRem, remToAllocate);
-            remToAllocate -= payForThis;
-            const newPaid = (inv.paidAmount || 0) + payForThis;
-            const newRem = Math.max(0, inv.total - newPaid);
-            return {
-              ...inv,
-              paidAmount: newPaid,
-              remainingAmount: newRem,
-            };
-          }
-          return inv;
-        });
-      }
-
-      // Update supplier recorded balance if applicable
-      if (paymentTargetType === 'supplier' && matchedSupplier) {
-        updatedData.suppliers = (updatedData.suppliers || []).map((s) => {
-          if (s.id === matchedSupplier.id) {
-            return {
-              ...s,
-              balance: (s.balance || 0) - val,
-            };
-          }
-          return s;
-        });
-      }
-
-      // Deduct from Cashbox and Branch Cashbox
-      updatedData.cashBox[method] = (updatedData.cashBox[method] || 0) - val;
-      const transBranch = selectedBranchId || appData.activeBranchId || 'br-main';
-      updatedData.branchCashBoxes = updateBranchCashBoxDelta(updatedData, transBranch, method, -val);
-
-      savedTransaction = {
-        id: nextId,
-        voucherNo,
-        syncId: `pay_${nextId}_${Date.now()}`,
-        companyId: appData.companyId || 'COMP-000001',
         branchId: transBranch,
-        date: voucherDate,
-        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        type: 'pay',
-        method,
-        amount: val,
-        note: generatedNote,
         supplierName: paymentTargetType === 'supplier' ? partyName : undefined,
         recipientName: partyName,
         expenseCategory: paymentTargetType === 'expense' ? expenseCategory : undefined,
-        invoiceId: selectedInvoiceIds.length === 1 ? selectedInvoiceIds[0] : undefined,
-        status: 'approved',
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        createdBy: currentUserObj?.name || 'مدير النظام',
-        createdByUserId: currentUserObj?.id,
-        createdByUserCode: currentUserObj?.code || 1,
-      };
-
-      updatedData.nextCashId = nextId + 1;
-      updatedData.cashTransactions = [savedTransaction, ...(updatedData.cashTransactions || [])];
-
-      const reconciled = reconcileTreasuryCashBox(updatedData);
-      updatedData.cashBox = reconciled.cashBox;
-      updatedData.branchCashBoxes = reconciled.branchCashBoxes;
+        selectedInvoiceIds: paymentTargetType === 'supplier' ? selectedInvoiceIds : [],
+        user: currentUserObj,
+      });
 
       onUpdateData(updatedData, {
-        action: 'create_payment',
+        action: editingId ? 'edit_payment' : 'create_payment',
         module: 'سندات الصرف',
-        details: `إصدار سند صرف (${voucherNo}) للجهة ${partyName} بقيمة ${val.toFixed(2)} ج.م`,
+        details: editingId
+          ? `تعديل سند صرف #${editingId} بقيمة ${val.toFixed(2)} ج.م`
+          : `إصدار سند صرف (${savedTransaction.voucherNo}) للجهة ${partyName} بقيمة ${val.toFixed(2)} ج.م`,
       });
-      showToast(`تم حفظ سند الصرف (${voucherNo}) بنجاح وخصم المبلغ من الخزينة`, 'success');
-    }
 
-    if (shouldPrint) {
-      printCashVoucherWindow(savedTransaction, appData.settings, showToast);
-    }
+      showToast(
+        editingId
+          ? `تم تعديل سند الصرف #${editingId} بنجاح`
+          : `تم حفظ سند الصرف (${savedTransaction.voucherNo}) بنجاح وخصم المبلغ من الخزينة`,
+        'success'
+      );
 
-    resetForm();
+      if (shouldPrint) {
+        printCashVoucherWindow(savedTransaction, updatedData.settings, showToast);
+      }
+
+      resetForm();
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حفظ سند الصرف', 'error');
+    }
   };
 
   // Delete Voucher
   const handleDeletePayment = (t: CashTransaction) => {
     if (!confirm(`هل أنت متأكد من إلغاء وحذف سند الصرف #${t.id} بقيمة ${t.amount} ج.م؟ سيتم استرجاع النقدية للخزينة.`)) return;
 
-    const updatedData = { ...appData };
-
-    // Revert supplier balance if applicable
-    if (t.supplierName) {
-      updatedData.suppliers = (updatedData.suppliers || []).map((s) => {
-        if (s.name.trim().toLowerCase() === t.supplierName?.trim().toLowerCase()) {
-          return {
-            ...s,
-            balance: (s.balance || 0) + t.amount,
-          };
-        }
-        return s;
-      });
-    }
-
-    if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
-    updatedData.deletedRecords[`cash_${t.id}`] = Date.now();
-    updatedData.cashTransactions = updatedData.cashTransactions.filter((x) => x.id !== t.id);
-
-    const reconciled = reconcileTreasuryCashBox(updatedData);
-    updatedData.cashBox = reconciled.cashBox;
-    updatedData.branchCashBoxes = reconciled.branchCashBoxes;
+    const updatedData = deleteCashVoucher(appData, t.id, false);
 
     onUpdateData(updatedData, {
       action: 'delete_payment',

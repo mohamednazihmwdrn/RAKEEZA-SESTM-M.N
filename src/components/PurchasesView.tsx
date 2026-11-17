@@ -616,6 +616,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
         method: payMethod,
         branchId: selectedInvoice.branchId || selectedBranchId || appData.activeBranchId || 'main',
         user: currentUserObj,
+        syncId: `vouch_purchase_${selectedInvoice.id}_inst_${Date.now()}`,
       });
 
       onUpdateData(updatedData, {

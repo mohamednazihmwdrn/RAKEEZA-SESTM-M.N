@@ -5,7 +5,14 @@ import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { exportToExcel } from '../utils/excelExport';
 import { TableActionButtons } from './TableActionButtons';
 import { SYSTEM_PERMISSIONS, PermissionDefinition } from '../utils/permissions';
-import { getStoredLocalSession, getStoredBoundDevice, setStoredBoundDevice } from '../services/cloudApi';
+import {
+  getStoredLocalSession,
+  getStoredBoundDevice,
+  setStoredBoundDevice,
+  fetchCompanyDevicesCloud,
+  revokeDeviceCloud,
+  restoreDeviceCloud,
+} from '../services/cloudApi';
 import { getBranchUsers, getMainBranchId } from '../utils/branchIsolation';
 import {
   Shield,
@@ -22,6 +29,8 @@ import {
   Phone,
   UserCheck,
   CheckCircle2,
+  Laptop,
+  RefreshCw,
 } from 'lucide-react';
 
 interface UsersViewProps {
@@ -60,6 +69,53 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
   const [assignedBranchId, setAssignedBranchId] = useState<string>(selectedBranchId);
   const [userStatus, setUserStatus] = useState<'active' | 'disabled'>('active');
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+  const [editingHasPassword, setEditingHasPassword] = useState<boolean>(false);
+
+  // Connected Devices & Active Sessions State
+  const [devices, setDevices] = useState<import('../types').DeviceSessionInfo[]>([]);
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+
+  const isCompanyAdminOrOwner =
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'company_admin' ||
+    currentUser?.role === 'owner';
+
+  const loadDevices = async () => {
+    if (!isCompanyAdminOrOwner) return;
+    setIsLoadingDevices(true);
+    try {
+      const res = await fetchCompanyDevicesCloud(currentCompanyId);
+      if (res.success && Array.isArray(res.devices)) {
+        setDevices(res.devices);
+      }
+    } finally {
+      setIsLoadingDevices(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadDevices();
+  }, [currentCompanyId]);
+
+  const handleRevokeDevice = async (deviceId: string, deviceLabel: string) => {
+    const res = await revokeDeviceCloud(deviceId, currentCompanyId);
+    if (res.success) {
+      if (Array.isArray(res.devices)) setDevices(res.devices);
+      showToast(`تم إيقاف الجهاز "${deviceLabel}" وطرد جلسته فورياً`, 'warning');
+    } else {
+      showToast(res.error || 'تعذر إيقاف الجهاز', 'error');
+    }
+  };
+
+  const handleRestoreDevice = async (deviceId: string, deviceLabel: string) => {
+    const res = await restoreDeviceCloud(deviceId, currentCompanyId);
+    if (res.success) {
+      if (Array.isArray(res.devices)) setDevices(res.devices);
+      showToast(`تم إعادة تفعيل الجهاز "${deviceLabel}" بنجاح`, 'success');
+    } else {
+      showToast(res.error || 'تعذر تفعيل الجهاز', 'error');
+    }
+  };
 
   // All company users vs isolated branch users
   const companyUsers = appData.users || [];
@@ -69,6 +125,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
   // Reset Form
   const handleOpenNewUserModal = () => {
     setEditingUserId(null);
+    setEditingHasPassword(false);
     setName('');
     setUsername('');
     setPassword('');
@@ -92,9 +149,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
   const handleOpenEditUserModal = (user: User) => {
     setEditingUserId(user.id);
+    setEditingHasPassword(Boolean(user.hasPassword || user.passwordHash || user.password));
     setName(user.name);
     setUsername(user.username);
-    setPassword(user.password || '');
+    // Keep password field empty when editing; non-empty input updates the server hash
+    setPassword('');
     setPhone(user.phone || '');
     setRole(user.role);
     setAssignedBranchId(user.branchId || selectedBranchId);
@@ -182,7 +241,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
   // Save User
   const handleSaveUser = () => {
-    if (!name.trim() || !username.trim() || !password.trim()) {
+    if (!name.trim() || !username.trim() || (!editingUserId && !password.trim())) {
       showToast('يرجى ملء جميع الحقول المفروضة (الاسم، اسم المستخدم، وكلمة المرور)', 'warning');
       return;
     }
@@ -210,11 +269,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
       '101';
 
     if (editingUserId) {
-      // Editing existing user
+      // Editing existing user (preserve existing server password hash when password input is left blank)
       updatedUsers = appData.users.map((u) => {
         if (u.id === editingUserId) {
           const userCode = u.code || (u as any).userCode || 1;
-          return {
+          const nextUser: User = {
             ...u,
             code: userCode,
             userCode: userCode,
@@ -223,7 +282,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             companyCode: u.companyCode || String(activeCompCode),
             name: name.trim(),
             username: username.trim(),
-            password: password.trim(),
             phone: phone.trim(),
             role,
             branchId: assignedBranchId ? assignedBranchId : undefined,
@@ -231,6 +289,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             status: userStatus,
             permissions: permissionPayload,
           };
+          if (password.trim()) {
+            nextUser.password = password.trim();
+            nextUser.hasPassword = true;
+          }
+          return nextUser;
         }
         return u;
       });
@@ -247,7 +310,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         details: `تم تحديث بيانات وصلاحيات المستخدم "${name.trim()}" (الدور: ${role})`,
       };
 
-      // Sync bound device user list in localStorage immediately
+      // Sync bound device user list in localStorage immediately (without storing passwords)
       const currentBound = getStoredBoundDevice();
       if (currentBound) {
         setStoredBoundDevice({
@@ -257,7 +320,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             code: u.code || (u as any).userCode || 1,
             name: u.name,
             username: u.username,
-            password: u.password,
             role: u.role,
             branchId: u.branchId,
           })),
@@ -300,7 +362,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
       updatedUsers = [...appData.users, newUser];
 
-      // Sync bound device user list in localStorage immediately
+      // Sync bound device user list in localStorage immediately (without storing plaintext passwords)
       const currentBound = getStoredBoundDevice();
       if (currentBound) {
         setStoredBoundDevice({
@@ -310,7 +372,6 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
             code: u.code || (u as any).userCode || 1,
             name: u.name,
             username: u.username,
-            password: u.password,
             role: u.role,
             branchId: u.branchId,
           })),
@@ -826,6 +887,101 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         </table>
       </div>
 
+      {/* 📱 Connected Devices & Active Sessions Panel */}
+      {isCompanyAdminOrOwner && (
+        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-700">
+                <Laptop className="w-5 h-5" />
+              </div>
+              <div>
+                <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                  الأجهزة المتصلة والجلسات النشطة
+                </h5>
+                <p className="text-xs text-slate-500">
+                  مراقبة الأجهزة المرتبطة بالشركة مع إمكانية الإيقاف الفوري عن العمل أو إعادة التفعيل
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={loadDevices}
+              disabled={isLoadingDevices}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDevices ? 'animate-spin' : ''}`} />
+              <span>تحديث الأجهزة</span>
+            </button>
+          </div>
+
+          {devices.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-xs">
+              لا توجد جلسات أجهزة مسجلة على الخادم السحابي حالياً
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {devices.map((dev) => {
+                const isRevoked = dev.status === 'revoked';
+                return (
+                  <div
+                    key={dev.deviceId}
+                    className={`p-3.5 rounded-xl border ${
+                      isRevoked ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50/70 border-slate-200'
+                    } space-y-2`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-xs truncate">
+                          {dev.deviceName || dev.deviceId}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-mono truncate">
+                          {dev.platform || 'Web'} • {dev.deviceId}
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                          isRevoked ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {isRevoked ? 'موقوف' : 'نشط'}
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] text-slate-600 space-y-0.5">
+                      <div>المستخدم: <strong>{dev.userName}</strong></div>
+                      <div>آخر نشاط: {dev.lastActiveAt ? new Date(dev.lastActiveAt).toLocaleString('ar-EG') : '—'}</div>
+                    </div>
+
+                    <div className="pt-1">
+                      {isRevoked ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreDevice(dev.deviceId, dev.deviceName || dev.deviceId)}
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>إعادة تفعيل الجهاز</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeDevice(dev.deviceId, dev.deviceName || dev.deviceId)}
+                          className="w-full py-1.5 px-3 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>إيقاف الجهاز فوراً</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Granular Permissions & User Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -865,15 +1021,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-slate-700">كلمة المرور *</label>
+                <label className="block font-semibold mb-1 text-slate-700">
+                  {editingUserId ? 'كلمة المرور (اتركها فارغة للإبقاء على الحالية)' : 'كلمة المرور *'}
+                </label>
                 <input
                   type="text"
-                  placeholder="••••••••"
+                  placeholder={editingUserId ? 'اتركها فارغة بدون تغيير' : '••••••••'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   dir="ltr"
                   className="w-full p-2.5 bg-white border border-slate-300 rounded-xl focus:border-blue-600 focus:outline-none font-mono text-left"
                 />
+                {editingUserId && editingHasPassword && (
+                  <p className="text-[11px] text-emerald-700 mt-1 font-semibold">
+                    ✓ كلمة مرور محفوظة (اتركها فارغة للإبقاء)
+                  </p>
+                )}
               </div>
 
               <div>

@@ -11,6 +11,7 @@ import { printAnnualClosing } from '../utils/printInventoryAdjustment';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { exportToExcel } from '../utils/excelExport';
 import { TableActionButtons } from './TableActionButtons';
+import { computeFinancialStatementsFromLedger } from '../utils/accountingEngine';
 
 interface YearEndClosingViewProps {
   appData: AppData;
@@ -41,34 +42,12 @@ export const YearEndClosingView: React.FC<YearEndClosingViewProps> = ({
   const [isReopenModalOpen, setIsReopenModalOpen] = useState<boolean>(false);
   const [reopenReason, setReopenReason] = useState<string>('');
 
-  // 1. CALCULATE FINANCIAL BALANCES & P&L FOR THE FISCAL YEAR
+  // 1. CALCULATE FINANCIAL BALANCES & P&L FOR THE FISCAL YEAR FROM REAL LEDGER
   const financialSummary = useMemo(() => {
-    // Total Sales & Revenues
-    const totalSales = appData.salesInvoices
-      .filter((inv) => inv.type === 'nagdi' || inv.type === 'ajel')
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-    const totalSalesReturns = appData.salesInvoices
-      .filter((inv) => inv.type === 'return_nagdi' || inv.type === 'return_ajel')
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-    const netSales = Math.max(0, totalSales - totalSalesReturns);
-
-    // COGS & Purchases
-    const totalPurchases = appData.purchaseInvoices
-      .filter((inv) => inv.type === 'nagdi' || inv.type === 'ajel')
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-    const totalPurchasesReturns = appData.purchaseInvoices
-      .filter((inv) => inv.type === 'return_nagdi' || inv.type === 'return_ajel')
-      .reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-    const netPurchases = Math.max(0, totalPurchases - totalPurchasesReturns);
-
-    // Other Cash Expenses & Depreciation
-    const cashExpenses = appData.cashTransactions
-      .filter((c) => c.type === 'pay')
-      .reduce((sum, c) => sum + c.amount, 0);
+    const st = computeFinancialStatementsFromLedger(appData);
+    const netSales = st.netSalesRevenue;
+    const netPurchases = st.totalCOGS;
+    const cashExpenses = st.operatingExpenses;
 
     const totalDepreciation = (appData.depreciationLogs || []).reduce((sum, d) => sum + (d.amount || 0), 0);
     const payrollExpenses = (appData.payrollSlips || []).reduce((sum, p) => sum + (p.netSalary || 0), 0);
@@ -78,26 +57,9 @@ export const YearEndClosingView: React.FC<YearEndClosingViewProps> = ({
     const inventoryLosses = (appData.inventoryAdjustments || []).reduce((sum, a) => sum + (a.totalShortageAmount || 0), 0);
 
     // Total Revenues & Total Expenses
-    const totalRevenues = netSales + inventoryGains;
-    const totalExpenses = netPurchases + cashExpenses + totalDepreciation + payrollExpenses + inventoryLosses;
-    const netProfitOrLoss = totalRevenues - totalExpenses;
-
-    // Assets Balances
-    const totalCash = (appData.cashBox.drawer || 0) + (appData.cashBox.vodafone || 0) + (appData.cashBox.instapay || 0) + (appData.cashBox.bank || 0);
-    const totalBankAccounts = (appData.bankAccounts || []).reduce((sum, b) => sum + (b.balance || 0), 0);
-    const totalReceivables = appData.customers.reduce((sum, c) => sum + (c.balance || 0), 0);
-    const totalInventoryValue = appData.items.reduce((sum, i) => sum + (i.quantity || 0) * (i.purchasePrice || 0), 0);
-    const totalFixedAssets = (appData.fixedAssets || []).reduce((sum, a) => sum + (a.netBookValue || a.purchasePrice || 0), 0);
-    const totalAssets = totalCash + totalBankAccounts + totalReceivables + totalInventoryValue + totalFixedAssets;
-
-    // Liabilities
-    const totalPayables = appData.suppliers.reduce((sum, s) => sum + (s.balance || 0), 0);
-    const totalVatPayable = appData.salesInvoices.reduce((sum, i) => sum + (i.tax || 0), 0) - appData.purchaseInvoices.reduce((sum, i) => sum + (i.tax || 0), 0);
-    const totalLiabilities = totalPayables + Math.max(0, totalVatPayable);
-
-    // Equity
-    const capital = 100000;
-    const totalEquity = capital + netProfitOrLoss;
+    const totalRevenues = Math.max(0, netSales + inventoryGains);
+    const totalExpenses = Math.max(0, netPurchases + cashExpenses + totalDepreciation + payrollExpenses + inventoryLosses);
+    const netProfitOrLoss = st.netIncome;
 
     return {
       netSales,
@@ -110,16 +72,16 @@ export const YearEndClosingView: React.FC<YearEndClosingViewProps> = ({
       inventoryLosses,
       totalExpenses,
       netProfitOrLoss,
-      totalCash,
-      totalBankAccounts,
-      totalReceivables,
-      totalInventoryValue,
-      totalFixedAssets,
-      totalAssets,
-      totalPayables,
-      totalLiabilities,
-      capital,
-      totalEquity,
+      totalCash: st.totalCashBank,
+      totalBankAccounts: (appData.bankAccounts || []).reduce((sum, b) => sum + (b.balance || 0), 0),
+      totalReceivables: st.totalReceivables,
+      totalInventoryValue: st.totalInventoryVal,
+      totalFixedAssets: st.totalFixedAssets,
+      totalAssets: st.totalAssets,
+      totalPayables: st.totalPayables,
+      totalLiabilities: st.totalLiabilities,
+      capital: st.capital,
+      totalEquity: st.totalEquity,
     };
   }, [appData]);
 

@@ -94,6 +94,8 @@ export interface User {
   name: string;
   username: string;
   password?: string;
+  passwordHash?: string;
+  hasPassword?: boolean;
   phone?: string;
   email?: string;
   role: UserRole;
@@ -105,6 +107,24 @@ export interface User {
   branchId?: string;
   lastLogin?: string;
   createdAt?: string;
+}
+
+export interface DeviceSessionInfo {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  platform?: string;
+  companyId: string;
+  userId: string;
+  userName: string;
+  userCode?: string | number;
+  role: string;
+  ip?: string;
+  createdAt: string;
+  lastActiveAt: string;
+  status: 'active' | 'revoked';
+  revokedAt?: string;
+  revokedBy?: string;
 }
 
 export interface Customer {
@@ -167,6 +187,16 @@ export interface ItemBatch {
   expiryDate: string;
   qty: number;
   purchasePrice: number;
+  date?: string;
+  invoiceId?: number;
+}
+
+export interface FifoCostLayer {
+  id: string;
+  invoiceId?: number;
+  date: string;
+  remainingQty: number;
+  unitCost: number;
 }
 
 export interface ItemMovement {
@@ -196,6 +226,8 @@ export interface Item {
   salePrice: number;
   price?: number;
   costPrice?: number;
+  avgCost?: number;
+  fifoLayers?: FifoCostLayer[];
   wholesalePrice?: number;
   normalSellingPrice?: number; // Synced with salePrice (سعر البيع النقدي)
   wholesaleSellingPrice?: number; // Synced with wholesalePrice (سعر البيع بالجملة)
@@ -236,6 +268,7 @@ export interface InvoiceItem {
   price: number; // السعر
   salePrice?: number; // سعر البيع المقترح / المعتمد
   costPrice?: number;
+  costMissing?: boolean;
   total: number; // الإجمالي
   spec?: string; // البيان / تفاصيل المنتج (مختصر)
   discVal?: number; // قيمة الخصم المدخلة
@@ -1104,8 +1137,11 @@ export interface AppData {
   exchangeRates?: ExchangeRate[];
   multiCurrencyConfig?: MultiCurrencyConfig;
 
-  // 20. Distributed Deletion Tombstones & Data Integrity
+  // 20. Distributed Deletion Tombstones, Optimistic Versioning & Device Sync
   deletedRecords?: Record<string, number>;
+  version?: number;
+  lastOperationId?: string;
+  devices?: DeviceSessionInfo[];
 }
 
 export type DashboardWidgetId =

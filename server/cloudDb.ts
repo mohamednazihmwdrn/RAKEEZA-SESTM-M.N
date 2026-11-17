@@ -8,6 +8,7 @@ import {
   TrialRegistryRecord,
   User,
   AppData,
+  DeviceSessionInfo,
 } from '../src/types';
 import {
   DEFAULT_COMPANIES,
@@ -20,6 +21,7 @@ import { getDefaultData, mergeAppDataMonotonically } from '../src/utils/storage'
 import { sendOtpVerificationEmail } from './emailService';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'rakeeza_cloud_db.json');
 
 export interface SessionRecord {
@@ -31,6 +33,8 @@ export interface SessionRecord {
   userName: string;
   userCode?: string | number;
   role: string;
+  deviceId?: string;
+  deviceName?: string;
   createdAt: string;
   expiresAt: string;
 }
@@ -55,9 +59,19 @@ export interface CloudDatabaseSchema {
   sessions: Record<string, SessionRecord>;
   tenantsData: Record<string, AppData>;
   globalUsers: User[]; // Owner & cross-tenant administrative users
+  devices?: Record<string, DeviceSessionInfo>;
+  companyVersions?: Record<string, number>;
+  processedOperations?: Record<string, string[]>;
   pendingVerifications?: Record<string, PendingVerification>;
   verifiedEmails?: Record<string, boolean>;
   usedRegistrationLinks?: string[];
+}
+
+export interface DeviceContext {
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
+  ip?: string;
 }
 
 let dbCache: CloudDatabaseSchema | null = null;
@@ -66,6 +80,323 @@ function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+}
+
+function createPreUpgradeBackup(rawJson: string): void {
+  try {
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(BACKUPS_DIR, `rakeeza_cloud_db_pre_upgrade_${stamp}.json`);
+    fs.writeFileSync(backupPath, rawJson, 'utf-8');
+  } catch (err) {
+    console.warn('Pre-upgrade cloud DB backup warning:', err);
+  }
+}
+
+export function hashPassword(plain: string): string {
+  const normalized = normalizeArabicNumerals(String(plain || '').trim());
+  if (!normalized) return '';
+  if (normalized.startsWith('scrypt:')) return normalized;
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(normalized, salt, 64).toString('hex');
+  return `scrypt:${salt}:${derived}`;
+}
+
+export function verifyPassword(plain: string, storedHashOrPlain?: string): boolean {
+  const cleanPlain = String(plain || '').trim();
+  if (!cleanPlain || !storedHashOrPlain) return false;
+  const normPlain = normalizeArabicNumerals(cleanPlain);
+  const stored = String(storedHashOrPlain).trim();
+
+  if (stored.startsWith('scrypt:')) {
+    const parts = stored.split(':');
+    if (parts.length !== 3) return false;
+    const [, salt, hexHash] = parts;
+    if (!salt || !hexHash) return false;
+    try {
+      const expectedBuf = Buffer.from(hexHash, 'hex');
+      const derivedNorm = crypto.scryptSync(normPlain, salt, 64);
+      if (expectedBuf.length === derivedNorm.length && crypto.timingSafeEqual(expectedBuf, derivedNorm)) {
+        return true;
+      }
+      if (cleanPlain !== normPlain) {
+        const derivedRaw = crypto.scryptSync(cleanPlain, salt, 64);
+        if (expectedBuf.length === derivedRaw.length && crypto.timingSafeEqual(expectedBuf, derivedRaw)) {
+          return true;
+        }
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
+
+  // Legacy plaintext fallback before migration
+  const normStored = normalizeArabicNumerals(stored);
+  return stored === cleanPlain || normStored === normPlain || stored === normPlain || normStored === cleanPlain;
+}
+
+export function sanitizeUserForClient<T extends Partial<User>>(user: T): T {
+  if (!user || typeof user !== 'object') return user;
+  const { password, passwordHash, altPass, ...rest } = user as any;
+  return {
+    ...rest,
+    hasPassword: Boolean(passwordHash || password || rest.hasPassword),
+  } as T;
+}
+
+export function sanitizeCompanyForClient<T extends Partial<TenantCompany>>(company: T): T {
+  if (!company || typeof company !== 'object') return company;
+  const { adminPassword, adminPasswordHash, ...rest } = company as any;
+  return {
+    ...rest,
+    ...(Array.isArray(rest.users) ? { users: rest.users.map((u: any) => sanitizeUserForClient(u)) } : {}),
+  } as T;
+}
+
+export function sanitizeAppDataForClient(data: AppData | null): AppData | null {
+  if (!data) return data;
+  return {
+    ...data,
+    users: Array.isArray(data.users) ? data.users.map((u) => sanitizeUserForClient(u)) : [],
+  };
+}
+
+function preserveOrHashIncomingUsers(incomingUsers: User[] = [], existingUsers: User[] = []): User[] {
+  return incomingUsers.map((u) => {
+    const existing = existingUsers.find(
+      (ex) =>
+        (ex.id && u.id && ex.id === u.id) ||
+        (ex.username && u.username && ex.username.toLowerCase() === u.username.toLowerCase())
+    );
+    const { password, altPass, ...rest } = u as any;
+    const rawPass = typeof password === 'string' && password.trim() ? password.trim() : '';
+    let nextHash = u.passwordHash || existing?.passwordHash;
+    if (rawPass) {
+      nextHash = hashPassword(rawPass);
+    } else if (!nextHash && existing?.password) {
+      nextHash = hashPassword(existing.password);
+    }
+    return {
+      ...rest,
+      ...(nextHash ? { passwordHash: nextHash, hasPassword: true } : { hasPassword: Boolean(u.hasPassword || existing?.hasPassword) }),
+    } as User;
+  });
+}
+
+function migrateDatabasePasswords(db: CloudDatabaseSchema): boolean {
+  let changed = false;
+
+  if (Array.isArray(db.globalUsers)) {
+    db.globalUsers = db.globalUsers.map((u: any) => {
+      if (u && (u.password || !u.passwordHash)) {
+        const nextHash = u.passwordHash || (u.password ? hashPassword(u.password) : hashPassword('29190615'));
+        const { password, ...rest } = u;
+        changed = true;
+        return { ...rest, passwordHash: nextHash, hasPassword: true };
+      }
+      return u;
+    });
+  }
+
+  if (Array.isArray(db.companies)) {
+    db.companies = db.companies.map((c: any) => {
+      if (!c) return c;
+      let copy = { ...c };
+      if (!copy.apiKey) {
+        copy.apiKey = `rkz_live_${String(copy.id || 'comp').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${crypto.randomBytes(6).toString('hex')}`;
+        changed = true;
+      }
+      if (copy.adminPassword && !copy.adminPasswordHash) {
+        copy.adminPasswordHash = hashPassword(copy.adminPassword);
+        delete copy.adminPassword;
+        changed = true;
+      } else if (copy.adminPassword !== undefined) {
+        delete copy.adminPassword;
+        changed = true;
+      }
+      if (Array.isArray(copy.users)) {
+        copy.users = copy.users.map((u: any) => {
+          if (u && (u.password || u.altPass)) {
+            const nextHash = u.passwordHash || hashPassword(u.password || u.altPass);
+            const { password, altPass, ...rest } = u;
+            changed = true;
+            return { ...rest, passwordHash: nextHash, hasPassword: true };
+          }
+          return u;
+        });
+      }
+      return copy;
+    });
+  }
+
+  if (db.tenantsData && typeof db.tenantsData === 'object') {
+    for (const [compId, tData] of Object.entries(db.tenantsData)) {
+      if (!tData) continue;
+      if (Array.isArray(tData.users)) {
+        tData.users = tData.users.map((u: any) => {
+          if (u && (u.password || u.altPass)) {
+            const nextHash = u.passwordHash || hashPassword(u.password || u.altPass);
+            const { password, altPass, ...rest } = u;
+            changed = true;
+            return { ...rest, passwordHash: nextHash, hasPassword: true };
+          }
+          return u;
+        });
+      }
+      if (!db.companyVersions) db.companyVersions = {};
+      if (!db.companyVersions[compId]) {
+        db.companyVersions[compId] = tData.version || 1;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+export function getPersistedCompanyVersion(companyId: string): number {
+  const db = getCloudDatabase();
+  db.companyVersions = db.companyVersions || {};
+  return db.companyVersions[companyId] || db.tenantsData?.[companyId]?.version || 1;
+}
+
+export function upsertDeviceSession(params: {
+  companyId: string;
+  userId: string;
+  userName: string;
+  userCode?: string | number;
+  role: string;
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
+  ip?: string;
+}): { allowed: boolean; device?: DeviceSessionInfo; error?: string } {
+  const cleanDeviceId = (params.deviceId || '').trim();
+  if (!cleanDeviceId) {
+    return { allowed: true };
+  }
+  const db = getCloudDatabase();
+  db.devices = db.devices || {};
+  const deviceKey = `${params.companyId}::${cleanDeviceId}`;
+  const existing = db.devices[deviceKey];
+  const now = new Date().toISOString();
+
+  if (existing && existing.status === 'revoked') {
+    return {
+      allowed: false,
+      device: existing,
+      error: 'تم إيقاف صلاحية هذا الجهاز من قِبل مدير المنشأة. يرجى إعادة التفعيل من لوحة إدارة الأجهزة.',
+    };
+  }
+
+  const record: DeviceSessionInfo = {
+    id: deviceKey,
+    deviceId: cleanDeviceId,
+    deviceName: (params.deviceName || existing?.deviceName || 'متصفح / جهاز مسجل').trim(),
+    platform: params.platform || existing?.platform || 'Web',
+    companyId: params.companyId,
+    userId: params.userId,
+    userName: params.userName,
+    userCode: params.userCode,
+    role: params.role,
+    ip: params.ip || existing?.ip,
+    createdAt: existing?.createdAt || now,
+    lastActiveAt: now,
+    status: 'active',
+  };
+
+  db.devices[deviceKey] = record;
+  saveCloudDatabase(db);
+  return { allowed: true, device: record };
+}
+
+export function listCompanyDevices(companyId: string): DeviceSessionInfo[] {
+  const db = getCloudDatabase();
+  const devices = Object.values(db.devices || {}).filter((d) => d.companyId === companyId);
+  return devices.sort((a, b) => (b.lastActiveAt || '').localeCompare(a.lastActiveAt || ''));
+}
+
+export function revokeDeviceSession(
+  companyId: string,
+  deviceId: string,
+  revokedBy: string
+): { success: boolean; device?: DeviceSessionInfo; revokedTokens: string[]; error?: string } {
+  const db = getCloudDatabase();
+  db.devices = db.devices || {};
+  const deviceKey = deviceId.includes('::') ? deviceId : `${companyId}::${deviceId}`;
+  const device = db.devices[deviceKey];
+  if (!device || device.companyId !== companyId) {
+    return { success: false, revokedTokens: [], error: 'الجهاز غير موجود لهذه المنشأة.' };
+  }
+
+  device.status = 'revoked';
+  device.revokedAt = new Date().toISOString();
+  device.revokedBy = revokedBy;
+
+  const revokedTokens: string[] = [];
+  for (const [token, sess] of Object.entries(db.sessions || {})) {
+    if (sess.companyId === companyId && sess.deviceId === device.deviceId) {
+      delete db.sessions[token];
+      revokedTokens.push(token);
+    }
+  }
+
+  if (db.tenantsData[companyId]) {
+    db.tenantsData[companyId].devices = listCompanyDevices(companyId);
+  }
+
+  saveCloudDatabase(db);
+  return { success: true, device, revokedTokens };
+}
+
+export function restoreDeviceSession(
+  companyId: string,
+  deviceId: string
+): { success: boolean; device?: DeviceSessionInfo; error?: string } {
+  const db = getCloudDatabase();
+  db.devices = db.devices || {};
+  const deviceKey = deviceId.includes('::') ? deviceId : `${companyId}::${deviceId}`;
+  const device = db.devices[deviceKey];
+  if (!device || device.companyId !== companyId) {
+    return { success: false, error: 'الجهاز غير موجود لهذه المنشأة.' };
+  }
+
+  device.status = 'active';
+  delete device.revokedAt;
+  delete device.revokedBy;
+  device.lastActiveAt = new Date().toISOString();
+
+  if (db.tenantsData[companyId]) {
+    db.tenantsData[companyId].devices = listCompanyDevices(companyId);
+  }
+
+  saveCloudDatabase(db);
+  return { success: true, device };
+}
+
+export function getOwnerSystemHealth() {
+  const db = getCloudDatabase();
+  const devices = Object.values(db.devices || {});
+  const sessions = Object.values(db.sessions || {});
+  let dbFileSizeBytes = 0;
+  let backupCount = 0;
+  try {
+    if (fs.existsSync(DB_FILE)) dbFileSizeBytes = fs.statSync(DB_FILE).size;
+    if (fs.existsSync(BACKUPS_DIR)) backupCount = fs.readdirSync(BACKUPS_DIR).length;
+  } catch {}
+  return {
+    companiesCount: db.companies.length,
+    tenantsInitialized: Object.keys(db.tenantsData || {}).length,
+    activeSessionsCount: sessions.filter((s) => new Date(s.expiresAt).getTime() > Date.now()).length,
+    registeredDevicesCount: devices.length,
+    activeDevicesCount: devices.filter((d) => d.status === 'active').length,
+    revokedDevicesCount: devices.filter((d) => d.status === 'revoked').length,
+    dbFileSizeBytes,
+    backupCount,
+  };
 }
 
 /**
@@ -80,26 +411,24 @@ export function initCloudDatabase(): CloudDatabaseSchema {
       const parsed = JSON.parse(content) as CloudDatabaseSchema;
       parsed.pendingVerifications = parsed.pendingVerifications || {};
       parsed.verifiedEmails = parsed.verifiedEmails || {};
-      parsed.companies = (parsed.companies || []).filter(
-        (c) =>
-          c &&
-          c.id !== 'COMP-000001' &&
-          c.code !== '101' &&
-          c.code !== '818' &&
-          c.code !== '190' &&
-          !c.name?.includes('شركة ركيزة للمحاسبة') &&
-          !c.name?.includes('شركة الأخوة للتجارة') &&
-          c.name !== 'الأخوة'
-      );
-      let needsSave = false;
-      parsed.companies = parsed.companies.map((c) => {
-        if (!c.apiKey) {
-          c.apiKey = `rkz_live_${c.id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${Math.random().toString(36).substring(2, 8)}${Math.random().toString(36).substring(2, 8)}`;
-          needsSave = true;
-        }
-        return c;
-      });
-      if (needsSave) {
+      parsed.devices = parsed.devices || {};
+      parsed.companyVersions = parsed.companyVersions || {};
+      parsed.processedOperations = parsed.processedOperations || {};
+      parsed.companies = (parsed.companies || []).filter(Boolean);
+
+      const hasLegacyPlaintext =
+        (parsed.globalUsers || []).some((u: any) => u?.password && !u?.passwordHash) ||
+        (parsed.companies || []).some((c: any) => c?.adminPassword) ||
+        Object.values(parsed.tenantsData || {}).some((td: any) =>
+          (td?.users || []).some((u: any) => u?.password && !u?.passwordHash)
+        );
+
+      if (hasLegacyPlaintext) {
+        createPreUpgradeBackup(content);
+      }
+
+      const migrated = migrateDatabasePasswords(parsed);
+      if (migrated || hasLegacyPlaintext) {
         saveCloudDatabase(parsed);
       }
       dbCache = parsed;
@@ -109,8 +438,8 @@ export function initCloudDatabase(): CloudDatabaseSchema {
     }
   }
 
-  // Build Initial Seed
-  const baseDefaultData = getDefaultData();
+  // Build Initial Seed (preserve legacy clean state cleanly)
+  const baseDefaultData = getDefaultData('COMP-000001');
 
   // Company 1 Seed Data (RAKEEZA HQ)
   const comp1Data: AppData = {
@@ -305,12 +634,16 @@ export function initCloudDatabase(): CloudDatabaseSchema {
     licenses: [],
     sessions: {},
     tenantsData: {},
+    devices: {},
+    companyVersions: {},
+    processedOperations: {},
     globalUsers: [
       {
         id: 'owner-mohamed-nazih',
         name: 'Mohamed Nazih (مالك المنظومة)',
         username: 'MohamedNazih',
-        password: '29190615',
+        passwordHash: hashPassword('29190615'),
+        hasPassword: true,
         role: 'owner',
         status: 'active',
         permissions: { all: true },
@@ -319,7 +652,8 @@ export function initCloudDatabase(): CloudDatabaseSchema {
         id: 'owner-super-1',
         name: 'مالك المنظومة السحابية (RAKEEZA Owner)',
         username: 'owner',
-        password: '29190615',
+        passwordHash: hashPassword('29190615'),
+        hasPassword: true,
         role: 'owner',
         status: 'active',
         permissions: { all: true },
@@ -328,7 +662,8 @@ export function initCloudDatabase(): CloudDatabaseSchema {
         id: 'owner-super-2',
         name: 'إدارة منظومة ركيزة (Super Admin)',
         username: 'rakeeza_admin',
-        password: '29190615',
+        passwordHash: hashPassword('29190615'),
+        hasPassword: true,
         role: 'owner',
         status: 'active',
         permissions: { all: true },
@@ -363,7 +698,8 @@ export function saveCloudDatabase(data: CloudDatabaseSchema): void {
 export function authenticateUser(
   companyIdOrCode: string,
   username: string,
-  password: string
+  password: string,
+  deviceCtx?: DeviceContext
 ): {
   success: boolean;
   token?: string;
@@ -391,7 +727,9 @@ export function authenticateUser(
     cleanUsername === 'rakeeza_admin'
   ) {
     const ownerUser = db.globalUsers.find(
-      (u) => u.username.toLowerCase() === cleanUsername && u.password === password
+      (u) =>
+        u.username.toLowerCase() === cleanUsername &&
+        verifyPassword(password, u.passwordHash || u.password)
     );
 
     if (ownerUser) {
@@ -404,6 +742,8 @@ export function authenticateUser(
         companyId: 'OWNER',
         userName: ownerUser.name,
         role: 'owner',
+        deviceId: deviceCtx?.deviceId,
+        deviceName: deviceCtx?.deviceName,
         createdAt: new Date().toISOString(),
         expiresAt,
       };
@@ -437,7 +777,7 @@ export function authenticateUser(
       return {
         success: true,
         token,
-        user: ownerUser,
+        user: sanitizeUserForClient(ownerUser),
         company: ownerVirtualCompany,
         subscription: {
           status: 'active',
@@ -483,20 +823,15 @@ export function authenticateUser(
     : [];
 
   const cleanPass = (password || '').trim();
-  const normPass = normalizeArabicNumerals(cleanPass);
+  if (!cleanPass) {
+    return {
+      success: false,
+      error: 'يرجى إدخال كلمة المرور للمتابعة.',
+    };
+  }
   const normUsername = normalizeArabicNumerals(cleanUsername);
 
-  const isPasswordMatch = (storedPass?: string): boolean => {
-    if (!storedPass) return false;
-    const cleanStored = String(storedPass).trim();
-    const normStored = normalizeArabicNumerals(cleanStored);
-    return (
-      cleanStored === cleanPass ||
-      normStored === normPass ||
-      cleanStored === normPass ||
-      normStored === cleanPass
-    );
-  };
+  const isPasswordMatch = (storedPassOrHash?: string): boolean => verifyPassword(cleanPass, storedPassOrHash);
 
   const isUserMatch = (u: any): boolean => {
     const uName = (u.name || '').trim().toLowerCase();
@@ -516,13 +851,15 @@ export function authenticateUser(
     );
   };
 
-  // Match user by username, name, id, or code and verify password
+  const companyAdminCred = (company as any).adminPasswordHash || company.adminPassword;
+
+  // Match user strictly by stored passwordHash / password
   let matchedUser = companyUsers.find(
     (u) =>
       isUserMatch(u) &&
-      (isPasswordMatch(u.password) ||
+      (isPasswordMatch(u.passwordHash || u.password) ||
         isPasswordMatch((u as any).altPass) ||
-        (isPasswordMatch(company.adminPassword) && (u.role === 'company_admin' || u.role === 'admin' || u.code === 1)))
+        (isPasswordMatch(companyAdminCred) && (u.role === 'company_admin' || u.role === 'admin' || u.code === 1)))
   );
 
   const isAdminLookup =
@@ -533,19 +870,13 @@ export function authenticateUser(
     company.adminName?.toLowerCase() === cleanUsername ||
     company.adminEmail?.toLowerCase() === cleanUsername ||
     company.email?.toLowerCase() === cleanUsername ||
-    cleanUsername === 'mohamed nazih' ||
-    cleanUsername === 'nazihm338' ||
     cleanUsername === 'المدير العام';
 
   if (!matchedUser && isAdminLookup) {
     const adminU = companyUsers.find((u) => u.role === 'company_admin' || u.role === 'admin' || u.code === 1);
     const hasAdminPassMatch = Boolean(
-      isPasswordMatch(company.adminPassword) ||
-      (adminU && isPasswordMatch(adminU.password)) ||
-      isPasswordMatch('123') ||
-      isPasswordMatch('admin123') ||
-      isPasswordMatch('123456') ||
-      (!company.adminPassword && cleanPass.length >= 3)
+      isPasswordMatch(companyAdminCred) ||
+      (adminU && isPasswordMatch(adminU.passwordHash || adminU.password))
     );
     if (hasAdminPassMatch) {
       matchedUser = adminU || {
@@ -554,15 +885,12 @@ export function authenticateUser(
         companyId: company.id,
         name: company.adminName || 'المدير العام',
         username: company.adminUsername || 'admin',
-        password: company.adminPassword || cleanPass,
+        passwordHash: companyAdminCred ? (String(companyAdminCred).startsWith('scrypt:') ? companyAdminCred : hashPassword(companyAdminCred)) : hashPassword(cleanPass),
+        hasPassword: true,
         role: 'company_admin',
         status: 'active',
         permissions: { all: true },
       };
-      if (!company.adminPassword) {
-        company.adminPassword = cleanPass;
-        saveCloudDatabase(db);
-      }
     }
   }
 
@@ -580,6 +908,26 @@ export function authenticateUser(
     };
   }
 
+  // Register/verify device status
+  const deviceCheck = upsertDeviceSession({
+    companyId: company.id,
+    userId: matchedUser.id,
+    userName: matchedUser.name,
+    userCode: matchedUser.code || 1,
+    role: matchedUser.role,
+    deviceId: deviceCtx?.deviceId,
+    deviceName: deviceCtx?.deviceName,
+    platform: deviceCtx?.platform,
+    ip: deviceCtx?.ip,
+  });
+
+  if (!deviceCheck.allowed) {
+    return {
+      success: false,
+      error: deviceCheck.error || 'تم إيقاف هذا الجهاز من قِبل مدير المنشأة.',
+    };
+  }
+
   // Assign strict multi-tenant UIDs
   const companyUid = (company as any).uid || `UID_COMP_${company.id}`;
   const userUid = (matchedUser as any).uid || `UID_${company.id}_USR_${matchedUser.code || 1}`;
@@ -590,7 +938,7 @@ export function authenticateUser(
 
   // 5. Subscription Status Evaluation
   const now = new Date();
-  let expiryDateStr = company.subscriptionExpiresAt || company.trialExpiresAt;
+  const expiryDateStr = company.subscriptionExpiresAt || company.trialExpiresAt;
   let isExpired = false;
   let daysRemaining = 30;
 
@@ -617,6 +965,8 @@ export function authenticateUser(
     userName: matchedUser.name,
     userCode: matchedUser.code || (matchedUser.role === 'company_admin' || matchedUser.role === 'admin' ? 1 : 2),
     role: matchedUser.role,
+    deviceId: deviceCtx?.deviceId,
+    deviceName: deviceCtx?.deviceName,
     createdAt: new Date().toISOString(),
     expiresAt,
   };
@@ -631,7 +981,7 @@ export function authenticateUser(
       companyId: company.id,
       action: 'login',
       module: 'المصادقة والأمان',
-      details: `تسجيل دخول ناجح إلى منظومة شركة "${company.name}"`,
+      details: `تسجيل دخول ناجح إلى منظومة شركة "${company.name}"${deviceCtx?.deviceName ? ` (${deviceCtx.deviceName})` : ''}`,
     };
     tenantData.auditLogs = [loginLog, ...(tenantData.auditLogs || [])].slice(0, 500);
   }
@@ -641,8 +991,8 @@ export function authenticateUser(
   return {
     success: true,
     token,
-    user: matchedUser,
-    company,
+    user: sanitizeUserForClient(matchedUser),
+    company: sanitizeCompanyForClient(company),
     subscription: {
       status: isExpired ? 'expired' : company.status,
       planName: company.planName || 'الاشتراك القياسي',
@@ -698,10 +1048,8 @@ export function authenticateOwnerCredentials(
     normPass === '29190615' ||
     normPass === '01029190615' ||
     normPass === '+201029190615' ||
-    normPass.endsWith('29190615') ||
-    normPass.toLowerCase() === 'rakeeza' ||
-    normPass === '123' ||
-    (process.env.OWNER_SECRET_PIN && normPass === process.env.OWNER_SECRET_PIN);
+    normPass === '201029190615' ||
+    Boolean(process.env.OWNER_SECRET_PIN && normPass === process.env.OWNER_SECRET_PIN);
 
   // If valid owner password is provided, immediately bypass and unlock any previous cooldown
   if (isOwnerMasterPass) {
@@ -729,14 +1077,14 @@ export function authenticateOwnerCredentials(
   const db = getCloudDatabase();
   const ownerUsers = (db.globalUsers || []).filter((u) => u.role === 'owner');
 
-  const ownerEnvPin = process.env.OWNER_SECRET_PIN;
   const matchedOwner =
     (isOwnerMasterPass
       ? ownerUsers[0] || {
           id: 'owner-mohamed-nazih',
           name: 'Mohamed Nazih (مالك المنظومة)',
           username: 'MohamedNazih',
-          password: '29190615',
+          passwordHash: hashPassword('29190615'),
+          hasPassword: true,
           role: 'owner',
           status: 'active',
           permissions: { all: true },
@@ -747,7 +1095,7 @@ export function authenticateOwnerCredentials(
         (u.username?.toLowerCase() === normUser ||
           u.name?.toLowerCase() === normUser ||
           u.id?.toLowerCase() === normUser) &&
-        u.password === normPass
+        verifyPassword(normPass, u.passwordHash || u.password)
     );
 
   if (!matchedOwner) {
@@ -773,7 +1121,6 @@ export function authenticateOwnerCredentials(
 
   // Clear failed tracker upon successful authentication
   ownerFailedAttempts.delete(clientIp);
-
 
   // Generate cryptographically secure Owner token
   const token = `tok_owner_${crypto.randomBytes(32).toString('hex')}`;
@@ -826,37 +1173,6 @@ export function validateOwnerSession(token: string): {
   const session = db.sessions[token];
 
   if (!session) {
-    if (token.startsWith('tok_owner_')) {
-      const ownerUser = (db.globalUsers || [])[0] || {
-        id: 'owner-mohamed-nazih',
-        name: 'Mohamed Nazih (مالك المنظومة)',
-        username: 'MohamedNazih',
-        role: 'owner',
-        permissions: { all: true },
-      };
-      const autoSession: SessionRecord = {
-        token,
-        userId: ownerUser.id,
-        companyId: 'OWNER',
-        userName: ownerUser.name,
-        role: 'owner',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
-      };
-      db.sessions[token] = autoSession;
-      saveCloudDatabase(db);
-      return {
-        valid: true,
-        session: autoSession,
-        user: {
-          id: ownerUser.id,
-          name: ownerUser.name,
-          username: ownerUser.username || 'MohamedNazih',
-          role: 'owner',
-          permissions: { all: true },
-        },
-      };
-    }
     return { valid: false, error: 'رمز الجلسة غير صالح أو منتهي الصلاحية' };
   }
 
@@ -928,20 +1244,18 @@ export function verifyOwnerSecret(secret: string): {
     normSecret === '29190615' ||
     normSecret === '01029190615' ||
     normSecret === '+201029190615' ||
-    normSecret.endsWith('29190615') ||
-    normSecret.toLowerCase() === 'rakeeza' ||
-    normSecret === '123' ||
-    (process.env.OWNER_SECRET_PIN && normSecret === process.env.OWNER_SECRET_PIN);
+    normSecret === '201029190615' ||
+    Boolean(process.env.OWNER_SECRET_PIN && normSecret === process.env.OWNER_SECRET_PIN);
 
   const ownerUser =
     (isOwnerSecret ? (db.globalUsers || []).find((u) => u.role === 'owner') || db.globalUsers[0] : null) ||
-    (db.globalUsers || []).find((u) => u.password === normSecret);
+    (db.globalUsers || []).find((u) => verifyPassword(normSecret, u.passwordHash || u.password));
 
   if (!ownerUser) {
     return { success: false, error: 'كلمة المرور الخاصة بمالك المنظومة غير صحيحة.' };
   }
 
-  const token = `tok_owner_${crypto.randomUUID()}`;
+  const token = `tok_owner_${crypto.randomBytes(32).toString('hex')}`;
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   db.sessions[token] = {
@@ -983,7 +1297,7 @@ export function verifyOwnerSecret(secret: string): {
   return {
     success: true,
     token,
-    user: ownerUser,
+    user: sanitizeUserForClient(ownerUser),
     company: ownerVirtualCompany,
     subscription: {
       status: 'active',
@@ -1089,8 +1403,8 @@ export function authenticateOrRegisterWithGmail(
       success: true,
       isNewCompany: false,
       token,
-      user: matchedUser,
-      company,
+      user: sanitizeUserForClient(matchedUser),
+      company: sanitizeCompanyForClient(company),
       subscription: {
         status: company.status,
         planName: company.planName || 'الاشتراك القياسي',
@@ -1327,8 +1641,8 @@ export function verifyEmailOtpAndRegister(
     return {
       success: true,
       token,
-      user: matchedUser,
-      company,
+      user: sanitizeUserForClient(matchedUser),
+      company: sanitizeCompanyForClient(company),
       subscription: {
         status: company.status,
         planName: company.planName || 'الاشتراك القياسي',
@@ -1354,7 +1668,7 @@ export function verifyEmailOtpAndRegister(
     adminEmail: cleanEmail,
     adminName: (adminName || pending?.adminName || cleanEmail.split('@')[0]).trim(),
     adminUsername: cleanEmail.split('@')[0],
-    adminPassword: '123',
+    adminPassword: crypto.randomBytes(6).toString('hex'),
     phone: (phone || pending?.phone || '').trim(),
     activity: 'تجارة عامة وخدمات',
     address: 'الفرع الرئيسي',
@@ -1394,8 +1708,8 @@ export function verifyEmailOtpAndRegister(
   return {
     success: true,
     token,
-    user: freshAdminUser,
-    company: freshCompany,
+    user: sanitizeUserForClient(freshAdminUser),
+    company: sanitizeCompanyForClient(freshCompany),
     subscription: {
       status: freshCompany.status,
       planName: freshCompany.planName || 'التجربة المجانية',
@@ -1408,8 +1722,13 @@ export function verifyEmailOtpAndRegister(
 /**
  * Validate active session token
  */
-export function validateSession(token: string): {
+export function validateSession(
+  token: string,
+  deviceId?: string
+): {
   valid: boolean;
+  revoked?: boolean;
+  error?: string;
   session?: SessionRecord;
   user?: User;
   company?: TenantCompany;
@@ -1424,74 +1743,7 @@ export function validateSession(token: string): {
   if (!token) return { valid: false };
   const cleanToken = (token || '').trim();
   const db = getCloudDatabase();
-  let session = db.sessions[cleanToken];
-
-  // If session is not found in memory, recover it for multi-device authenticated client tokens
-  if (!session && (cleanToken.startsWith('local_owner_token') || cleanToken.startsWith('owner_') || cleanToken === 'owner_secret_session')) {
-    const ownerUser = db.globalUsers[0] || {
-      id: 'usr_global_owner',
-      name: 'محمد نزيه (مالك المنظومة)',
-      username: 'owner',
-      role: 'owner',
-      phone: '01029190615',
-    };
-    session = {
-      token: cleanToken,
-      userId: ownerUser.id,
-      userUid: 'UID_OWNER_ROOT',
-      companyId: 'OWNER',
-      companyUid: 'UID_ROOT_OWNER',
-      userName: ownerUser.name,
-      userCode: 0,
-      role: 'owner',
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-    db.sessions[cleanToken] = session;
-    saveCloudDatabase(db);
-  } else if (!session && (cleanToken.startsWith('token_') || cleanToken.startsWith('tok_'))) {
-    const parts = cleanToken.split('_');
-    const candidateCompId = parts[1] === 'local' ? parts[2] : parts[1];
-    const candidateUserId = parts[1] === 'local' ? parts[3] : parts[2];
-    if (candidateCompId) {
-      const { company } = findCompanyByAnyIdentifier(db, candidateCompId);
-      if (company) {
-        const tenantData = getTenantDataStrict(company.id);
-        const users = tenantData?.users || [];
-        const matchedUser =
-          users.find(
-            (u) =>
-              (u as any).uid === candidateUserId ||
-              u.id === candidateUserId ||
-              String(u.code) === candidateUserId ||
-              u.username?.toLowerCase() === candidateUserId?.toLowerCase()
-          ) ||
-          users[0] || {
-            id: `u-${company.id}-admin`,
-            code: 1,
-            name: company.adminName || 'المدير العام',
-            username: company.adminUsername || 'admin',
-            role: 'company_admin',
-            permissions: { all: true },
-          };
-
-        session = {
-          token: cleanToken,
-          userId: matchedUser.id,
-          userUid: (matchedUser as any).uid || candidateUserId || `UID_${company.id}_USR_1`,
-          companyId: company.id,
-          companyUid: (company as any).uid || `UID_COMP_${company.id}`,
-          userName: matchedUser.name,
-          userCode: (matchedUser as any).code || (matchedUser as any).userCode || 1,
-          role: matchedUser.role || 'company_admin',
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        };
-        db.sessions[cleanToken] = session;
-        saveCloudDatabase(db);
-      }
-    }
-  }
+  const session = db.sessions[cleanToken];
 
   if (!session) return { valid: false };
 
@@ -1500,6 +1752,24 @@ export function validateSession(token: string): {
     delete db.sessions[cleanToken];
     saveCloudDatabase(db);
     return { valid: false };
+  }
+
+  // Enforce device revocation if session or request specifies a deviceId
+  const effectiveDeviceId = (deviceId || session.deviceId || '').trim();
+  if (effectiveDeviceId && session.companyId !== 'OWNER') {
+    const devRecord = db.devices?.[`${session.companyId}::${effectiveDeviceId}`];
+    if (devRecord && devRecord.status === 'revoked') {
+      delete db.sessions[cleanToken];
+      saveCloudDatabase(db);
+      return {
+        valid: false,
+        revoked: true,
+        error: 'تم إيقاف هذا الجهاز من قِبل مدير المنشأة.',
+      };
+    }
+    if (devRecord && devRecord.status === 'active') {
+      devRecord.lastActiveAt = new Date().toISOString();
+    }
   }
 
   if (session.companyId === 'OWNER') {
@@ -1531,7 +1801,7 @@ export function validateSession(token: string): {
     return {
       valid: true,
       session,
-      user: ownerUser,
+      user: sanitizeUserForClient(ownerUser),
       company: ownerVirtualCompany,
       subscription: {
         status: 'active',
@@ -1554,6 +1824,12 @@ export function validateSession(token: string): {
     permissions: { all: true },
   };
 
+  if ('status' in user && user.status === 'disabled') {
+    delete db.sessions[cleanToken];
+    saveCloudDatabase(db);
+    return { valid: false, error: 'تم تعطيل حساب المستخدم.' };
+  }
+
   const now = new Date();
   const expiryDateStr = company.subscriptionExpiresAt || company.trialExpiresAt;
   let isExpired = false;
@@ -1572,8 +1848,8 @@ export function validateSession(token: string): {
   return {
     valid: true,
     session,
-    user,
-    company,
+    user: sanitizeUserForClient(user),
+    company: sanitizeCompanyForClient(company),
     subscription: {
       status: isExpired ? 'expired' : company.status,
       planName: company.planName || 'الاشتراك السنوي',
@@ -1603,13 +1879,12 @@ export function invalidateSession(token: string): boolean {
 export function getTenantDataStrict(companyId: string): AppData | null {
   const db = getCloudDatabase();
   if (!db.tenantsData[companyId]) {
-    // If not existing yet, create clean isolated tenant data
-    const base = getDefaultData();
+    const base = getDefaultData(companyId);
     const company = db.companies.find((c) => c.id === companyId);
-    
-    // Ensure company users & admin password are preserved
+    const companyAdminCred = (company as any)?.adminPasswordHash || company?.adminPassword;
+
     const companyUsers: User[] = (company?.users && company.users.length > 0)
-      ? (company.users as User[])
+      ? preserveOrHashIncomingUsers(company.users as User[])
       : [
           {
             id: `u-${companyId}-admin`,
@@ -1618,7 +1893,7 @@ export function getTenantDataStrict(companyId: string): AppData | null {
             companyId,
             name: company?.adminName || 'المدير العام',
             username: company?.adminUsername || 'admin',
-            password: company?.adminPassword || '123456',
+            ...(companyAdminCred ? { passwordHash: String(companyAdminCred).startsWith('scrypt:') ? companyAdminCred : hashPassword(companyAdminCred), hasPassword: true } : { hasPassword: false }),
             role: 'company_admin' as const,
             status: 'active' as const,
             permissions: { all: true },
@@ -1642,6 +1917,7 @@ export function getTenantDataStrict(companyId: string): AppData | null {
     db.tenantsData[companyId] = {
       ...base,
       companyId,
+      version: db.companyVersions?.[companyId] || 1,
       settings: {
         ...base.settings,
         companyName: company?.name || 'منشأة جديدة',
@@ -1658,17 +1934,18 @@ export function getTenantDataStrict(companyId: string): AppData | null {
       customers: [],
       suppliers: [],
       cashTransactions: [],
+      devices: listCompanyDevices(companyId),
     };
     saveCloudDatabase(db);
   } else {
-    // If tenant data exists but users are missing admin or company.users has newer users, merge them
     const company = db.companies.find((c) => c.id === companyId);
     if (company) {
       let modified = false;
       const tData = db.tenantsData[companyId];
+      const companyAdminCred = (company as any).adminPasswordHash || company.adminPassword;
       if (!tData.users || tData.users.length === 0) {
         tData.users = (company.users && company.users.length > 0)
-          ? company.users
+          ? preserveOrHashIncomingUsers(company.users)
           : [
               {
                 id: `u-${companyId}-admin`,
@@ -1677,20 +1954,20 @@ export function getTenantDataStrict(companyId: string): AppData | null {
                 companyId,
                 name: company.adminName || 'المدير العام',
                 username: company.adminUsername || 'admin',
-                password: company.adminPassword || '123456',
+                ...(companyAdminCred ? { passwordHash: String(companyAdminCred).startsWith('scrypt:') ? companyAdminCred : hashPassword(companyAdminCred), hasPassword: true } : { hasPassword: false }),
                 role: 'company_admin' as const,
                 status: 'active' as const,
                 permissions: { all: true },
               },
             ];
         modified = true;
-      } else if (company.adminPassword) {
-        // Ensure admin user password in tenant data matches company.adminPassword if changed
+      } else if (companyAdminCred) {
         const adminU = tData.users.find(
           (u) => u.username?.toLowerCase() === company.adminUsername?.toLowerCase() || u.role === 'company_admin' || u.code === 1
         );
-        if (adminU && !adminU.password) {
-          adminU.password = company.adminPassword;
+        if (adminU && !adminU.passwordHash && !adminU.password) {
+          adminU.passwordHash = String(companyAdminCred).startsWith('scrypt:') ? companyAdminCred : hashPassword(companyAdminCred);
+          adminU.hasPassword = true;
           modified = true;
         }
       }
@@ -1703,16 +1980,29 @@ export function getTenantDataStrict(companyId: string): AppData | null {
 }
 
 /**
- * Update strictly isolated tenant ERP data with automatic audit logging
+ * Update strictly isolated tenant ERP data with automatic audit logging & operationId idempotency
  */
 export function saveTenantDataStrict(
   companyId: string,
   updatedData: Partial<AppData>,
   actorUser?: { id: string; name: string; code?: string | number; role?: string },
-  actionInfo?: { action?: string; module?: string; details?: string }
-): AppData {
+  actionInfo?: { action?: string; module?: string; details?: string; deletedId?: string | number },
+  options?: { operationId?: string; baseVersion?: number }
+): { data: AppData; version: number; deduplicated?: boolean } {
   const db = getCloudDatabase();
-  const current = getTenantDataStrict(companyId) || getDefaultData();
+  db.companyVersions = db.companyVersions || {};
+  db.processedOperations = db.processedOperations || {};
+
+  const current = getTenantDataStrict(companyId) || getDefaultData(companyId);
+  const currentVersion = db.companyVersions[companyId] || current.version || 1;
+
+  // Idempotency guard: if this exact operationId already committed, return current state safely without duplicating
+  if (options?.operationId) {
+    const processed = db.processedOperations[companyId] || [];
+    if (processed.includes(options.operationId)) {
+      return { data: current, version: currentVersion, deduplicated: true };
+    }
+  }
 
   // Audit operation stamp
   let auditLogs = updatedData.auditLogs || current.auditLogs || [];
@@ -1738,9 +2028,27 @@ export function saveTenantDataStrict(
     actionInfo?.action === 'delete_invoice' ||
     actionInfo?.action === 'delete_item';
 
+  // Hash incoming new passwords while preserving existing passwordHash values when client sends sanitized users
+  const sanitizedIncoming: Partial<AppData> = { ...updatedData };
+  if (Array.isArray(updatedData.users)) {
+    sanitizedIncoming.users = preserveOrHashIncomingUsers(updatedData.users, current.users || []);
+  }
+
+  const nextVersion = currentVersion + 1;
+  db.companyVersions[companyId] = nextVersion;
+
+  if (options?.operationId) {
+    const list = db.processedOperations[companyId] || [];
+    list.push(options.operationId);
+    db.processedOperations[companyId] = list.slice(-250);
+  }
+
   const merged: AppData = {
-    ...mergeAppDataMonotonically(current, updatedData, isExplicitDelete, actionInfo),
+    ...mergeAppDataMonotonically(current, sanitizedIncoming, isExplicitDelete, actionInfo),
     companyId,
+    version: nextVersion,
+    lastOperationId: options?.operationId || current.lastOperationId,
+    devices: listCompanyDevices(companyId),
     auditLogs,
   };
 
@@ -1761,7 +2069,7 @@ export function saveTenantDataStrict(
   }
 
   saveCloudDatabase(db);
-  return merged;
+  return { data: merged, version: nextVersion };
 }
 
 /**
@@ -1773,20 +2081,29 @@ export function createNewCompanyCloud(
 ): { company: TenantCompany; license: LicenseRecord } {
   const db = getCloudDatabase();
   const res = createNewTenantCompany(companyInput, planId, db.plans, db.trialRegistry);
+  const rawAdminPass = (companyInput.adminPassword || res.company.adminPassword || '').trim();
+  const adminPasswordHash = rawAdminPass ? hashPassword(rawAdminPass) : undefined;
+  delete (res.company as any).adminPassword;
+  if (adminPasswordHash) {
+    (res.company as any).adminPasswordHash = adminPasswordHash;
+  }
 
   if (!res.company.apiKey) {
-    res.company.apiKey = `rkz_live_${res.company.id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${Math.random().toString(36).substring(2, 8)}${Math.random().toString(36).substring(2, 8)}`;
+    res.company.apiKey = `rkz_live_${res.company.id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}_${crypto.randomBytes(6).toString('hex')}`;
   }
 
   db.companies.push(res.company);
   db.licenses.push(res.license);
   db.trialRegistry = res.updatedRegistry;
+  db.companyVersions = db.companyVersions || {};
+  db.companyVersions[res.company.id] = 1;
 
   // Initialize fresh isolated data for the new company
-  const base = getDefaultData();
+  const base = getDefaultData(res.company.id);
   db.tenantsData[res.company.id] = {
     ...base,
     companyId: res.company.id,
+    version: 1,
     settings: {
       ...base.settings,
       companyName: res.company.name,
@@ -1799,10 +2116,11 @@ export function createNewCompanyCloud(
     users: [
       {
         id: `u-${res.company.id}-admin`,
+        code: 1,
         companyId: res.company.id,
         name: res.company.adminName || 'المدير العام',
         username: res.company.adminUsername || 'admin',
-        password: res.company.adminPassword || '123456',
+        ...(adminPasswordHash ? { passwordHash: adminPasswordHash, hasPassword: true } : { hasPassword: false }),
         role: 'company_admin',
         status: 'active',
         permissions: { all: true },
@@ -1829,7 +2147,7 @@ export function createNewCompanyCloud(
   };
 
   saveCloudDatabase(db);
-  return { company: res.company, license: res.license };
+  return { company: sanitizeCompanyForClient(res.company), license: res.license };
 }
 
 /**
@@ -2173,6 +2491,10 @@ export function registerDeviceAndCompany(params: {
   adminPassword?: string;
   branchName?: string;
   registrationLink?: string;
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
+  ip?: string;
 }): {
   success: boolean;
   company?: TenantCompany;
@@ -2186,7 +2508,7 @@ export function registerDeviceAndCompany(params: {
   const cleanName = (params.companyName || '').trim();
   const cleanEmail = (params.adminEmail || '').trim().toLowerCase();
   const cleanUsername = (params.adminUsername || 'admin').trim().toLowerCase();
-  const cleanPassword = (params.adminPassword || '123').trim();
+  const cleanPassword = (params.adminPassword || '').trim();
   const cleanBranchName = (params.branchName || 'الفرع الرئيسي').trim();
   const cleanLink = (params.registrationLink || '').trim().toLowerCase();
 
@@ -2196,8 +2518,8 @@ export function registerDeviceAndCompany(params: {
   if (!cleanEmail || !cleanEmail.includes('@')) {
     return { success: false, error: 'يرجى إدخال بريد إلكتروني صحيح للمدير (مثال: example@gmail.com).' };
   }
-  if (!cleanPassword) {
-    return { success: false, error: 'يرجى تحديد كلمة المرور لحساب المدير.' };
+  if (!cleanPassword || cleanPassword.length < 3) {
+    return { success: false, error: 'يرجى تحديد كلمة مرور آمنة لحساب المدير (3 أحرف على الأقل).' };
   }
 
   const db = getCloudDatabase();
@@ -2242,7 +2564,7 @@ export function registerDeviceAndCompany(params: {
   saveCloudDatabase(db);
 
   // Ensure tenant data exists
-  const tenantData = getTenantDataStrict(targetCompany.id) || getDefaultData();
+  const tenantData = getTenantDataStrict(targetCompany.id) || getDefaultData(targetCompany.id);
 
   // Ensure main branch
   if (!tenantData.branches || tenantData.branches.length === 0) {
@@ -2259,6 +2581,8 @@ export function registerDeviceAndCompany(params: {
     ];
   }
 
+  const hashedAdminPass = hashPassword(cleanPassword);
+
   // Ensure admin user
   if (!tenantData.users || tenantData.users.length === 0) {
     tenantData.users = [
@@ -2268,17 +2592,19 @@ export function registerDeviceAndCompany(params: {
         companyId: targetCompany.id,
         name: targetCompany.adminName || 'المدير العام',
         username: cleanUsername,
-        password: cleanPassword,
+        passwordHash: hashedAdminPass,
+        hasPassword: true,
         role: 'company_admin',
         status: 'active',
         permissions: { all: true },
       },
     ];
   } else {
-    // Update or add admin user credentials if matching
     const adminU = tenantData.users.find((u) => u.username?.toLowerCase() === cleanUsername || u.role === 'company_admin');
     if (adminU) {
-      adminU.password = cleanPassword;
+      adminU.passwordHash = hashedAdminPass;
+      adminU.hasPassword = true;
+      delete adminU.password;
       adminU.username = cleanUsername;
     } else {
       tenantData.users.unshift({
@@ -2287,7 +2613,8 @@ export function registerDeviceAndCompany(params: {
         companyId: targetCompany.id,
         name: 'المدير العام',
         username: cleanUsername,
-        password: cleanPassword,
+        passwordHash: hashedAdminPass,
+        hasPassword: true,
         role: 'company_admin',
         status: 'active',
         permissions: { all: true },
@@ -2297,8 +2624,20 @@ export function registerDeviceAndCompany(params: {
 
   saveTenantDataStrict(targetCompany.id, tenantData);
 
-  // Generate session
   const matchedUser = tenantData.users[0];
+  upsertDeviceSession({
+    companyId: targetCompany.id,
+    userId: matchedUser.id,
+    userName: matchedUser.name,
+    userCode: matchedUser.code || 1,
+    role: matchedUser.role,
+    deviceId: params.deviceId,
+    deviceName: params.deviceName,
+    platform: params.platform,
+    ip: params.ip,
+  });
+
+  // Generate session
   const token = `tok_${targetCompany.id}_${crypto.randomUUID()}`;
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -2308,6 +2647,8 @@ export function registerDeviceAndCompany(params: {
     companyId: targetCompany.id,
     userName: matchedUser.name,
     role: matchedUser.role,
+    deviceId: params.deviceId,
+    deviceName: params.deviceName,
     createdAt: new Date().toISOString(),
     expiresAt,
   };
@@ -2330,8 +2671,8 @@ export function registerDeviceAndCompany(params: {
 
   return {
     success: true,
-    company: targetCompany,
-    user: matchedUser,
+    company: sanitizeCompanyForClient(targetCompany),
+    user: sanitizeUserForClient(matchedUser),
     token,
     branches: publicBranches,
     users: publicUsers,
@@ -2571,7 +2912,7 @@ export function getCompanyPublicInfo(query: string): {
 
   return {
     success: true,
-    company,
+    company: sanitizeCompanyForClient(company),
     branches,
     users,
     preselectedUsername: matchedUser?.username || users[0]?.username,

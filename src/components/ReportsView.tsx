@@ -30,6 +30,7 @@ import {
   ReportRowData,
 } from '../utils/reportsData';
 import { Modal } from './Modal';
+import { processSalePayment, processPurchasePayment } from '../utils/accountingEngine';
 
 interface ReportsViewProps {
   appData: AppData;
@@ -138,54 +139,35 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
       return;
     }
 
-    const updatedData = { ...appData };
-    if (isSale) {
-      const saleInv = updatedData.salesInvoices.find((s) => s.id === inv.id);
-      if (saleInv) {
-        saleInv.paidAmount = (saleInv.paidAmount || 0) + val;
-        saleInv.remainingAmount = saleInv.total - saleInv.paidAmount;
-        updatedData.cashBox[payMethodInput] += val;
-        const cust = updatedData.customers.find((c) => c.name === saleInv.customerName);
-        if (cust) cust.balance = Math.max(0, (cust.balance || 0) - val);
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    try {
+      const syncMarker = `rep_${Date.now()}`;
+      const updatedData = isSale
+        ? processSalePayment(appData, {
+            invoiceId: inv.id,
+            amount: val,
+            method: payMethodInput,
+            branchId: inv.branchId || appData.activeBranchId || 'main',
+            user: currentUserObj,
+            syncId: `vouch_sale_${inv.id}_inst_${syncMarker}`,
+          })
+        : processPurchasePayment(appData, {
+            invoiceId: inv.id,
+            amount: val,
+            method: payMethodInput,
+            branchId: inv.branchId || appData.activeBranchId || 'main',
+            user: currentUserObj,
+            syncId: `vouch_purchase_${inv.id}_inst_${syncMarker}`,
+          });
 
-        updatedData.cashTransactions.push({
-          id: updatedData.nextCashId++,
-          date: new Date().toISOString().split('T')[0],
-          type: 'receive',
-          method: payMethodInput,
-          amount: val,
-          note: `سداد/تحصيل فاتورة مبيعات #${saleInv.id} - ${saleInv.customerName}`,
-          customerName: saleInv.customerName,
-          invoiceId: saleInv.id,
-        });
+      if (onUpdateData) {
+        onUpdateData(updatedData);
       }
-    } else {
-      const purInv = updatedData.purchaseInvoices.find((p) => p.id === inv.id);
-      if (purInv) {
-        purInv.paidAmount = (purInv.paidAmount || 0) + val;
-        purInv.remainingAmount = purInv.total - purInv.paidAmount;
-        updatedData.cashBox[payMethodInput] -= val;
-        const supp = updatedData.suppliers.find((s) => s.name === purInv.supplierName);
-        if (supp) supp.balance = Math.max(0, (supp.balance || 0) - val);
-
-        updatedData.cashTransactions.push({
-          id: updatedData.nextCashId++,
-          date: new Date().toISOString().split('T')[0],
-          type: 'pay',
-          method: payMethodInput,
-          amount: val,
-          note: `سداد/دفعة فاتورة مشتريات #${purInv.id} - ${purInv.supplierName}`,
-          supplierName: purInv.supplierName,
-          invoiceId: purInv.id,
-        });
-      }
+      setPayModalInvoice(null);
+      showToast(`تم تسجيل ${isSale ? 'تحصيل' : 'سداد'} مبلغ ${val.toFixed(2)} ج.م بنجاح`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'حدث خطأ أثناء معالجة الدفعة', 'error');
     }
-
-    if (onUpdateData) {
-      onUpdateData(updatedData);
-    }
-    setPayModalInvoice(null);
-    showToast(`تم تسجيل ${isSale ? 'تحصيل' : 'سداد'} مبلغ ${val.toFixed(2)} ج.م بنجاح`, 'success');
   };
 
   // Trigger search handler

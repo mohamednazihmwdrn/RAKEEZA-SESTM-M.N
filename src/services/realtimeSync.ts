@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth, OperationType, handleFirestoreError, isFirestorePermissionError } from '../firebase';
 import { AppData } from '../types';
 import { getStoredToken, canWriteToFirestore, checkFirestoreQuotaExhausted } from './cloudApi';
 
@@ -35,13 +35,15 @@ export interface SyncActionInfo {
 }
 
 export interface RealtimeSyncEvent {
-  type: 'REALTIME_SYNC' | 'CONNECTED' | 'DISCONNECTED';
+  type: 'REALTIME_SYNC' | 'CONNECTED' | 'DISCONNECTED' | 'FORCE_LOGOUT';
   version?: number;
   data?: AppData;
   actorUser?: SyncActorUser;
   actionInfo?: SyncActionInfo;
   timestamp?: string;
   isBackgroundSync?: boolean;
+  deviceId?: string;
+  reason?: string;
 }
 
 export interface RealtimeSyncInitOptions {
@@ -50,6 +52,7 @@ export interface RealtimeSyncInitOptions {
   currentUserName?: string;
   currentUserId?: string;
   initialVersion?: number;
+  onForceLogout?: (reason: string) => void;
   onDataUpdated?: (
     data: AppData,
     meta?: {
@@ -94,6 +97,18 @@ export function sanitizeForFirestore(data: Partial<AppData>): Record<string, any
     }
   }
 
+  // 5. Never store plaintext user passwords or password hashes in Firestore documents
+  if (Array.isArray(clean.users)) {
+    clean.users = clean.users.map((u: any) => {
+      if (!u || typeof u !== 'object') return u;
+      const { password: _p, passwordHash: _ph, altPass: _ap, ...safeUser } = u;
+      return {
+        ...safeUser,
+        hasPassword: Boolean(u.passwordHash || u.password || u.hasPassword),
+      };
+    });
+  }
+
   return clean;
 }
 
@@ -111,6 +126,7 @@ export class RealtimeSyncService {
   private lastLocalPushTimestamp: number = 0;
   private listeners: Set<(event: RealtimeSyncEvent) => void> = new Set();
   private statusListeners: Set<(connected: boolean) => void> = new Set();
+  private onForceLogoutCallback: ((reason: string) => void) | null = null;
   private recentActivities: Array<{
     id: string;
     timestamp: string;
@@ -133,6 +149,7 @@ export class RealtimeSyncService {
       this.currentUserCode = opts.currentUserCode || 1;
       this.currentUserName = opts.currentUserName || 'مستخدم';
       this.currentVersion = opts.initialVersion || 1;
+      this.onForceLogoutCallback = opts.onForceLogout || null;
       if (opts.onDataUpdated) {
         this.subscribe((event) => {
           if (event.data) {
@@ -303,6 +320,9 @@ export class RealtimeSyncService {
         },
         (error) => {
           checkFirestoreQuotaExhausted(error);
+          if (isFirestorePermissionError(error)) {
+            console.warn('[RealtimeSync Firestore Permission Notice]', error?.message);
+          }
           if (this.firestoreUnsub) {
             try {
               this.firestoreUnsub();
@@ -324,38 +344,7 @@ export class RealtimeSyncService {
    * 4. Excludes static historical archives (`closedFiscalYears`).
    */
   private sanitizeForFirestore(data: Partial<AppData>): Record<string, any> {
-    const clean: any = { ...data };
-
-    // 1. Never send recursive JSON backup copies to Firestore
-    if (Array.isArray(clean.backups)) {
-      clean.backups = clean.backups.map((b: any) => ({
-        id: b.id,
-        date: b.date,
-        label: b.label,
-        type: b.type,
-        sizeKB: b.sizeKB,
-        dataPreview: b.dataPreview,
-      }));
-    }
-
-    // 2. Cap real-time audit logs to 100 entries to prevent Firestore document inflation
-    if (Array.isArray(clean.auditLogs)) {
-      clean.auditLogs = clean.auditLogs.slice(0, 100);
-    }
-
-    // 3. Exclude heavy closed years archive from the active live operational document
-    if ('closedFiscalYears' in clean) {
-      delete clean.closedFiscalYears;
-    }
-
-    // 4. Protect against heavy base64 logos
-    if (clean.settings && clean.settings.logo && typeof clean.settings.logo === 'string') {
-      if (clean.settings.logo.length > 150000) {
-        clean.settings = { ...clean.settings, logo: '' };
-      }
-    }
-
-    return clean;
+    return sanitizeForFirestore(data);
   }
 
   /**
@@ -393,6 +382,7 @@ export class RealtimeSyncService {
     const payload: any = {
       ...sanitizedData,
       companyId: cleanId,
+      ownerUid: auth?.currentUser?.uid || 'system',
       version: nextVer,
       updatedAt: new Date().toISOString(),
       serverUpdatedAt: serverTimestamp(),
@@ -420,11 +410,14 @@ export class RealtimeSyncService {
     }
 
     // 1. Layer 1: Google Cloud Firestore real-time push to all devices
-    if (canWriteToFirestore()) {
+    if (canWriteToFirestore() && auth?.currentUser?.uid) {
       try {
         const docRef = doc(db, 'tenants', cleanId);
         setDoc(docRef, payload, { merge: true }).catch((err) => {
           checkFirestoreQuotaExhausted(err);
+          if (isFirestorePermissionError(err)) {
+            handleFirestoreError(err, OperationType.WRITE, `tenants/${cleanId}`);
+          }
         });
         this.setConnectedStatus(true);
       } catch (err: any) {
@@ -447,7 +440,7 @@ export class RealtimeSyncService {
     }
 
     try {
-      const url = `/api/tenant/sync-stream?token=${encodeURIComponent(token)}`;
+      const url = `/api/tenant/sync-stream?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(this.getDeviceId())}`;
       this.eventSource = new EventSource(url);
 
       this.eventSource.onopen = () => {
@@ -460,6 +453,16 @@ export class RealtimeSyncService {
           if (payload.type === 'CONNECTED') {
             this.setConnectedStatus(true);
             if (payload.version) this.currentVersion = payload.version;
+            return;
+          }
+
+          if (payload.type === 'FORCE_LOGOUT') {
+            const myDeviceId = this.getDeviceId();
+            if (!payload.deviceId || payload.deviceId === myDeviceId) {
+              this.onForceLogoutCallback?.(
+                payload.reason || 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.'
+              );
+            }
             return;
           }
 
@@ -482,19 +485,36 @@ export class RealtimeSyncService {
     // Seamlessly synchronizes updates without exhausting Firestore quotas or causing backoff delays.
     this.pollTimer = setInterval(async () => {
       const token = getStoredToken();
+      if (!token) return;
+
+      const myDeviceId = this.getDeviceId();
       const queryParams = new URLSearchParams({
         version: String(this.currentVersion),
         companyId: this.companyId,
+        deviceId: myDeviceId,
+        token,
       });
-      if (token) queryParams.set('token', token);
 
       try {
-        const headers: Record<string, string> = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token}`,
+          'x-device-id': myDeviceId,
+          'x-device-name': typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 80) : 'Web',
+        };
 
         const res = await fetch(`/api/tenant/sync-check?${queryParams.toString()}`, {
           headers,
         });
+
+        if (res.status === 401) {
+          const errJson = await res.json().catch(() => null);
+          if (errJson?.code === 'device_revoked') {
+            this.onForceLogoutCallback?.(
+              errJson.error || 'تم إيقاف هذا الجهاز عن العمل من قِبل مدير المنشأة.'
+            );
+          }
+          return;
+        }
 
         if (res.ok) {
           const json = await res.json();
@@ -589,6 +609,7 @@ export class RealtimeSyncService {
     }
     this.listeners.clear();
     this.statusListeners.clear();
+    this.onForceLogoutCallback = null;
     this.isConnected = false;
   }
 }
