@@ -70,85 +70,68 @@ export function generateGoodsIssuePrintHtml(
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>إذن صرف مخزني - ${issue.voucherNumber || 'GIN'}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @page { size: auto; margin: 0mm; }
-  * { box-sizing: border-box; }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; margin: 0; padding: 0; color: #000;
-    width: 100%; min-height: 100%; display: flex; flex-direction: column; align-items: center;
+  @page { size: auto; margin: 5mm; }
+  * { box-sizing: border-box; font-family: 'Tajawal', system-ui, -apple-system, sans-serif; }
+
+  html, body {
+    background-color: #f1f5f9; margin: 0; padding: 10px; color: #0f172a;
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  .report-container { 
-    background: #fff; width: 100vw; min-height: calc(100vh - 25px); max-width: 100%;
-    margin: 0 auto; padding: 5mm 7mm; border: 3px solid #000; 
+  .report-container {
+    background: #fff; width: 100%; max-width: 210mm; min-height: auto;
+    margin: 0 auto; padding: 8mm 10mm; border: 1px solid #cbd5e1; border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.06);
     display: flex; flex-direction: column; justify-content: space-between;
   }
 
-  /* 1. الترويسة */
-  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 5px; width: 100%; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: bold; }
-  .header-right p { margin: 0; font-size: 0.75rem; color: #333; }
-  .phone-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; }
+  .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #1e293b; padding-bottom: 6px; margin-bottom: 8px; width: 100%; gap: 8px; }
+  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+  .header-right p { margin: 0; font-size: 0.78rem; color: #475569; }
+  .phone-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; color: #334155; }
   .logo-img { max-height: 48px; max-width: 130px; object-fit: contain; }
 
-  /* 2. بيانات إذن الصرف */
-  .info-box { 
-    display: flex; justify-content: space-between; border: 1.5px solid #000; 
-    padding: 5px 10px; margin-bottom: 5px; font-size: 0.75rem; background: #fff; line-height: 1.4;
+  .info-box {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; border: 1px solid #cbd5e1; border-radius: 4px;
+    padding: 6px 10px; margin-bottom: 8px; font-size: 0.78rem; background: #f8fafc; line-height: 1.45;
   }
   .info-item { display: flex; flex-direction: column; gap: 2px; }
 
-  /* 3. كروت الإجماليات */
-  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 5px; }
-  .kpi-card { border: 1.5px solid #000; padding: 4px; text-align: center; background: #fafafa; }
-  .kpi-title { font-size: 0.7rem; font-weight: bold; color: #333; margin-bottom: 2px; }
-  .kpi-value { font-size: 0.95rem; font-weight: bold; }
-  .kpi-total { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-bottom: 8px; }
+  .kpi-card { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; background: #f8fafc; }
+  .kpi-title { font-size: 0.72rem; font-weight: 500; color: #475569; margin-bottom: 2px; }
+  .kpi-value { font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kpi-total { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
 
-  /* 4. الجدول */
-  .table-container { flex-grow: 1; margin-bottom: 5px; }
-  table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; }
-  th, td { border: 1px solid #000; padding: 3.5px 4px; font-size: 0.72rem; text-align: center; }
-  th { background-color: #ededed; font-weight: bold; }
+  .table-container { width: 100%; overflow-x: auto; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px 6px; font-size: 0.75rem; text-align: center; font-variant-numeric: tabular-nums; }
+  th { background-color: #f1f5f9; color: #0f172a; font-weight: 600; }
   .text-right { text-align: right; padding-right: 6px; }
-  .amount-cell { font-family: Tahoma, sans-serif; font-weight: bold; }
-  tfoot tr { background-color: #ededed; font-weight: bold; }
+  .amount-cell { font-weight: 600; font-variant-numeric: tabular-nums; }
+  tfoot tr { background-color: #f1f5f9; font-weight: 600; }
 
-  /* 5. البيان والملاحظات */
-  .notes-section { border: 1px solid #000; padding: 4px 8px; font-size: 0.72rem; margin-bottom: 5px; background: #fff; }
-  .notes-title { font-weight: bold; margin-bottom: 2px; }
+  .notes-section { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 8px; font-size: 0.75rem; margin-bottom: 8px; background: #fff; }
+  .notes-title { font-weight: 600; margin-bottom: 2px; color: #0f172a; }
 
-  /* 6. التوقيعات */
-  .signatures { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; padding: 0 10px; }
+  .signatures { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 0.76rem; font-weight: 600; padding: 0 6px; }
+  .footer { border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 0.7rem; color: #475569; }
+  .copyright-outside { font-size: 0.72rem; font-weight: 500; text-align: center; padding: 6px 0; width: 100%; color: #64748b; }
 
-  /* 7. التذييل */
-  .footer { border-top: 1px solid #000; padding-top: 2px; display: flex; justify-content: space-between; font-size: 0.65rem; }
-  
-  .copyright-outside { font-size: 0.75rem; font-weight: bold; text-align: center; padding: 3px 0; width: 100%; color: #000; }
-
-  /* شريط أدوات التحكم في المعاينة */
-  .no-print {
-    width: 100%;
-    max-width: 1000px;
-    margin: 8px auto 4px auto;
-    padding: 8px 12px;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    direction: rtl;
-  }
   ${getPrintToolbarStyles()}
 
   @media print {
-    html, body { background: #fff; width: 100vw; height: 100vh; overflow: hidden; }
-    .report-container { border: 2.5px solid #000; height: calc(100vh - 22px); width: 100vw; max-width: 100%; }
-    .no-print { display: none !important; }
+    html, body { background: #fff !important; width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+    .no-print, .no-print-toolbar { display: none !important; }
+    .report-container { border: none !important; height: auto !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; box-shadow: none !important; }
+    .table-container { overflow: visible !important; }
   }
 </style>
 </head>

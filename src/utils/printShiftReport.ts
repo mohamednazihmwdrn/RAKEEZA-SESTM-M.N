@@ -149,91 +149,109 @@ export function generateShiftReportPrintHtml(
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تقرير ملخص الشفت والأرباح اليومية</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @page { 
-    size: auto; 
-    margin: 4mm; 
+  @page {
+    size: A4 portrait;
+    margin: 6mm;
   }
-  * { 
-    box-sizing: border-box; 
+  * {
+    box-sizing: border-box;
   }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; 
-    margin: 0; padding: 0; color: #000;
-    width: 100%; height: 100%;
+
+  html, body {
+    font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #f8fafc;
+    margin: 0; padding: 10px 8px; color: #0f172a;
+    width: 100%; min-height: 100%;
     display: flex; flex-direction: column; align-items: center;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
   }
 
-  .report-container { 
-    background: #fff; 
-    width: 100vw; height: calc(100vh - 25px); max-width: 100%;
-    margin: 0 auto; padding: 5mm 7mm; 
-    border: 3px solid #000; 
-    display: flex; flex-direction: column; justify-content: space-between;
+  .report-container {
+    background: #fff;
+    width: 100%; max-width: 210mm;
+    margin: 0 auto; padding: 6mm 7mm;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
   }
 
-  /* 1. الترويسة الديناميكية */
-  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 5px; width: 100%; }
+  .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1.5px solid #0f172a; padding-bottom: 6px; width: 100%; }
   .header.is-empty { display: none !important; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 900; }
-  .header-right p { margin: 0; font-size: 0.8rem; font-weight: bold; }
+  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+  .header-right p { margin: 0; font-size: 0.78rem; font-weight: 500; color: #475569; }
   .header-center { text-align: center; }
   .logo-img { max-height: 52px; max-width: 120px; object-fit: contain; }
   .header-left { text-align: left; }
-  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; font-weight: bold; font-family: 'Segoe UI', Tahoma, sans-serif; }
+  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.76rem; font-weight: 600; color: #334155; direction: ltr; text-align: left; font-variant-numeric: tabular-nums; }
   .phones-list li { margin-bottom: 1px; }
 
-  /* 2. صندوق البيانات */
-  .info-box { display: flex; justify-content: space-between; align-items: center; border: 1.5px solid #000; padding: 4px 10px; margin-bottom: 6px; font-size: 0.8rem; background-color: #fff; }
-  .info-item p { margin: 1px 0; }
+  .info-box { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; font-size: 0.8rem; background-color: #f8fafc; }
+  .info-item p { margin: 1px 0; font-weight: 500; color: #1e293b; }
 
-  /* 3. الجدول المالي المتجاوب */
-  .table-wrapper { width: 100%; margin-bottom: 6px; border: 1.5px solid #000; flex-grow: 1; display: flex; flex-direction: column; }
-  table { width: 100%; height: 100%; border-collapse: collapse; text-align: center; font-size: 0.82rem; }
-  th, td { border: 1px solid #000; padding: 5px 3px; }
-  th { background-color: #f2f2f2; font-weight: bold; }
-  .total-row { font-weight: bold; background-color: #e6e6e6; }
+  .table-wrapper { width: 100%; margin-bottom: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; text-align: center; font-size: 0.8rem; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 5px; }
+  th { background-color: #f1f5f9; font-weight: 600; color: #0f172a; }
+  td { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .total-row { font-weight: 700; background-color: #f8fafc; }
 
-  /* 4. الحسابات والمؤشرات الختامية */
-  .bottom-section { display: flex; justify-content: flex-end; margin-bottom: 5px; }
-  .summary-vertical-list { width: 45%; border: 1.5px solid #000; font-size: 0.82rem; }
-  .summary-line { display: flex; justify-content: space-between; padding: 3px 8px; border-bottom: 1px solid #000; }
+  .bottom-section { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  .summary-vertical-list { width: 100%; max-width: 360px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.82rem; overflow: hidden; }
+  .summary-line { display: flex; justify-content: space-between; padding: 5px 10px; border-bottom: 1px solid #e2e8f0; font-variant-numeric: tabular-nums; }
   .summary-line:last-child { border-bottom: none; }
-  .total-line { font-weight: bold; font-size: 0.92rem; background-color: #f2f2f2; border-top: 1.5px solid #000; }
+  .total-line { font-weight: 700; font-size: 0.92rem; background-color: #f1f5f9; border-top: 1px solid #cbd5e1; }
 
-  /* 5. التذييل داخل الحاوية */
-  .report-footer-note { border-top: 1px dashed #000; padding-top: 3px; font-size: 0.72rem; display: flex; justify-content: space-between; width: 100%; }
+  .report-footer-note { border-top: 1px solid #cbd5e1; padding-top: 5px; font-size: 0.72rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; width: 100%; color: #64748b; }
 
-  /* 6. حقوق الملكية خارج الإطار الخارجي تماماً */
   .copyright-outside {
     font-size: 0.72rem;
-    font-weight: bold;
-    color: #000;
-    margin-top: 4px;
+    font-weight: 600;
+    color: #475569;
+    margin-top: 8px;
     text-align: center;
     width: 100%;
     direction: rtl;
   }
 
+  @media (max-width: 640px) {
+    .report-container { padding: 10px; }
+    .summary-vertical-list { max-width: 100%; }
+  }
+
   @media print {
     html, body {
-      background-color: #fff;
-      height: 100%;
-      overflow: hidden;
+      background-color: #fff !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
+      display: block !important;
     }
     .report-container {
-      height: calc(100vh - 20px) !important;
-      border: 3px solid #000 !important;
-      page-break-inside: avoid;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      border: 1px solid #94a3b8 !important;
+      border-radius: 0 !important;
+      padding: 4mm 6mm !important;
+      box-shadow: none !important;
     }
+    .table-wrapper { overflow: visible !important; }
     .copyright-outside {
       display: block !important;
-      position: relative;
-      margin-top: 4px;
+      margin-top: 6px !important;
+      color: #0f172a !important;
     }
+    .no-print { display: none !important; }
   }
   ${getPrintToolbarStyles()}
 </style>

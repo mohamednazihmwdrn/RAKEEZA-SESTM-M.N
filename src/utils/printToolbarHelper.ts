@@ -12,42 +12,45 @@ export function getPrintToolbarStyles(): string {
   .no-print-toolbar, .no-print-bar {
     background: #0f172a;
     color: #fff;
-    padding: 10px 16px;
+    padding: 10px 12px;
     width: 100%;
+    max-width: 100vw;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    gap: 8px 12px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
     position: sticky;
     top: 0;
     z-index: 99999;
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    font-family: 'Tajawal', 'Segoe UI', Tahoma, Arial, sans-serif;
     direction: rtl;
-    border-bottom: 2px solid #1e293b;
+    border-bottom: 1px solid #1e293b;
+    box-sizing: border-box;
   }
 
   .toolbar-title-box {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    min-width: 0;
   }
 
   .toolbar-title-box .title-text {
-    font-weight: 800;
+    font-weight: 600;
     font-size: 14px;
     color: #f8fafc;
-    letter-spacing: -0.2px;
   }
 
   .toolbar-title-box .doc-badge {
     background: #1e293b;
-    color: #93c5fd;
-    padding: 3px 10px;
+    color: #cbd5e1;
+    padding: 3px 8px;
     border-radius: 6px;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     border: 1px solid #334155;
   }
 
@@ -55,7 +58,14 @@ export function getPrintToolbarStyles(): string {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    width: 100%;
+  }
+
+  @media (min-width: 768px) {
+    .toolbar-controls {
+      width: auto;
+    }
   }
 
   .toolbar-field {
@@ -67,69 +77,57 @@ export function getPrintToolbarStyles(): string {
 
   .toolbar-field label {
     color: #cbd5e1;
-    font-weight: 700;
+    font-weight: 500;
     white-space: nowrap;
   }
 
   .toolbar-select {
     background: #1e293b;
     color: #f8fafc;
-    border: 1.5px solid #475569;
+    border: 1px solid #475569;
+    min-height: 38px;
     padding: 6px 10px;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 500;
     cursor: pointer;
     outline: none;
-    transition: all 0.2s ease;
-  }
-
-  .toolbar-select:hover {
-    border-color: #60a5fa;
-    background: #243248;
+    max-width: 100%;
   }
 
   .toolbar-select:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+    border-color: #60a5fa;
   }
 
   .btn-print {
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: #1d4ed8;
     color: white;
-    border: 1px solid #22c55e;
-    padding: 6px 18px;
+    border: 1px solid #1d4ed8;
+    min-height: 38px;
+    padding: 6px 16px;
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 600;
     border-radius: 6px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35);
-    transition: all 0.15s ease;
   }
 
   .btn-print:hover {
-    background: linear-gradient(135deg, #15803d, #166534);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 10px rgba(22, 163, 74, 0.45);
-  }
-
-  .btn-print:active {
-    transform: translateY(0);
+    background: #1e40af;
   }
 
   .btn-close {
     background: #334155;
-    color: #e2e8f0;
+    color: #f1f5f9;
     border: 1px solid #475569;
+    min-height: 38px;
     padding: 6px 14px;
     font-size: 12.5px;
-    font-weight: 700;
+    font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.15s ease;
   }
 
   .btn-close:hover {
@@ -233,33 +231,42 @@ export function getPrintToolbarStyles(): string {
     .no-print-toolbar, .no-print-bar, .no-print {
       display: none !important;
     }
-    body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
     .report-container, .invoice-container, .voucher-container {
       box-shadow: none !important;
       transform: none !important;
-      page-break-after: avoid !important;
-      page-break-inside: avoid !important;
       box-sizing: border-box !important;
+      min-height: auto !important;
+      height: auto !important;
+      overflow: visible !important;
     }
+    table { width: 100% !important; border-collapse: collapse !important; }
+    thead { display: table-header-group !important; }
+    tfoot { display: table-footer-group !important; }
+    tr, .print-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
     body.size-a4 .report-container,
     body.size-a4 .invoice-container,
     body.size-a4 .voucher-container {
       width: 100% !important;
-      max-width: 200mm !important;
-      min-height: 280mm !important;
+      max-width: 100% !important;
       margin: 0 auto !important;
-      padding: 6mm 8mm !important;
-      border: 2px solid #000 !important;
+      padding: 4mm !important;
+      border: 1px solid #cbd5e1 !important;
     }
     body.size-a5 .report-container,
     body.size-a5 .invoice-container,
     body.size-a5 .voucher-container {
       width: 100% !important;
-      max-width: 140mm !important;
-      min-height: 196mm !important;
+      max-width: 100% !important;
       margin: 0 auto !important;
-      padding: 4mm 5mm !important;
-      border: 1.5px solid #000 !important;
+      padding: 3mm !important;
+      border: 1px solid #cbd5e1 !important;
       font-size: 0.76rem !important;
     }
     body.size-80mm .report-container,
@@ -267,11 +274,9 @@ export function getPrintToolbarStyles(): string {
     body.size-80mm .voucher-container {
       width: 72mm !important;
       max-width: 72mm !important;
-      min-height: auto !important;
-      height: auto !important;
       margin: 0 auto !important;
       padding: 2mm !important;
-      border: 1px dashed #000 !important;
+      border: 1px dashed #94a3b8 !important;
       font-size: 0.72rem !important;
     }
     body.size-58mm .report-container,
@@ -279,11 +284,9 @@ export function getPrintToolbarStyles(): string {
     body.size-58mm .voucher-container {
       width: 48mm !important;
       max-width: 48mm !important;
-      min-height: auto !important;
-      height: auto !important;
       margin: 0 auto !important;
       padding: 1.5mm !important;
-      border: 1px dashed #000 !important;
+      border: 1px dashed #94a3b8 !important;
       font-size: 0.65rem !important;
     }
   }

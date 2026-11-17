@@ -210,64 +210,66 @@ export function generateCashBalancesReportHtml(appData: AppData): string {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تقرير الخزينة والأرصدة النقدية التفاعلي</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @page { size: auto; margin: 0mm; }
-  * { box-sizing: border-box; }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; margin: 0; padding: 0; color: #000;
-    width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center;
+  @page { size: auto; margin: 5mm; }
+  * { box-sizing: border-box; font-family: 'Tajawal', system-ui, -apple-system, sans-serif; }
+
+  html, body {
+    background-color: #f1f5f9; margin: 0; padding: 10px; color: #0f172a;
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  .report-container { 
-    background: #fff; width: 100vw; height: calc(100vh - 25px); max-width: 100%;
-    margin: 0 auto; padding: 5mm 7mm; border: 3px solid #000; 
+  .report-container {
+    background: #fff; width: 100%; max-width: 210mm; min-height: auto;
+    margin: 0 auto; padding: 8mm 10mm; border: 1px solid #cbd5e1; border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.06);
     display: flex; flex-direction: column; justify-content: space-between;
   }
 
-  /* 1. الترويسة */
-  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 5px; width: 100%; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.1rem; font-weight: bold; }
-  .header-right p { margin: 0; font-size: 0.75rem; color: #333; }
-  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; }
-  .phones-list li { margin-bottom: 1px; font-weight: 600; }
+  .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #1e293b; padding-bottom: 6px; margin-bottom: 8px; width: 100%; gap: 8px; }
+  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+  .header-right p { margin: 0; font-size: 0.78rem; color: #475569; }
+  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; color: #334155; }
+  .phones-list li { margin-bottom: 1px; font-weight: 500; }
 
-  /* 2. صندوق البيانات والفلترة */
-  .info-box { 
-    display: flex; justify-content: space-between; align-items: center;
-    border: 1.5px solid #000; padding: 4px 8px; margin-bottom: 6px; 
-    font-size: 0.78rem; line-height: 1.3; width: 100%; background-color: #fafafa;
+  .info-box {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;
+    border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;
+    font-size: 0.78rem; line-height: 1.4; width: 100%; background-color: #f8fafc;
   }
   .info-item p { margin: 1px 0; }
 
-  /* 3. كروت الإحصائيات (Dynamic KPIs Grid) */
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-bottom: 6px; }
-  .kpi-card { border: 1.5px solid #000; padding: 4px 6px; text-align: center; background-color: #f8f9fa; }
-  .kpi-card .kpi-title { font-size: 0.7rem; font-weight: bold; color: #333; }
-  .kpi-card .kpi-value { font-size: 0.9rem; font-weight: bold; margin-top: 2px; color: #2563eb; direction: ltr; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-bottom: 8px; }
+  .kpi-card { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; background-color: #f8fafc; }
+  .kpi-card .kpi-title { font-size: 0.72rem; font-weight: 500; color: #475569; }
+  .kpi-card .kpi-value { font-size: 0.9rem; font-weight: 600; margin-top: 2px; color: #1d4ed8; direction: ltr; font-variant-numeric: tabular-nums; }
 
-  /* 4. الجدول */
-  .table-wrapper { width: 100%; flex-grow: 1; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  th, td { border: 1px solid #000; padding: 4px; text-align: center; font-size: 0.72rem; }
-  th { background-color: #ededed; font-weight: bold; font-size: 0.75rem; }
-  tfoot tr { background-color: #e2e8f0; font-weight: bold; }
+  .table-wrapper { width: 100%; overflow-x: auto; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px; text-align: center; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+  th { background-color: #f1f5f9; color: #0f172a; font-weight: 600; font-size: 0.75rem; }
+  tfoot tr { background-color: #f1f5f9; font-weight: 600; }
 
   .amount-cell { direction: ltr; }
-  .total-col { font-weight: bold; background-color: #f8f9fa; direction: ltr; }
+  .total-col { font-weight: 600; background-color: #f8fafc; direction: ltr; }
 
-  /* 5. التوقيعات */
-  .bottom-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; margin-bottom: 4px; width: 100%; font-size: 0.78rem; font-weight: bold; }
-  .report-footer-note { border-top: 1.5px solid #000; padding-top: 3px; margin-top: auto; display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 600; width: 100%; }
-  .copyright-outside { width: 100%; text-align: center; font-size: 0.72rem; font-weight: bold; color: #000; padding: 2px 0; direction: rtl; }
+  .bottom-section { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 8px; margin-bottom: 6px; width: 100%; font-size: 0.78rem; font-weight: 600; }
+  .report-footer-note { border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 0.72rem; font-weight: 500; color: #475569; width: 100%; }
+  .copyright-outside { width: 100%; text-align: center; font-size: 0.72rem; font-weight: 500; color: #64748b; padding: 6px 0; direction: rtl; }
 
   ${getPrintToolbarStyles()}
 
   @media print {
-    body { background: none; padding: 0; margin: 0; }
-    .report-container { border: 3px solid #000 !important; width: 100vw !important; height: calc(100vh - 20px) !important; padding: 4mm !important; box-shadow: none; }
+    html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; overflow: visible !important; }
+    .no-print-toolbar, .no-print { display: none !important; }
+    .report-container { border: none !important; width: 100% !important; max-width: 100% !important; height: auto !important; padding: 0 !important; box-shadow: none !important; }
+    .table-wrapper { overflow: visible !important; }
   }
 </style>
 </head>

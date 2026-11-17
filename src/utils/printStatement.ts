@@ -336,314 +336,129 @@ export function generateStatementPrintHtml(data: StatementData, isSupplier: bool
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>كشف حساب تفصيلي - ${data.accountName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --page-size: ${paperSize === 'A5' ? 'A5 portrait' : paperSize === 'Letter' ? 'letter portrait' : 'A4 portrait'};
     --page-margin: ${pageMargin}mm;
   }
 
-  @page { 
-    size: var(--page-size, auto); 
-    margin: var(--page-margin, 4mm); 
+  @page {
+    size: var(--page-size, auto);
+    margin: var(--page-margin, 5mm);
   }
-  * { box-sizing: border-box; }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; margin: 0; padding: 0; color: #000;
-    width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center;
+  * { box-sizing: border-box; font-family: 'Tajawal', system-ui, -apple-system, sans-serif; }
+
+  html, body {
+    background-color: #f1f5f9; margin: 0; padding: 10px; color: #0f172a;
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
   .no-print-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 9999;
-    background: #0f172a;
-    color: #fff;
-    width: 100%;
-    padding: 8px 16px;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    position: sticky; top: 0; z-index: 9999;
+    background: #0f172a; color: #fff; width: 100%; max-width: 100vw; padding: 10px 14px;
+    border-radius: 10px; margin-bottom: 12px;
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+    gap: 10px; box-shadow: 0 4px 12px rgba(15,23,42,0.18);
   }
-  .toolbar-title-box {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .toolbar-title-box .title-text {
-    font-weight: bold;
-    font-size: 13.5px;
-    color: #fff;
-  }
-  .toolbar-title-box .doc-badge {
-    background: #334155;
-    color: #93c5fd;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-  .toolbar-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .toolbar-field {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-  }
-  .toolbar-field label {
-    color: #cbd5e1;
-    font-weight: 600;
-    white-space: nowrap;
-  }
+  .toolbar-title-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .toolbar-title-box .title-text { font-weight: 600; font-size: 13.5px; color: #fff; }
+  .toolbar-title-box .doc-badge { background: #334155; color: #e2e8f0; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 500; }
+  .toolbar-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .toolbar-field { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+  .toolbar-field label { color: #cbd5e1; font-weight: 500; white-space: nowrap; }
   .toolbar-select {
-    padding: 5px 9px;
-    border-radius: 6px;
-    border: 1px solid #475569;
-    background: #1e293b;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.15s;
+    min-height: 36px; padding: 5px 9px; border-radius: 6px; border: 1px solid #475569;
+    background: #1e293b; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; outline: none;
   }
-  .toolbar-select:focus {
-    border-color: #3b82f6;
-  }
+  .toolbar-select:focus { border-color: #3b82f6; }
   .btn-print {
-    background: #16a34a;
-    color: #fff;
-    border: none;
-    padding: 6px 18px;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 13px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.25);
-    transition: all 0.15s;
+    min-height: 36px; background: #16a34a; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-print:hover {
-    background: #15803d;
-    transform: translateY(-1px);
-  }
+  .btn-print:hover { background: #15803d; }
   .btn-close {
-    background: #475569;
-    color: #fff;
-    border: none;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.15s;
+    min-height: 36px; background: #475569; color: #fff; border: none; padding: 6px 14px;
+    border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer;
   }
-  .btn-close:hover {
-    background: #334155;
-  }
+  .btn-close:hover { background: #334155; }
 
-  body.size-a5 { font-size: 0.72rem; }
-  body.size-a5 .report-container { padding: 3mm 4mm; min-height: calc(100vh - 12px); }
-  body.size-a5 .header-right h2 { font-size: 0.95rem; }
-  body.size-a5 .header-right p, body.size-a5 .phones-list { font-size: 0.65rem; }
-  body.size-a5 .logo-img { max-height: 38px; }
-  body.size-a5 .info-box { padding: 3px 5px; font-size: 0.68rem; }
-  body.size-a5 .kpi-card { padding: 2px 4px; }
-  body.size-a5 .kpi-card .kpi-title { font-size: 0.65rem; }
-  body.size-a5 .kpi-card .kpi-value { font-size: 0.8rem; }
-  body.size-a5 table th, body.size-a5 table td { padding: 2.5px 3.5px; font-size: 0.68rem; }
-  body.size-a5 .report-footer-note { font-size: 0.68rem; padding-top: 2px; }
-  body.size-a5 .copyright-outside { font-size: 0.65rem; padding: 1px 0; }
+  body.size-a5 .report-container { max-width: 148mm; padding: 5mm 6mm; }
+  body.size-a5 .header-right h2 { font-size: 1rem; }
+  body.size-a5 table th, body.size-a5 table td { padding: 3px 4px; font-size: 0.7rem; }
 
-  /* Thermal 80mm & 58mm POS styles */
-  body.size-80mm {
-    font-size: 0.72rem;
-    background: #fff;
-    padding: 0;
-  }
-  body.size-80mm .report-container {
-    width: 76mm !important;
-    min-height: auto !important;
-    height: auto !important;
-    border: none !important;
-    padding: 2mm !important;
-    margin: 0 auto;
-  }
-  body.size-80mm .header {
-    flex-direction: column;
-    text-align: center;
-    border-bottom: 1px dashed #000;
-  }
-  body.size-80mm .header-right, body.size-80mm .header-center, body.size-80mm .header-left {
-    width: 100%;
-    text-align: center;
-  }
-  body.size-80mm .info-box {
-    flex-direction: column;
-    text-align: center;
-    border: 1px dashed #000;
-  }
-  body.size-80mm .kpi-grid {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-  body.size-80mm table th, body.size-80mm table td {
-    padding: 2px 3px;
-    font-size: 0.68rem;
-  }
+  body.size-80mm { background: #fff; padding: 0; font-size: 0.72rem; }
+  body.size-80mm .report-container { width: 76mm !important; max-width: 76mm !important; border: none !important; padding: 2mm !important; box-shadow: none !important; }
+  body.size-80mm .header { flex-direction: column; text-align: center; border-bottom: 1px dashed #334155; }
+  body.size-80mm .header-right, body.size-80mm .header-center, body.size-80mm .header-left { width: 100%; text-align: center; }
+  body.size-80mm .info-box { display: block; border: 1px dashed #334155; }
+  body.size-80mm .info-col { display: block; width: 100%; text-align: center !important; }
+  body.size-80mm .kpi-grid { grid-template-columns: 1fr; gap: 4px; }
 
-  body.size-58mm {
-    font-size: 0.65rem;
-    background: #fff;
-    padding: 0;
-  }
-  body.size-58mm .report-container {
-    width: 54mm !important;
-    min-height: auto !important;
-    height: auto !important;
-    border: none !important;
-    padding: 1.5mm !important;
-    margin: 0 auto;
-  }
-  body.size-58mm .header {
-    flex-direction: column;
-    text-align: center;
-    border-bottom: 1px dashed #000;
-  }
-  body.size-58mm .header-right, body.size-58mm .header-center, body.size-58mm .header-left {
-    width: 100%;
-    text-align: center;
-  }
-  body.size-58mm .info-box {
-    flex-direction: column;
-    text-align: center;
-    border: 1px dashed #000;
-  }
-  body.size-58mm .kpi-grid {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-  body.size-58mm table th, body.size-58mm table td {
-    padding: 1.5px 2px;
-    font-size: 0.6rem;
-  }
+  body.size-58mm { background: #fff; padding: 0; font-size: 0.65rem; }
+  body.size-58mm .report-container { width: 54mm !important; max-width: 54mm !important; border: none !important; padding: 1.5mm !important; box-shadow: none !important; }
+  body.size-58mm .header { flex-direction: column; text-align: center; border-bottom: 1px dashed #334155; }
+  body.size-58mm .header-right, body.size-58mm .header-center, body.size-58mm .header-left { width: 100%; text-align: center; }
+  body.size-58mm .info-box { display: block; border: 1px dashed #334155; }
+  body.size-58mm .info-col { display: block; width: 100%; text-align: center !important; }
+  body.size-58mm .kpi-grid { grid-template-columns: 1fr; gap: 3px; }
 
-  body.orient-landscape .report-container { width: 100vw; height: auto; min-height: calc(100vh - 20px); }
-
-  .report-container { 
-    background: #fff; width: 100vw; height: 100vh; min-height: 98vh; max-width: 100%;
-    margin: 0 auto; padding: 5mm 7mm; border: 3px solid #000; 
-    box-sizing: border-box;
+  .report-container {
+    background: #fff; width: 100%; max-width: 210mm; min-height: auto;
+    margin: 0 auto; padding: 8mm 10mm; border: 1px solid #cbd5e1; border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.06);
     display: flex; flex-direction: column; justify-content: space-between;
   }
 
-  /* 1. الترويسة */
-  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 5px; width: 100%; }
+  .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #1e293b; padding-bottom: 6px; margin-bottom: 8px; width: 100%; gap: 8px; }
   .header.is-empty { display: none !important; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.1rem; font-weight: bold; }
-  .header-right p { margin: 0; font-size: 0.75rem; color: #333; }
-  .header-center { display: flex; justify-content: center; align-items: center; min-width: 80px; }
-  .logo-img { max-width: 85px; max-height: 50px; object-fit: contain; }
-  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; }
-  .phones-list li { margin-bottom: 1px; font-weight: 600; }
+  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+  .header-right p { margin: 0; font-size: 0.78rem; color: #475569; }
+  .header-center { display: flex; justify-content: center; align-items: center; min-width: 60px; }
+  .logo-img { max-width: 85px; max-height: 48px; object-fit: contain; }
+  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; color: #334155; }
+  .phones-list li { margin-bottom: 1px; font-weight: 500; }
 
-  /* 2. صندوق البيانات الأساسية */
-  .info-box { 
-    display: table;
-    width: 100%;
-    border: 1.5px solid #000; 
-    padding: 4px 6px; 
-    margin-bottom: 6px; 
-    font-size: 0.75rem; 
-    line-height: 1.4; 
-    background-color: #fafafa;
+  .info-box {
+    display: table; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px;
+    padding: 6px 8px; margin-bottom: 8px; font-size: 0.78rem; line-height: 1.45; background-color: #f8fafc;
   }
   .info-col { display: table-cell; vertical-align: top; width: 33.33%; }
-  .info-item { margin-bottom: 2px; white-space: nowrap; }
+  .info-item { margin-bottom: 2px; }
   .no-break { display: inline-block; direction: ltr; unicode-bidi: embed; white-space: nowrap; }
 
-  /* 3. كروت المؤشرات (KPIs) */
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
-  .kpi-card { border: 1.5px solid #000; padding: 4px 6px; text-align: center; background-color: #f8f9fa; }
-  .kpi-card .kpi-title { font-size: 0.7rem; font-weight: bold; color: #333; }
-  .kpi-card .kpi-value { font-size: 0.88rem; font-weight: bold; margin-top: 2px; direction: ltr; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin-bottom: 8px; }
+  .kpi-card { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 8px; text-align: center; background-color: #f8fafc; }
+  .kpi-card .kpi-title { font-size: 0.72rem; font-weight: 500; color: #475569; }
+  .kpi-card .kpi-value { font-size: 0.9rem; font-weight: 600; margin-top: 2px; direction: ltr; font-variant-numeric: tabular-nums; }
 
-  /* 4. الجدول */
-  .table-wrapper { width: 100%; flex-grow: 1; display: flex; flex-direction: column; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  th, td { border: 1px solid #000; padding: 4px 5px; text-align: center; font-size: 0.73rem; }
-  th { background-color: #ededed; font-weight: bold; font-size: 0.76rem; }
-  tfoot tr { background-color: #e2e8f0; font-weight: bold; }
+  .table-wrapper { width: 100%; overflow-x: auto; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px 6px; text-align: center; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+  th { background-color: #f1f5f9; color: #0f172a; font-weight: 600; font-size: 0.76rem; }
+  tfoot tr { background-color: #f1f5f9; font-weight: 600; }
 
   .amount-cell { direction: ltr; }
-  .debit-col { color: #dc2626; }
-  .credit-col { color: #16a34a; }
-  .balance-col { font-weight: bold; background-color: #f8f9fa; direction: ltr; }
+  .debit-col { color: #b91c1c; }
+  .credit-col { color: #15803d; }
+  .balance-col { font-weight: 600; background-color: #f8fafc; direction: ltr; }
 
-  /* 5. التوقيعات والتذييل */
-  .bottom-section { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; margin-bottom: 4px; width: 100%; font-size: 0.78rem; font-weight: bold; }
-  .report-footer-note { border-top: 1.5px solid #000; padding-top: 3px; margin-top: auto; display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 600; width: 100%; }
-  .copyright-outside { 
-    width: 100%; 
-    text-align: center; 
-    font-size: 0.72rem; 
-    font-weight: bold; 
-    color: #000; 
-    margin-top: auto; 
-    padding: 2px 0; 
-    direction: rtl; 
-  }
+  .bottom-section { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 10px; margin-bottom: 6px; width: 100%; font-size: 0.78rem; font-weight: 600; }
+  .report-footer-note { border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 0.72rem; font-weight: 500; color: #475569; width: 100%; }
+  .copyright-outside { width: 100%; text-align: center; font-size: 0.72rem; font-weight: 500; color: #475569; padding: 6px 0; direction: rtl; }
 
   @media print {
-    html, body { 
-      background: #fff !important; 
-      padding: 0 !important; 
-      margin: 0 !important; 
-      width: 100% !important;
-      height: 100% !important;
-      overflow: hidden !important;
-    }
-    .report-container { 
-      border: 3px solid #000 !important; 
-      width: 100vw !important; 
-      height: calc(100vh - 20px) !important; 
-      min-height: calc(100vh - 20px) !important; 
-      max-height: calc(100vh - 20px) !important; 
-      padding: 4mm 6mm !important; 
-      box-sizing: border-box !important; 
-      box-shadow: none !important; 
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      page-break-after: avoid !important;
-      page-break-inside: avoid !important;
-    }
-    .table-wrapper {
-      flex-grow: 1 !important;
-      display: flex !important;
-      flex-direction: column !important;
-    }
-    .copyright-outside {
-      display: block !important;
-      position: relative !important;
-      margin-top: auto !important;
-      padding-top: 2px !important;
-      font-size: 0.72rem !important;
-      font-weight: bold !important;
-      color: #000 !important;
-    }
+    html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
+    .no-print-toolbar, .no-print { display: none !important; }
+    .report-container { border: none !important; width: 100% !important; max-width: 100% !important; height: auto !important; min-height: auto !important; padding: 0 !important; box-shadow: none !important; }
+    .table-wrapper { overflow: visible !important; }
+    .copyright-outside { display: block !important; color: #334155 !important; }
   }
 </style>
 </head>

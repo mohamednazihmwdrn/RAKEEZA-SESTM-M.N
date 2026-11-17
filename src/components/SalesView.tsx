@@ -904,107 +904,104 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
-      {/* 🏛️ ترويسة قسم إدارة المبيعات والفواتير - خلفية بيضاء وكتابة سوداء متناسقة مع الواجهة الرئيسية */}
-      <div className="bg-white text-slate-900 p-3 sm:p-4 rounded-xl shadow-xs border-2 border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0 shadow-2xs">
-            <DollarSign className="w-6 h-6 text-blue-600" />
+      {/* 🏛️ ترويسة قسم إدارة المبيعات والفواتير */}
+      <div className="bg-white text-slate-900 p-3.5 sm:p-4 rounded-xl border border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5 text-blue-600" />
           </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-black tracking-wide flex items-center gap-2">
-              <span className="text-slate-900 font-black">إدارة فواتير المبيعات والإيرادات</span>
-              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">
-                💵 قسم المبيعات
-              </span>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">
+              إدارة فواتير المبيعات والإيرادات
             </h2>
-            <p className="text-[11px] text-slate-600 font-medium">
-              تسجيل ومتابعة فواتير البيع النقدي والجملة والآجل ومردودات المبيعات بدقة وسرعة
+            <p className="text-xs text-slate-500 font-normal">
+              قسم المبيعات · تسجيل ومتابعة فواتير البيع النقدي والجملة والآجل ومردودات المبيعات
             </p>
           </div>
         </div>
 
-        {/* Quick KPI badges */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">عدد الفواتير</span>
-            <span className="text-xs font-black font-mono text-slate-900">{appData.salesInvoices?.length || 0}</span>
+        {/* Quick KPI Summary */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto tabular-nums">
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">عدد الفواتير</span>
+            <span className="text-xs sm:text-sm font-semibold text-slate-900">{appData.salesInvoices?.length || 0}</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">إجمالي المبيعات</span>
-            <span className="text-xs font-black font-mono text-emerald-600">{totalSalesAmount.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">إجمالي المبيعات</span>
+            <span className="text-xs sm:text-sm font-semibold text-emerald-700">{totalSalesAmount.toLocaleString()} ج.م</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">المحصل نقداً</span>
-            <span className="text-xs font-black font-mono text-blue-600">{totalSalesPaid.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">المحصل نقداً</span>
+            <span className="text-xs sm:text-sm font-semibold text-blue-700">{totalSalesPaid.toLocaleString()} ج.م</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">المتبقي ذمم</span>
-            <span className="text-xs font-black font-mono text-amber-600">{totalSalesRemaining.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">المتبقي ذمم</span>
+            <span className="text-xs sm:text-sm font-semibold text-amber-700">{totalSalesRemaining.toLocaleString()} ج.م</span>
           </div>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="bg-indigo-50/40 p-3 sm:p-4 rounded-xl shadow-xs border border-indigo-200/80 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between">
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           {/* 1. بيع نقدي */}
           <button
             onClick={() => openCreateModal('nagdi', 'cash')}
-            className="min-h-[40px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-emerald-700 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة بيع نقدي قطاعي بسداد فوري"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span>💵 بيع نقدي</span>
+            <span>بيع نقدي</span>
           </button>
 
           {/* 2. بيع جملة */}
           <button
             onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[40px] bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-indigo-700 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة بيع بأسعار الجملة المعتمدة"
           >
             <Tag className="w-4 h-4 shrink-0" />
-            <span>🏷️ بيع جملة</span>
+            <span>بيع جملة</span>
           </button>
 
           {/* 3. بيع أجل */}
           <button
             onClick={() => openCreateModal('ajel', 'cash')}
-            className="min-h-[40px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-amber-700 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة بيع آجل على حساب ومديونية العميل"
           >
             <Calendar className="w-4 h-4 shrink-0" />
-            <span>⏳ بيع أجل</span>
+            <span>بيع آجل</span>
           </button>
 
           {/* 4. مرتجع نقدي */}
           <button
             onClick={() => openCreateModal('return_nagdi', 'cash')}
-            className="min-h-[40px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-rose-700 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع مبيعات نقدي بسعر القطاعي"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع نقدي</span>
+            <span>مرتجع نقدي</span>
           </button>
 
           {/* 5. مرتجع جملة */}
           <button
             onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="min-h-[40px] bg-red-800 hover:bg-red-900 active:bg-red-950 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-red-900 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-red-800 hover:bg-red-900 active:bg-red-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع مبيعات جملة بسعر الجملة"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع جملة</span>
+            <span>مرتجع جملة</span>
           </button>
 
           {/* 6. مرتجع أجل */}
           <button
             onClick={() => openCreateModal('return_ajel', 'cash')}
-            className="min-h-[40px] bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-purple-800 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع مبيعات آجل وخصم من مديونية العميل"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع أجل</span>
+            <span>مرتجع آجل</span>
           </button>
 
           <TableActionButtons
@@ -1017,15 +1014,14 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
           {/* ⚡ زر فحص النزاهة وصحة البيانات الضخمة (10M+) */}
           <button
             onClick={() => setIsDiagnosticsModalOpen(true)}
-            className="min-h-[40px] bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs border border-slate-700"
+            className="min-h-[44px] sm:min-h-[40px] bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فحص النزاهة المحاسبية ومراقبة أداء وسعة قاعدة البيانات الضخمة"
           >
             <Activity className="w-4 h-4 text-emerald-400" />
-            <span className="hidden xl:inline">صحة البيانات (10M+)</span>
+            <span className="hidden xl:inline">صحة البيانات</span>
           </button>
         </div>
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
-          {/* فلتر الفترات والسنوات المالية (Sharding Partition Filter) */}
+        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
           {availableInvoiceYears.length > 0 && (
             <select
               value={selectedYearFilter}
@@ -1033,7 +1029,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                 setSelectedYearFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="min-h-[40px] px-3 py-2 border border-indigo-300 bg-white text-indigo-950 font-bold rounded-lg text-xs focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 focus:outline-none cursor-pointer"
+              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none cursor-pointer"
               title="تجزئة وعرض الفواتير حسب السنة المالية"
             >
               <option value="all">كافة السنوات ({appData.salesInvoices?.length || 0})</option>
@@ -1052,7 +1048,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                 setSelectedBranchFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="min-h-[40px] px-3 py-2 border border-indigo-300 bg-white text-indigo-950 font-semibold rounded-lg text-xs focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 focus:outline-none cursor-pointer"
+              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none cursor-pointer"
             >
               <option value="all">جميع الفروع ({appData.salesInvoices?.length || 0})</option>
               {appData.branches.map((b) => (
@@ -1063,7 +1059,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             </select>
           )}
           <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-indigo-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="بحث برقم الفاتورة أو اسم العميل..."
@@ -1072,7 +1068,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full min-h-[40px] pr-9 pl-3 py-2 border border-indigo-300 bg-white rounded-lg text-xs focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 focus:outline-none placeholder:text-slate-400"
+              className="w-full min-h-[44px] sm:min-h-[40px] pr-9 pl-3 py-2 border border-slate-300 bg-white rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -1081,7 +1077,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       {/* Mobile Card List View (< md) */}
       <div className="block md:hidden space-y-3">
         {paginatedInvoices.length === 0 ? (
-          <div className="bg-white rounded-2xl p-6 text-center text-black font-bold text-sm border-2 border-slate-300">
+          <div className="bg-white rounded-xl p-6 text-center text-slate-600 font-semibold text-sm border border-slate-200">
             لا توجد فواتير مبيعات مسجلة
           </div>
         ) : (
@@ -1090,30 +1086,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             return (
               <div
                 key={inv.id}
-                className="bg-white rounded-2xl p-4 shadow-xs border-2 border-indigo-200/90 space-y-3 hover:border-indigo-400 transition"
+                className="bg-white rounded-xl p-4 border border-slate-200 space-y-3 hover:border-slate-300 transition"
               >
-                {/* Top Row: Invoice ID, Date & Type Badge */}
-                <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                {/* Top Row */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
                   <div
                     onClick={() => {
                       setSelectedInvoice(inv);
                       setActiveModal('view');
                     }}
-                    className="flex items-center gap-1.5 cursor-pointer"
+                    className="flex items-center gap-2 cursor-pointer min-w-0"
                   >
-                    <span className="text-indigo-950 font-black text-sm font-mono">#{inv.id}</span>
-                    <span className="text-slate-600 font-bold text-xs font-mono">| {inv.date}</span>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-300 px-1.5 py-0.2 rounded font-bold">
-                      مبيعات
-                    </span>
+                    <span className="text-blue-700 font-semibold text-sm font-mono tabular-nums">#{inv.id}</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-600 font-medium text-xs tabular-nums">{inv.date}</span>
                   </div>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                    className={`px-2 py-0.5 rounded-md text-xs font-semibold border shrink-0 ${
                       inv.type === 'nagdi'
-                        ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : inv.type === 'ajel'
-                        ? 'bg-amber-50 text-amber-950 border-amber-300'
-                        : 'bg-rose-50 text-rose-950 border-rose-300'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
                     }`}
                   >
                     {inv.type === 'nagdi'
@@ -1122,48 +1116,48 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                       ? 'آجل'
                       : inv.type === 'return_nagdi'
                       ? 'مرتجع نقدي'
-                      : 'مرتجع أجل'}
+                      : 'مرتجع آجل'}
                   </span>
                 </div>
 
-                {/* Middle Info: Customer & Financials */}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-black text-black text-sm">{inv.customerName}</div>
+                {/* Middle Info */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 text-sm truncate">{inv.customerName}</div>
                     {inv.salesRep && (
-                      <div className="text-xs text-blue-950 font-bold mt-0.5">👔 مندوب: {inv.salesRep}</div>
+                      <div className="text-xs text-slate-600 mt-0.5">مندوب: {inv.salesRep}</div>
                     )}
                     {inv.notes && (
-                      <div className="text-xs text-black font-medium mt-0.5 line-clamp-1">📝 {inv.notes}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{inv.notes}</div>
                     )}
                   </div>
-                  <div className="text-left shrink-0">
-                    <div className="text-xs text-slate-800 font-bold">القيمة الإجمالية</div>
-                    <div className="font-black text-black text-base font-mono">
+                  <div className="text-left shrink-0 tabular-nums">
+                    <div className="text-[11px] text-slate-500 font-medium">القيمة الإجمالية</div>
+                    <div className="font-semibold text-slate-900 text-base">
                       {(inv.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                     </div>
                   </div>
                 </div>
 
-                {/* Status & Payment breakdown if Ajel */}
-                <div className="flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-300">
+                {/* Status */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200 tabular-nums">
                   <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-black border ${
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${
                       isPaidFull
-                        ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : inv.paidAmount > 0
-                        ? 'bg-amber-100 text-amber-950 border-amber-300'
-                        : 'bg-rose-100 text-rose-950 border-rose-300'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
                     }`}
                   >
                     {isPaidFull ? (
                       <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>مدفوع بالكامل</span>
                       </>
                     ) : inv.paidAmount > 0 ? (
                       <>
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                         <span>مدفوع جزئياً</span>
                       </>
                     ) : (
@@ -1172,59 +1166,59 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                   </span>
 
                   {inv.type === 'ajel' && (
-                    <div className="text-xs text-black font-mono font-bold">
-                      <span>المدفوع: <strong className="text-emerald-900 font-black">{inv.paidAmount.toFixed(0)}</strong></span>
-                      <span className="mx-1 text-slate-400">/</span>
-                      <span>المتبقي: <strong className="text-rose-900 font-black">{(inv.total - inv.paidAmount).toFixed(0)}</strong></span>
+                    <div className="text-xs text-slate-700 font-medium">
+                      <span>المدفوع: <strong className="text-emerald-700">{inv.paidAmount.toFixed(0)}</strong></span>
+                      <span className="mx-1.5 text-slate-300">/</span>
+                      <span>المتبقي: <strong className="text-rose-700">{(inv.total - inv.paidAmount).toFixed(0)}</strong></span>
                     </div>
                   )}
                 </div>
 
-                {/* Action Buttons with 40px min-height */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <button
                     onClick={() => {
                       setSelectedInvoice(inv);
                       setActiveModal('view');
                     }}
-                    className="min-h-[40px] bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-black border border-slate-300 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-700" />
+                    <Eye className="w-4 h-4 text-blue-600" />
                     <span>عرض</span>
                   </button>
                   <button
                     onClick={() => openEditModal(inv)}
-                    className="min-h-[40px] bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-950 border border-blue-400 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Pencil className="w-3.5 h-3.5 text-blue-700" />
+                    <Pencil className="w-4 h-4 text-blue-600" />
                     <span>تعديل</span>
                   </button>
                   <button
                     onClick={() => handlePrintInvoice(inv)}
-                    className="min-h-[40px] bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-black border border-slate-300 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Printer className="w-3.5 h-3.5 text-slate-700" />
+                    <Printer className="w-4 h-4 text-slate-700" />
                     <span>طباعة</span>
                   </button>
                   <button
                     onClick={() => handleWhatsAppShare(inv)}
-                    className="min-h-[40px] bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 text-emerald-950 border border-emerald-400 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                     title="إرسال عبر واتساب"
                   >
-                    <MessageSquare className="w-3.5 h-3.5 text-emerald-800" />
+                    <MessageSquare className="w-4 h-4 text-emerald-700" />
                     <span>واتساب</span>
                   </button>
                   <button
                     onClick={() => handleDeleteInvoice(inv.id)}
-                    className="min-h-[40px] bg-rose-100 hover:bg-rose-200 active:bg-rose-300 text-rose-950 border border-rose-400 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="min-h-[44px] bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                    <Trash2 className="w-4 h-4 text-rose-600" />
                     <span>حذف</span>
                   </button>
                   {inv.type === 'ajel' && !isPaidFull && (
                     <button
                       onClick={() => handleOpenPayModal(inv)}
-                      className="min-h-[40px] bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-black rounded-lg text-xs transition flex items-center justify-center gap-1.5 shadow-xs col-span-2 sm:col-span-4 cursor-pointer"
+                      className="min-h-[44px] bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 col-span-2 sm:col-span-4 cursor-pointer"
                     >
                       <DollarSign className="w-4 h-4" />
                       <span>تسديد دفعة من الفاتورة الآجلة</span>
@@ -1238,24 +1232,24 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       </div>
 
       {/* Invoices Desktop Table (>= md) */}
-      <div className="hidden md:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-x-auto">
-        <table className="w-full text-right text-xs md:text-sm border-collapse border border-slate-300">
+      <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table className="w-full text-right text-xs md:text-sm border-collapse tabular-nums">
           <thead>
-            <tr className="bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-950 text-indigo-100">
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">رقم الفاتورة</th>
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">العميل</th>
-              {appData.branches && appData.branches.length > 1 && <th className="p-3 font-black border border-indigo-900 text-indigo-100">الفرع</th>}
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">التاريخ</th>
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">القيمة (ج.م)</th>
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">النوع</th>
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">الحالة</th>
-              <th className="p-3 font-black border border-indigo-900 text-indigo-100">الإجراءات</th>
+            <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
+              <th className="p-3 font-semibold border-l border-slate-200">رقم الفاتورة</th>
+              <th className="p-3 font-semibold border-l border-slate-200">العميل</th>
+              {appData.branches && appData.branches.length > 1 && <th className="p-3 font-semibold border-l border-slate-200">الفرع</th>}
+              <th className="p-3 font-semibold border-l border-slate-200">التاريخ</th>
+              <th className="p-3 font-semibold border-l border-slate-200">القيمة (ج.م)</th>
+              <th className="p-3 font-semibold border-l border-slate-200">النوع</th>
+              <th className="p-3 font-semibold border-l border-slate-200">الحالة</th>
+              <th className="p-3 font-semibold">الإجراءات</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-300 bg-white">
+          <tbody className="divide-y divide-slate-200 bg-white">
             {paginatedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-black font-bold">
+                <td colSpan={8} className="text-center py-8 text-slate-500 font-medium">
                   لا توجد فواتير مبيعات مسجلة
                 </td>
               </tr>
@@ -1263,50 +1257,48 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
               paginatedInvoices.map((inv) => {
                 const isPaidFull = inv.paidAmount >= inv.total;
                 return (
-                  <tr key={inv.id} className="bg-white hover:bg-slate-100 transition border-b border-slate-300">
+                  <tr key={inv.id} className="bg-white hover:bg-slate-50 transition">
                     <td
                       onClick={() => {
                         setSelectedInvoice(inv);
                         setActiveModal('view');
                       }}
-                      className="p-3 text-blue-900 font-black font-mono cursor-pointer hover:underline border border-slate-300"
+                      className="p-3 text-blue-700 font-semibold font-mono cursor-pointer hover:underline border-l border-slate-200"
                     >
                       #{inv.id}
                     </td>
-                    <td className="p-3 border border-slate-300">
-                      <div className="font-black text-black">{inv.customerName}</div>
+                    <td className="p-3 border-l border-slate-200">
+                      <div className="font-semibold text-slate-900">{inv.customerName}</div>
                       {inv.salesRep && (
-                        <div className="text-xs text-blue-950 font-bold flex items-center gap-1 mt-0.5">
-                          <UserIcon className="w-3 h-3 text-blue-700" />
+                        <div className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+                          <UserIcon className="w-3 h-3 text-blue-600" />
                           <span>مندوب: {inv.salesRep}</span>
                         </div>
                       )}
                       {inv.notes && (
-                        <div className="text-xs text-black font-medium truncate max-w-[160px] flex items-center gap-1 mt-0.5" title={inv.notes}>
-                          <FileText className="w-3 h-3 text-slate-700 shrink-0" />
+                        <div className="text-xs text-slate-500 truncate max-w-[180px] flex items-center gap-1 mt-0.5" title={inv.notes}>
+                          <FileText className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>{inv.notes}</span>
                         </div>
                       )}
                     </td>
                     {appData.branches && appData.branches.length > 1 && (
-                      <td className="p-3 border border-slate-300">
-                        <span className="text-xs font-black px-2 py-0.5 rounded bg-blue-100 text-blue-950 border border-blue-300">
-                          {appData.branches.find((b) => b.id === inv.branchId)?.name || 'الفرع الرئيسي'}
-                        </span>
+                      <td className="p-3 border-l border-slate-200 text-xs font-medium text-slate-700">
+                        {appData.branches.find((b) => b.id === inv.branchId)?.name || 'الفرع الرئيسي'}
                       </td>
                     )}
-                    <td className="p-3 font-mono font-bold text-black border border-slate-300">{inv.date}</td>
-                    <td className="p-3 font-black font-mono text-black tabular-nums border border-slate-300 text-sm">
+                    <td className="p-3 font-mono font-medium text-slate-700 border-l border-slate-200">{inv.date}</td>
+                    <td className="p-3 font-semibold font-mono text-slate-900 border-l border-slate-200">
                       {(inv.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="p-3 border border-slate-300">
+                    <td className="p-3 border-l border-slate-200">
                       <span
-                        className={`inline-block px-2.5 py-0.5 rounded text-xs font-black border ${
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-semibold border ${
                           inv.type === 'nagdi'
-                            ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             : inv.type === 'ajel'
-                            ? 'bg-amber-50 text-amber-950 border-amber-300'
-                            : 'bg-rose-50 text-rose-950 border-rose-300'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
                         }`}
                       >
                         {inv.type === 'nagdi'
@@ -1315,27 +1307,27 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                           ? 'آجل'
                           : inv.type === 'return_nagdi'
                           ? 'مرتجع نقدي'
-                          : 'مرتجع أجل'}
+                          : 'مرتجع آجل'}
                       </span>
                     </td>
-                    <td className="p-3 border border-slate-300">
+                    <td className="p-3 border-l border-slate-200">
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-black border ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border ${
                           isPaidFull
-                            ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             : inv.paidAmount > 0
-                            ? 'bg-amber-50 text-amber-950 border-amber-300'
-                            : 'bg-rose-50 text-rose-950 border-rose-300'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
                         }`}
                       >
                         {isPaidFull ? (
                           <>
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             <span>مكتمل</span>
                           </>
                         ) : inv.paidAmount > 0 ? (
                           <>
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
                             <span>مدفوع جزئياً</span>
                           </>
                         ) : (
@@ -1534,12 +1526,12 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       {/* Modal for Invoice Pay */}
       <Modal
         isOpen={activeModal === 'pay'}
-        title={`💰 تسديد دُفعة للفاتورة #${selectedInvoice?.id}`}
+        title={`تسديد دفعة للفاتورة #${selectedInvoice?.id}`}
         onClose={() => setActiveModal(null)}
       >
         {selectedInvoice && (
-          <div className="space-y-4 text-xs md:text-sm">
-            <div className="bg-slate-50 p-3 rounded-xl">
+          <div className="space-y-4 text-xs md:text-sm tabular-nums">
+            <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1">
               <p>
                 العميل: <strong>{selectedInvoice.customerName}</strong>
               </p>
@@ -1549,28 +1541,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
               <p>
                 المدفوع حالياً: <strong>{selectedInvoice.paidAmount.toFixed(2)} ج.م</strong>
               </p>
-              <p className="text-red-700 font-bold text-base mt-1">
+              <p className="text-rose-700 font-semibold text-base pt-1">
                 المتبقي: {(selectedInvoice.total - selectedInvoice.paidAmount).toFixed(2)} ج.م
               </p>
             </div>
 
             <div>
-              <label className="block font-bold mb-1">مبلغ التسديد (ج.م)</label>
+              <label className="block font-semibold text-slate-700 mb-1">مبلغ التسديد (ج.م)</label>
               <input
                 type="number"
                 step="0.01"
                 value={payAmount}
                 onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
-                className="w-full p-2 border-2 border-gray-200 rounded-xl"
+                className="w-full min-h-[42px] px-3 py-2 border border-slate-300 rounded-lg text-base sm:text-sm focus:border-blue-600 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block font-bold mb-1">وسيلة التحصيل</label>
+              <label className="block font-semibold text-slate-700 mb-1">وسيلة التحصيل</label>
               <select
                 value={payMethod}
                 onChange={(e) => setPayMethod(e.target.value as any)}
-                className="w-full p-2 border-2 border-gray-200 rounded-xl"
+                className="w-full min-h-[42px] px-3 py-2 border border-slate-300 rounded-lg text-base sm:text-sm bg-white focus:border-blue-600 focus:outline-none"
               >
                 <option value="drawer">نقدي (الدرج)</option>
                 <option value="vodafone">فودافون كاش</option>
@@ -1583,13 +1575,13 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
               <button
                 onClick={handleConfirmPayment}
                 disabled={isSubmitting}
-                className="min-h-[44px] bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-xl font-bold cursor-pointer transition shadow-xs flex-1 sm:flex-initial text-center"
+                className="min-h-[44px] bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg font-semibold cursor-pointer transition flex-1 sm:flex-initial text-center"
               >
-                {isSubmitting ? 'جاري التحصيل والترحيل...' : '✅ تأكيد التسديد'}
+                {isSubmitting ? 'جاري التحصيل والترحيل...' : 'تأكيد التسديد'}
               </button>
               <button
                 onClick={() => setActiveModal(null)}
-                className="min-h-[44px] bg-gray-400 hover:bg-gray-500 active:bg-gray-600 text-white px-6 py-2 rounded-xl font-bold cursor-pointer transition flex-1 sm:flex-initial text-center"
+                className="min-h-[44px] bg-slate-200 hover:bg-slate-300 text-slate-800 px-6 py-2 rounded-lg font-semibold cursor-pointer transition flex-1 sm:flex-initial text-center"
               >
                 إلغاء
               </button>

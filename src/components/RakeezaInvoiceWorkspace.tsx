@@ -1270,406 +1270,470 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-2 bg-slate-900/70 select-none overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-3 lg:p-5 bg-slate-900/65 select-none overflow-hidden"
       dir="rtl"
       onKeyDown={handleKeyDownEnterNav}
     >
-      {/* 📱 Scoped CSS formatted for high-definition mobile ergonomics and crisp readability */}
+      {/* 📱 Scoped CSS — Enterprise Arabic ERP Workspace (Tajawal + Responsive Ergonomics + Tabular Numerals) */}
       <style>{`
         .app-container {
           width: 100%;
-          max-width: 480px;
-          background: #fff;
+          max-width: 100%;
+          background: #ffffff;
           border-radius: 0px;
           border: 1px solid #cbd5e1;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
           display: flex;
           flex-direction: column;
           height: 100%;
-          max-height: 100vh;
+          max-height: 100dvh;
           position: relative;
-          overflow-x: hidden;
-          overflow-y: hidden;
+          overflow: hidden;
           box-sizing: border-box;
+          font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         @media (min-width: 640px) {
           .app-container {
-            border-radius: 6px;
-            max-width: 580px;
-            max-height: 98vh;
-          }
-        }
-        @media (min-width: 768px) {
-          .app-container {
-            max-width: 680px;
+            border-radius: 10px;
+            max-width: 720px;
+            max-height: 94vh;
           }
         }
         @media (min-width: 1024px) {
           .app-container {
-            max-width: 800px;
+            max-width: 1040px;
+            max-height: 92vh;
           }
         }
         .header-title {
           background: #1e293b;
-          color: #fff;
-          padding: 6px 10px;
-          font-size: 11px;
-          font-weight: bold;
+          color: #ffffff;
+          padding: 10px 14px;
+          font-size: 14px;
+          font-weight: 600;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          gap: 8px;
           flex-shrink: 0;
           box-sizing: border-box;
           border-top-left-radius: inherit;
           border-top-right-radius: inherit;
         }
         #liveTime {
-          font-size: 10px;
+          font-size: 12px;
           font-family: inherit;
-          font-weight: bold;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+          opacity: 0.92;
         }
         .main-content {
-          padding: 5px;
+          padding: 10px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 8px;
           flex: 1;
           overflow-x: hidden;
-          overflow-y: hidden;
+          overflow-y: auto;
           min-height: 0;
           box-sizing: border-box;
+          background: #f8fafc;
+        }
+        @media (min-width: 640px) {
+          .main-content {
+            padding: 12px 14px;
+            gap: 10px;
+          }
         }
         .invoice-card {
-          background: #f8fafc;
+          background: #ffffff;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          padding: 4px;
+          border-radius: 8px;
+          padding: 10px;
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 3px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
         }
+        @media (min-width: 640px) {
+          .invoice-card {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            padding: 12px;
+          }
+        }
         .field-inline {
           display: flex;
           flex-direction: column;
-          gap: 1.5px;
+          gap: 4px;
           min-width: 0;
           position: relative;
           box-sizing: border-box;
         }
         .field-inline label {
-          font-size: 9px;
-          font-weight: bold;
+          font-size: 12px;
+          font-weight: 600;
           color: #475569;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .field-inline input, .field-inline select {
-          padding: 3px 5px;
+          padding: 6px 10px;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          font-size: 10px;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: 500;
+          color: #0f172a;
           outline: none;
-          background: #fff;
+          background: #ffffff;
           width: 100%;
-          height: 25px;
+          min-height: 40px;
           box-sizing: border-box;
+          font-family: inherit;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        @media (min-width: 768px) {
+          .field-inline input, .field-inline select {
+            font-size: 13px;
+            min-height: 36px;
+            padding: 5px 10px;
+          }
         }
         .field-inline input:focus, .field-inline select:focus {
           border-color: #2563eb;
-          box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
         }
         .span-2 { grid-column: span 2; }
-        .span-3 { grid-column: span 3; }
+        .span-3 { grid-column: 1 / -1; }
 
-        /* 🟡 شريط حالة الحساب والدائن/المدين */
+        /* شريط حالة الحساب والدائن/المدين */
         .account-status-bar {
-          background: #fefce8;
-          border: 1px solid #fef08a;
-          border-radius: 4px;
-          padding: 4px 6px;
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          border-radius: 8px;
+          padding: 8px 12px;
           display: flex;
+          flex-wrap: wrap;
           justify-content: space-between;
           align-items: center;
-          font-size: 9.5px;
-          font-weight: bold;
+          gap: 6px 12px;
+          font-size: 12.5px;
+          font-weight: 600;
           flex-shrink: 0;
           width: 100%;
           box-sizing: border-box;
         }
 
-        /* 🏷️ نظام تسعير الفاتورة */
+        /* نظام تسعير الفاتورة */
         .pricing-tier-bar {
-          background: #fff;
+          background: #ffffff;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          padding: 3px 6px;
+          border-radius: 8px;
+          padding: 8px 10px;
           display: flex;
+          flex-wrap: wrap;
           justify-content: space-between;
           align-items: center;
           flex-shrink: 0;
           width: 100%;
           box-sizing: border-box;
-          gap: 4px;
+          gap: 8px;
         }
         .pricing-tier-btn {
           flex: 1;
-          padding: 3px 4px;
-          font-size: 9px;
-          font-weight: bold;
-          border-radius: 3px;
+          min-height: 38px;
+          padding: 6px 10px;
+          font-size: 12.5px;
+          font-weight: 600;
+          border-radius: 6px;
           cursor: pointer;
           border: 1px solid #cbd5e1;
-          background: #fff;
+          background: #f8fafc;
           color: #334155;
           text-align: center;
           white-space: nowrap;
           box-sizing: border-box;
           transition: all 0.15s ease;
         }
+        .pricing-tier-btn:hover {
+          background: #f1f5f9;
+        }
         .pricing-tier-btn.active-cash {
           background: #16a34a !important;
-          color: #fff !important;
-          border-color: #16a34a !important;
+          color: #ffffff !important;
+          border-color: #15803d !important;
         }
         .pricing-tier-btn.active-wholesale {
           background: #2563eb !important;
-          color: #fff !important;
-          border-color: #2563eb !important;
+          color: #ffffff !important;
+          border-color: #1d4ed8 !important;
         }
         .pricing-tier-btn.active-buy {
           background: #d97706 !important;
-          color: #fff !important;
-          border-color: #d97706 !important;
+          color: #ffffff !important;
+          border-color: #b45309 !important;
         }
 
         .top-actions-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 4px;
+          gap: 8px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
         }
         .btn-action-top {
           width: 100%;
-          padding: 6px;
+          min-height: 42px;
+          padding: 8px 12px;
           background: #2563eb;
-          color: white;
+          color: #ffffff;
           border: none;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: bold;
+          border-radius: 7px;
+          font-size: 13px;
+          font-weight: 600;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 4px;
+          gap: 6px;
           box-sizing: border-box;
           white-space: nowrap;
+          transition: background 0.15s ease;
+        }
+        .btn-action-top:hover {
+          background: #1d4ed8;
         }
         .btn-action-alt {
           background: #475569;
         }
+        .btn-action-alt:hover {
+          background: #334155;
+        }
         .table-responsive {
           width: 100%;
-          flex: 1;
+          flex: 1 1 200px;
+          min-height: 160px;
           overflow-y: auto;
-          overflow-x: hidden;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          background: #fff;
-          min-height: 0;
+          border-radius: 8px;
+          background: #ffffff;
           box-sizing: border-box;
         }
-        table {
+        .table-responsive table {
           width: 100%;
-          table-layout: fixed;
+          min-width: 620px;
           border-collapse: collapse;
           text-align: center;
           box-sizing: border-box;
+          font-variant-numeric: tabular-nums;
         }
-        th, td {
-          border: 1px solid #cbd5e1;
+        .table-responsive th, .table-responsive td {
+          border-bottom: 1px solid #e2e8f0;
+          border-left: 1px solid #e2e8f0;
           vertical-align: middle;
           white-space: nowrap;
           box-sizing: border-box;
         }
-        th {
+        .table-responsive th:last-child, .table-responsive td:last-child {
+          border-left: none;
+        }
+        .table-responsive th {
           background: #f1f5f9;
-          color: #1e293b;
-          font-weight: 700;
-          height: 24px;
-          font-size: 9px;
-          padding: 2px 2px;
+          color: #334155;
+          font-weight: 600;
+          height: 36px;
+          font-size: 12px;
+          padding: 6px 8px;
           position: sticky;
           top: 0;
           z-index: 2;
-          overflow: hidden;
           text-align: center;
+          border-bottom: 1px solid #cbd5e1;
         }
-        tbody tr {
-          height: 24px;
+        .table-responsive tbody tr:hover {
+          background: #f8fafc;
         }
-        tbody tr td {
-          padding: 2px 3px;
-          height: 24px;
-          line-height: 1.2;
-          font-size: 9px;
-          overflow: hidden;
-          text-overflow: ellipsis;
+        .table-responsive tbody tr td {
+          padding: 6px 8px;
+          height: 40px;
+          line-height: 1.35;
+          font-size: 12.5px;
+          color: #0f172a;
         }
-        .col-seq { width: 6%; text-align: center; font-size: 9px; }
-        .col-item { width: 28%; text-align: right; padding-right: 4px; font-weight: 600; font-size: 9px; }
-        .col-desc { width: 16%; text-align: right; padding-right: 2px; font-size: 9px; }
-        .col-qty { width: 11%; text-align: center; font-size: 9px; }
-        .col-price { width: 12%; text-align: center; font-size: 9px; }
-        .col-total { width: 15%; font-weight: bold; text-align: center; font-size: 9px; }
-        .col-action { width: 12%; text-align: center; }
+        .col-seq { width: 42px; text-align: center; color: #64748b; }
+        .col-item { min-width: 150px; text-align: right; font-weight: 600; white-space: normal !important; }
+        .col-desc { min-width: 100px; max-width: 160px; text-align: right; color: #64748b; overflow: hidden; text-overflow: ellipsis; }
+        .col-qty { width: 78px; text-align: center; }
+        .col-price { width: 92px; text-align: center; }
+        .col-total { width: 104px; font-weight: 600; text-align: center; }
+        .col-action { width: 74px; text-align: center; }
 
         .invoice-item-actions {
           display: inline-flex;
-          gap: 6px;
+          gap: 10px;
           justify-content: center;
           align-items: center;
         }
         .invoice-item-actions i {
           cursor: pointer;
-          font-size: 11px;
-          padding: 2px;
+          font-size: 14px;
+          padding: 4px;
+          border-radius: 4px;
         }
         .bottom-fixed-area {
           flex-shrink: 0;
           display: flex;
           flex-direction: column;
-          gap: 3px;
-          background: #fff;
-          padding: 4px;
+          gap: 8px;
+          background: #ffffff;
+          padding: 10px;
           border-top: 1px solid #cbd5e1;
-          position: sticky;
-          bottom: 0;
-          z-index: 100;
           box-sizing: border-box;
           width: 100%;
         }
         .summary-bar {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 3px;
+          gap: 6px;
           background: #ffffff;
           color: #0f172a;
-          border: 1.5px solid #cbd5e1;
-          padding: 4px;
-          border-radius: 4px;
-          text-align: center;
           box-sizing: border-box;
           width: 100%;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+          font-variant-numeric: tabular-nums;
+        }
+        @media (min-width: 768px) {
+          .summary-bar {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+          }
         }
         .summary-item {
-          font-size: 8.5px;
+          font-size: 11.5px;
+          font-weight: 500;
           background: #f8fafc;
           border: 1px solid #e2e8f0;
-          color: #334155;
-          padding: 3px 2px;
-          border-radius: 3px;
+          color: #475569;
+          padding: 6px 8px;
+          border-radius: 6px;
+          text-align: center;
           box-sizing: border-box;
         }
         .summary-item span {
-          font-weight: bold;
+          font-weight: 700;
           color: #16a34a;
           display: block;
-          font-size: 9.5px;
+          font-size: 13px;
+          margin-top: 2px;
         }
         .summary-net {
-          grid-column: span 3;
+          grid-column: 1 / -1;
           background: #f0fdf4 !important;
-          border: 1.5px solid #86efac !important;
+          border: 1px solid #86efac !important;
           color: #166534 !important;
-          font-size: 10.5px !important;
-          font-weight: bold !important;
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 14px;
         }
-        .summary-net span { color: #15803d !important; font-size: 12.5px !important; font-weight: 900 !important; }
+        .summary-net span {
+          color: #15803d !important;
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          margin-top: 0;
+        }
         .btn-action-bar {
           display: flex;
-          gap: 4px;
+          gap: 8px;
           width: 100%;
           box-sizing: border-box;
         }
         .btn-action {
           flex: 1;
-          padding: 7px;
+          min-height: 44px;
+          padding: 10px 14px;
           border: none;
-          border-radius: 4px;
-          font-weight: bold;
-          font-size: 10px;
-          color: white;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13.5px;
+          color: #ffffff;
           cursor: pointer;
           text-align: center;
           box-sizing: border-box;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: filter 0.15s ease;
+        }
+        .btn-action:hover {
+          filter: brightness(0.95);
         }
         .modal-overlay {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.65);
+          background: rgba(15, 23, 42, 0.62);
           z-index: 2000;
           display: flex;
           justify-content: center;
           align-items: center;
-          padding: 6px;
+          padding: 10px;
           box-sizing: border-box;
           overflow: hidden;
         }
         .modal-box {
-          background: #fff;
+          background: #ffffff;
           width: 100%;
-          max-width: 400px;
-          border-radius: 8px;
+          max-width: 520px;
+          border-radius: 10px;
           overflow: hidden;
           display: flex;
           flex-direction: column;
           border: 1px solid #cbd5e1;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+          box-shadow: 0 14px 35px rgba(15, 23, 42, 0.22);
           box-sizing: border-box;
         }
         .modal-header {
-          background: #2563eb;
-          color: white;
-          padding: 6px 10px;
+          background: #1e293b;
+          color: #ffffff;
+          padding: 12px 16px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 10.5px;
-          font-weight: bold;
+          font-size: 14px;
+          font-weight: 600;
           box-sizing: border-box;
         }
         .modal-body {
-          padding: 8px;
+          padding: 14px 16px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 10px;
           box-sizing: border-box;
-          max-height: 85vh;
+          max-height: 84vh;
           overflow-y: auto;
         }
         .big-toggle-group {
           display: flex;
-          border: 2px solid #2563eb;
-          border-radius: 4px;
+          border: 1px solid #2563eb;
+          border-radius: 6px;
           overflow: hidden;
-          height: 24px;
-          width: 110px;
+          min-height: 32px;
+          width: 120px;
         }
         .big-toggle-btn {
           flex: 1;
-          font-size: 9.5px;
-          font-weight: bold;
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
           border: none;
-          background: #fff;
+          background: #ffffff;
           color: #2563eb;
           display: flex;
           align-items: center;
@@ -1677,58 +1741,61 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
         .big-toggle-btn.active {
           background: #2563eb;
-          color: white;
+          color: #ffffff;
         }
         .edit-card-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 4px;
+          gap: 8px;
           box-sizing: border-box;
           width: 100%;
         }
         .lookup-modal-box {
           background: #ffffff;
           width: 100%;
-          max-width: 580px;
-          height: 92vh;
-          border-radius: 8px;
+          max-width: 820px;
+          height: 90vh;
+          border-radius: 10px;
           display: flex;
           flex-direction: column;
-          border: 2px solid #94a3b8;
+          border: 1px solid #94a3b8;
           overflow: hidden;
           box-sizing: border-box;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+          box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
         }
         .hierarchy-nav-bar {
           background: #ffffff;
-          padding: 6px 10px;
-          border-bottom: 1.5px solid #e2e8f0;
+          padding: 10px 14px;
+          border-bottom: 1px solid #e2e8f0;
           display: flex;
+          flex-wrap: wrap;
           align-items: center;
           justify-content: space-between;
-          gap: 6px;
-          font-size: 9.5px;
-          font-weight: bold;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 600;
           color: #0f172a;
           flex-shrink: 0;
           box-sizing: border-box;
         }
         .hierarchy-btns-group {
           display: flex;
-          gap: 3px;
+          gap: 6px;
         }
         .hier-btn {
           background: #f8fafc;
           color: #0f172a;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          padding: 3.5px 8px;
+          border-radius: 6px;
+          min-height: 36px;
+          padding: 6px 12px;
           cursor: pointer;
-          font-size: 8.5px;
-          font-weight: bold;
-          display: flex;
+          font-size: 12px;
+          font-weight: 600;
+          display: inline-flex;
           align-items: center;
-          gap: 3px;
+          gap: 5px;
+          white-space: nowrap;
           transition: background 0.15s ease;
         }
         .hier-btn:hover {
@@ -1742,39 +1809,40 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .hierarchy-content-area {
           flex: 1;
           background: #f8fafc;
-          padding: 6px;
+          padding: 10px 12px;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
-          gap: 5px;
+          gap: 8px;
           box-sizing: border-box;
         }
         .hierarchy-card-item {
-          background: #fff;
+          background: #ffffff;
           border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          padding: 7px;
+          border-radius: 8px;
+          padding: 10px 12px;
           display: flex;
           justify-content: space-between;
           align-items: center;
           cursor: pointer;
-          font-weight: bold;
-          font-size: 10px;
+          font-weight: 600;
+          font-size: 13px;
           color: #1e293b;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
           box-sizing: border-box;
           width: 100%;
+          transition: border-color 0.15s ease, background 0.15s ease;
         }
         .hierarchy-card-item:hover {
           background: #eff6ff;
           border-color: #2563eb;
         }
         .search-quick-bar {
-          background: #fff;
-          padding: 4px;
+          background: #ffffff;
+          padding: 10px 12px;
           border-bottom: 1px solid #cbd5e1;
           display: flex;
-          gap: 4px;
+          flex-wrap: wrap;
+          gap: 8px;
           align-items: center;
           flex-shrink: 0;
           box-sizing: border-box;
@@ -1782,46 +1850,46 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
       `}</style>
 
-      {/* 📦 Main Rakeeza App Container (مطابق للصورة 2 تماماً) */}
+      {/* 📦 Main Rakeeza App Container */}
       <div
         className={`app-container ${
           isMaximized ? '!max-w-none !w-full !h-full !max-h-full !rounded-none' : ''
         }`}
       >
-        {/* 🏷️ Header Bar (نظام الفواتير والمخزون - ركيزة) مع ثيم وعنوان ديناميكي يعبر عن نوع الحركة */}
-        <div className="header-title" style={{ background: invoiceTheme.bg, borderBottomColor: invoiceTheme.border }}>
-          <div className="flex items-center gap-1.5">
+        {/* 🏷️ Header Bar */}
+        <div className="header-title" style={{ background: invoiceTheme.bg, borderBottom: `1px solid ${invoiceTheme.border}` }}>
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="text-white hover:text-rose-400 p-0.5 rounded transition cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 hover:text-rose-200 transition cursor-pointer shrink-0"
               title="إغلاق"
             >
-              <i className="fa-solid fa-xmark text-xs"></i>
+              <i className="fa-solid fa-xmark text-sm"></i>
             </button>
             <button
               type="button"
               onClick={() => setIsMaximized(!isMaximized)}
-              className="text-white hover:text-blue-300 p-0.5 rounded transition cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 transition cursor-pointer shrink-0"
               title={isMaximized ? 'تصغير' : 'تكبير'}
             >
-              <i className={`fa-solid ${isMaximized ? 'fa-compress' : 'fa-expand'} text-[9px]`}></i>
+              <i className={`fa-solid ${isMaximized ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
             </button>
-            <span style={{ fontWeight: 800, fontSize: '10.5px' }}>
-              <i className={`fa-solid ${invoiceTheme.icon} ml-1`}></i>
+            <span className="font-semibold text-sm truncate">
+              <i className={`fa-solid ${invoiceTheme.icon} ml-1.5`}></i>
               {invoiceTheme.badgeText}
             </span>
           </div>
-          <span id="liveTime">{liveTime}</span>
+          <span id="liveTime" className="shrink-0">{liveTime}</span>
         </div>
 
         {/* 📑 Main Content Area */}
         <div className="main-content">
-          {/* 1. Header Information Card (3 columns) */}
+          {/* 1. Header Information Card */}
           <div className="invoice-card">
             <div className="field-inline">
               <label>رقم الفاتورة</label>
-              <input type="text" value={invNum} readOnly />
+              <input type="text" value={invNum} readOnly className="tabular-nums bg-slate-50" />
             </div>
             <div className="field-inline">
               <label>التاريخ</label>
@@ -1829,6 +1897,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 type="date"
                 value={invDate}
                 onChange={(e) => setInvDate(e.target.value)}
+                className="tabular-nums"
               />
             </div>
             <div className="field-inline">
@@ -1837,6 +1906,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 type="time"
                 value={invTime}
                 onChange={(e) => setInvTime(e.target.value)}
+                className="tabular-nums"
               />
             </div>
             <div className="field-inline">
@@ -1846,6 +1916,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 value={custCode}
                 onChange={(e) => setCustCode(e.target.value)}
                 placeholder="الكود..."
+                className="tabular-nums"
               />
             </div>
             <div className="field-inline">
@@ -1861,7 +1932,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 placeholder="اكتب للبحث..."
               />
               {showCustDropdown && partySuggestions.length > 0 && (
-                <div className="absolute top-[26px] right-0 left-0 bg-white border border-slate-300 rounded shadow-lg z-50 max-h-36 overflow-y-auto text-[8.5px]">
+                <div className="absolute top-full mt-1 right-0 left-0 bg-white border border-slate-300 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto text-xs">
                   {partySuggestions.map((p) => (
                     <div
                       key={p.id}
@@ -1871,10 +1942,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         if (p.phone) setCustPhone(p.phone);
                         setShowCustDropdown(false);
                       }}
-                      className="p-1.5 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center"
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center gap-2"
                     >
-                      <span className="font-bold text-slate-800">{p.name}</span>
-                      <span className="text-slate-500 font-mono text-[7.5px]">
+                      <span className="font-semibold text-slate-800 truncate">{p.name}</span>
+                      <span className="text-slate-500 font-mono text-[11px] tabular-nums shrink-0">
                         {p.phone || p.code || p.id}
                       </span>
                     </div>
@@ -1889,6 +1960,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 value={custPhone}
                 onChange={(e) => setCustPhone(e.target.value)}
                 placeholder="ابحث برقم الهاتف..."
+                className="tabular-nums"
               />
             </div>
             <div className="field-inline span-3">
@@ -1902,7 +1974,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 🟡 2. شريط حالة الحساب والدائن/المدين (طبق الأصل للصورة 2) */}
+          {/* 🟡 2. شريط حالة الحساب والدائن/المدين */}
           <div className="account-status-bar">
             <div>
               <span className="text-slate-600">حالة الحساب: </span>
@@ -1930,6 +2002,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             <div>
               <span className="text-amber-900">المبلغ (له / عليه): </span>
               <span
+                className="tabular-nums"
                 style={{
                   color:
                     partyBalance > 0
@@ -1937,7 +2010,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       : partyBalance < 0
                       ? '#2563eb'
                       : '#16a34a',
-                  fontFamily: 'monospace',
                 }}
               >
                 {partyBalance !== 0
@@ -1955,12 +2027,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 🏷️ 3. نظام تسعير الفاتورة: [سعر نقدي] [سعر جملة] [سعر شراء] (طبق الأصل للصورة 2) */}
+          {/* 🏷️ 3. نظام تسعير الفاتورة */}
           <div className="pricing-tier-bar">
-            <span style={{ fontSize: '8.5px', fontWeight: 'bold', color: '#1e293b' }}>
+            <span className="text-xs font-semibold text-slate-700 shrink-0">
               نظام تسعير الفاتورة:
             </span>
-            <div style={{ display: 'flex', gap: '3px', flex: 1, maxWidth: '240px' }}>
+            <div className="flex gap-1.5 flex-1 min-w-[210px] max-w-[340px]">
               <button
                 type="button"
                 onClick={() => handleChangePricingTier('cash')}
@@ -1988,7 +2060,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 4. Top Action Buttons Grid (دليل الأصناف، والخصم والدفع - طبقاً للصورة 2) */}
+          {/* 4. Top Action Buttons Grid */}
           <div className="top-actions-grid">
             <button
               type="button"
@@ -2000,7 +2072,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               }}
               title="دليل الأصناف والتنقل الهرمي لاختيار صنف"
             >
-              <i className="fa-solid fa-boxes-stacked ml-1"></i> دليل الأصناف
+              <i className="fa-solid fa-boxes-stacked"></i>
+              <span>دليل الأصناف</span>
             </button>
             <button
               type="button"
@@ -2010,14 +2083,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               }}
               title="الخصم، الضريبة وإدارة المدفوعات"
             >
-              <i className="fa-solid fa-sliders ml-1"></i> الخصم والدفع
+              <i className="fa-solid fa-sliders"></i>
+              <span>الخصم والدفع</span>
             </button>
           </div>
 
-          {/* 🔍 Quick Search Bar on-screen for direct mobile item addition from 1,001 items */}
-          <div className="relative w-full my-1">
-            <div className="flex items-center gap-1.5 bg-blue-50/80 p-1.5 rounded border border-blue-200">
-              <div className="relative flex-1">
+          {/* 🔍 Quick Search Bar on-screen for direct mobile/desktop item addition */}
+          <div className="relative w-full">
+            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-300">
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="text"
                   value={workspaceItemSearch}
@@ -2028,8 +2102,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onFocus={() => {
                     if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
                   }}
-                  placeholder="🔍 اكتب اسم أو كود الصنف للإضافة المباشرة (1,001 صنف)..."
-                  className="w-full text-[11px] py-1 px-2.5 rounded bg-white border border-slate-300 focus:outline-none focus:border-blue-600 font-sans shadow-inner"
+                  placeholder="اكتب اسم أو كود الصنف للإضافة المباشرة..."
+                  className="w-full text-base md:text-xs min-h-[38px] py-1.5 px-3 rounded-md bg-slate-50 border border-slate-300 focus:outline-none focus:bg-white focus:border-blue-600 text-slate-900"
                 />
                 {workspaceItemSearch && (
                   <button
@@ -2038,20 +2112,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       setWorkspaceItemSearch('');
                       setShowWorkspaceItemDropdown(false);
                     }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-1"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5"
                   >
                     ×
                   </button>
                 )}
               </div>
-              <span className="text-[9.5px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200 whitespace-nowrap">
-                {localItemsDatabase.length} صنف متاح
+              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap shrink-0 tabular-nums px-1">
+                {localItemsDatabase.length} صنف
               </span>
             </div>
 
             {/* Quick Autocomplete Dropdown */}
             {showWorkspaceItemDropdown && filteredWorkspaceItems.length > 0 && (
-              <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-slate-300 rounded shadow-xl z-50 max-h-56 overflow-y-auto">
+              <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-slate-300 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
                 {filteredWorkspaceItems.map((item) => {
                   const itemPrice = getItemPriceForTier(item, activePricingTier);
                   return (
@@ -2062,26 +2136,26 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         setWorkspaceItemSearch('');
                         setShowWorkspaceItemDropdown(false);
                       }}
-                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex items-center justify-between"
+                      className="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between gap-2"
                     >
-                      <div className="flex flex-col text-right">
-                        <span className="font-bold text-[11px] text-slate-800">{item.name}</span>
-                        <span className="text-[9px] text-slate-500 font-mono">
-                          {item.code} {item.typeName ? `• ${item.typeName}` : ''}
+                      <div className="flex flex-col text-right min-w-0">
+                        <span className="font-semibold text-xs sm:text-sm text-slate-900 truncate">{item.name}</span>
+                        <span className="text-[11px] text-slate-500 font-mono tabular-nums">
+                          {item.code} {item.typeName ? `· ${item.typeName}` : ''}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-left">
-                        <div className="flex flex-col items-end">
-                          <span className="text-[11px] font-bold text-emerald-700 font-mono">
+                      <div className="flex items-center gap-2.5 text-left shrink-0">
+                        <div className="flex flex-col items-end tabular-nums">
+                          <span className="text-xs font-semibold text-emerald-700">
                             {itemPrice > 0 ? `${itemPrice.toFixed(2)} ج.م` : 'بدون سعر'}
                           </span>
-                          <span className="text-[9px] text-slate-500">
+                          <span className="text-[11px] text-slate-500">
                             مخزون: {item.stock}
                           </span>
                         </div>
                         <button
                           type="button"
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2 py-1 rounded"
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md whitespace-nowrap"
                         >
                           + إضافة
                         </button>
@@ -2093,7 +2167,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             )}
           </div>
 
-          {/* 5. Compact Items Table (تنسيق مدمج مع ظهور كامل لترويسات الأعمدة طبقاً للصورة 2) */}
+          {/* 5. Items Table */}
           <div className="table-responsive">
             <table>
               <thead>
@@ -2110,18 +2184,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               <tbody id="invoiceItemsTable">
                 {currentInvoiceItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ color: '#94a3b8', padding: '15px' }}>
+                    <td colSpan={7} className="text-slate-400 py-8 text-sm">
                       لم يتم إدراج أصناف بعد
                     </td>
                   </tr>
                 ) : (
                   currentInvoiceItems.map((item, index) => (
                     <tr key={item.rowId}>
-                      <td className="col-seq">{index + 1}</td>
-                      <td className="col-item" style={{ textAlign: 'right' }}>
-                        <span style={{ fontWeight: 'bold' }}>{item.name}</span>
+                      <td className="col-seq tabular-nums">{index + 1}</td>
+                      <td className="col-item">
+                        <span className="font-semibold text-slate-900">{item.name}</span>
                       </td>
-                      <td className="col-desc" style={{ textAlign: 'right', color: '#64748b' }}>
+                      <td className="col-desc">
                         {item.spec || '-'}
                       </td>
                       <td className="col-qty">
@@ -2131,7 +2205,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           step="any"
                           value={item.qty}
                           onChange={(e) => updateTableRowQty(index, e.target.value)}
-                          style={{ width: '45px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                          className="w-16 h-8 text-center text-sm md:text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
                         />
                       </td>
                       <td className="col-price">
@@ -2140,7 +2214,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           step="any"
                           value={item.price}
                           onChange={(e) => updateTableRowPrice(index, e.target.value)}
-                          style={{ width: '58px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                          className="w-20 h-8 text-center text-sm md:text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
                         />
                       </td>
                       <td className="col-total">
@@ -2150,20 +2224,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           value={item.total}
                           onChange={(e) => updateTableRowTotal(index, e.target.value)}
                           title="تعديل الإجمالي يقسم تلقائياً على العدد ليضبط سعر الوحدة"
-                          style={{ width: '64px', height: '22px', textAlign: 'center', fontSize: '9.5px', fontWeight: 'bold', border: '1.5px solid #86efac', background: '#f0fdf4', color: '#166534', borderRadius: '4px' }}
+                          className="w-24 h-8 text-center text-sm md:text-xs font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
                         />
                       </td>
                       <td className="col-action">
                         <span className="invoice-item-actions">
                           <i
-                            className="fa-solid fa-pen-to-square"
-                            style={{ color: '#2563eb' }}
+                            className="fa-solid fa-pen-to-square text-blue-600 hover:bg-blue-50"
                             title="تعديل"
                             onClick={() => openModifyInvoiceItem(index)}
                           ></i>
                           <i
-                            className="fa-solid fa-trash"
-                            style={{ color: '#dc2626' }}
+                            className="fa-solid fa-trash text-rose-600 hover:bg-rose-50"
                             title="حذف"
                             onClick={() => removeItem(index)}
                           ></i>
@@ -2177,7 +2249,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           </div>
         </div>
 
-        {/* 6. Bottom Fixed Summary & Action Bar (طبق الأصل للصورة 2) */}
+        {/* 6. Bottom Fixed Summary & Action Bar */}
         <div className="bottom-fixed-area">
           <div className="summary-bar">
             <div className="summary-item">
@@ -2193,10 +2265,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               الإيراد: <span id="lblExtraTotal">{totals.extra.toFixed(2)}</span>
             </div>
             <div className="summary-item">
-              المدفوع: <span id="lblPaidTotal" style={{ color: '#60a5fa' }}>{totals.paid.toFixed(2)}</span>
+              المدفوع: <span id="lblPaidTotal" style={{ color: '#2563eb' }}>{totals.paid.toFixed(2)}</span>
             </div>
             <div className="summary-item">
-              المتبقي: <span id="lblRemainTotal" style={{ color: '#f87171' }}>{totals.remain.toFixed(2)}</span>
+              المتبقي: <span id="lblRemainTotal" style={{ color: '#dc2626' }}>{totals.remain.toFixed(2)}</span>
             </div>
             <div className="summary-item summary-net">
               اجمالي الصافي: <span id="lblNetTotal">{totals.net.toFixed(2)}</span>
@@ -2207,18 +2279,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             <button
               type="button"
               className="btn-action"
-              style={{ background: '#16a34a', padding: '6px', fontSize: '9px' }}
+              style={{ background: '#16a34a' }}
               onClick={saveInvoice}
             >
-              <i className="fa-solid fa-save ml-1"></i> حفظ وترحيل الحسابات
+              <i className="fa-solid fa-save"></i>
+              <span>حفظ وترحيل الحسابات</span>
             </button>
             <button
               type="button"
               className="btn-action"
-              style={{ background: '#2563eb', padding: '6px', fontSize: '9px' }}
+              style={{ background: '#2563eb' }}
               onClick={handlePrintCurrentInvoice}
             >
-              <i className="fa-solid fa-print ml-1"></i> طباعة
+              <i className="fa-solid fa-print"></i>
+              <span>طباعة</span>
             </button>
           </div>
         </div>
@@ -2230,17 +2304,21 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           <div className="modal-box">
             <div className="modal-header">
               <span>
-                <i className="fa-solid fa-sliders ml-1"></i> خصومات، ضرائب، إيرادات ودفع
+                <i className="fa-solid fa-sliders ml-1.5"></i> خصومات، ضرائب، إيرادات ودفع
               </span>
-              <span style={{ cursor: 'pointer', fontSize: '18px' }} onClick={() => setIsOptionsModalOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsOptionsModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
             <div className="modal-body">
               {/* Discount */}
-              <div className="field-inline" style={{ gap: '3px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '9px' }}>خصم الفاتورة الكلية</label>
+              <div className="field-inline">
+                <div className="flex justify-between items-center gap-2">
+                  <label>خصم الفاتورة الكلية</label>
                   <div className="big-toggle-group">
                     <button
                       type="button"
@@ -2263,14 +2341,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   value={globalInvDisc}
                   onChange={(e) => setGlobalInvDisc(e.target.value)}
                   placeholder="أدخل قيمة أو نسبة الخصم..."
-                  style={{ height: '26px', fontSize: '10px' }}
+                  className="tabular-nums"
                 />
               </div>
 
               {/* Tax */}
-              <div className="field-inline" style={{ gap: '3px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '9px' }}>ضريبة الفاتورة الكلية</label>
+              <div className="field-inline">
+                <div className="flex justify-between items-center gap-2">
+                  <label>ضريبة الفاتورة الكلية</label>
                   <div className="big-toggle-group">
                     <button
                       type="button"
@@ -2293,47 +2371,38 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   value={globalInvTax}
                   onChange={(e) => setGlobalInvTax(e.target.value)}
                   placeholder="أدخل قيمة أو نسبة الضريبة..."
-                  style={{ height: '26px', fontSize: '10px' }}
+                  className="tabular-nums"
                 />
               </div>
 
               {/* Extra Income */}
               <div className="edit-card-grid">
                 <div className="field-inline">
-                  <label style={{ fontSize: '9px' }}>اسم الإيراد الإضافي</label>
+                  <label>اسم الإيراد الإضافي</label>
                   <input
                     type="text"
                     value={extraIncomeName}
                     onChange={(e) => setExtraIncomeName(e.target.value)}
-                    style={{ height: '25px', fontSize: '9.5px' }}
                   />
                 </div>
                 <div className="field-inline">
-                  <label style={{ fontSize: '9px' }}>مبلغ الإيراد</label>
+                  <label>مبلغ الإيراد</label>
                   <input
                     type="number"
                     value={extraIncomeVal}
                     onChange={(e) => setExtraIncomeVal(e.target.value)}
-                    style={{ height: '25px', fontSize: '9.5px' }}
+                    className="tabular-nums"
                   />
                 </div>
               </div>
 
               {/* Multi-Payment Rows */}
               <div className="field-inline">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '9px' }}>طرق الدفع المتعددة</label>
+                <div className="flex justify-between items-center gap-2">
+                  <label>طرق الدفع المتعددة</label>
                   <button
                     type="button"
-                    style={{
-                      padding: '2px 6px',
-                      fontSize: '8.5px',
-                      background: '#16a34a',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '3px',
-                      cursor: 'pointer',
-                    }}
+                    className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer"
                     onClick={() => addPaymentRow('نقدي', 0)}
                   >
                     + إضافة دفع
@@ -2341,20 +2410,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 </div>
                 <div
                   id="paymentRowsContainer"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    maxHeight: '100px',
-                    overflowY: 'auto',
-                    marginTop: '2px',
-                  }}
+                  className="flex flex-col gap-2 max-h-40 overflow-y-auto mt-1"
                 >
                   {paymentRows.map((r) => (
                     <div
                       key={r.id}
-                      className="pay-row"
-                      style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+                      className="pay-row flex gap-2 items-center"
                     >
                       <select
                         value={r.method}
@@ -2362,7 +2423,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           const val = e.target.value;
                           setPaymentRows((prev) => prev.map((row) => (row.id === r.id ? { ...row, method: val } : row)));
                         }}
-                        style={{ height: '24px', width: '95px', fontSize: '9px' }}
+                        className="!w-32 shrink-0"
                       >
                         <option value="نقدي">نقدي</option>
                         <option value="انستاباي">انستاباي</option>
@@ -2378,13 +2439,16 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           setPaymentRows((prev) => prev.map((row) => (row.id === r.id ? { ...row, amount: val } : row)));
                         }}
                         placeholder="المبلغ"
-                        style={{ height: '24px', flex: 1, fontSize: '9.5px' }}
+                        className="flex-1 tabular-nums"
                       />
-                      <i
-                        className="fa-solid fa-circle-xmark"
-                        style={{ color: '#dc2626', cursor: 'pointer', fontSize: '14px' }}
+                      <button
+                        type="button"
                         onClick={() => removePaymentRow(r.id)}
-                      ></i>
+                        className="w-9 h-9 flex items-center justify-center text-rose-600 hover:bg-rose-50 rounded-md cursor-pointer shrink-0"
+                        title="حذف"
+                      >
+                        <i className="fa-solid fa-circle-xmark text-base"></i>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2392,28 +2456,33 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
               <button
                 type="button"
-                className="btn-action-top"
-                style={{ background: '#16a34a', marginTop: '6px', padding: '6px', fontSize: '9.5px' }}
+                className="btn-action-top mt-1"
+                style={{ background: '#16a34a' }}
                 onClick={() => setIsOptionsModalOpen(false)}
               >
-                <i className="fa-solid fa-check ml-1"></i> تم وحفظ الخيارات
+                <i className="fa-solid fa-check"></i>
+                <span>تم وحفظ الخيارات</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 📇 كارت الصنف التفصيلي (التركيز التلقائي على الكمية وبدون أقواس حول الكود نهائياً) */}
+      {/* 📇 كارت الصنف التفصيلي */}
       {isDetailCardOpen && cardItem && (
         <div className="modal-overlay" id="itemDetailCardModal">
           <div className="modal-box">
             <div className="modal-header">
               <span>
-                <i className="fa-solid fa-pen-to-square ml-1"></i> كارت الصنف التفصيلي
+                <i className="fa-solid fa-pen-to-square ml-1.5"></i> كارت الصنف التفصيلي
               </span>
-              <span style={{ cursor: 'pointer', fontSize: '18px' }} onClick={() => setIsDetailCardOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsDetailCardOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
             <div className="modal-body">
               <input type="hidden" value={cardItem.code} />
@@ -2423,7 +2492,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   type="text"
                   readOnly
                   value={cardItem.name}
-                  style={{ background: '#f1f5f9', fontWeight: 'bold', height: '24px', fontSize: '9.5px' }}
+                  className="!bg-slate-100 !font-semibold"
                 />
               </div>
               <div className="edit-card-grid">
@@ -2433,14 +2502,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     type="text"
                     readOnly
                     value={cardItem.stock}
-                    style={{
-                      background: '#e2e8f0',
-                      fontWeight: 'bold',
-                      color: '#2563eb',
-                      textAlign: 'center',
-                      height: '24px',
-                      fontSize: '9.5px',
-                    }}
+                    className="!bg-slate-100 !font-semibold !text-blue-700 text-center tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -2449,19 +2511,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     type="text"
                     readOnly
                     value={`${Number(cardItem.buyPrice || 0).toFixed(2)} ج.م`}
-                    style={{
-                      background: '#e2e8f0',
-                      fontWeight: 'bold',
-                      color: '#dc2626',
-                      textAlign: 'center',
-                      height: '24px',
-                      fontSize: '9.5px',
-                    }}
+                    className="!bg-slate-100 !font-semibold !text-rose-700 text-center tabular-nums"
                   />
                 </div>
               </div>
               {/* أزرار التسعير السريعة داخل كارت الصنف */}
-              <div style={{ display: 'flex', gap: '3px', margin: '2px 0 4px 0' }}>
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -2471,8 +2526,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     const q = parseFloat(cardQty) || 1;
                     setCardTotal((p * q).toFixed(2));
                   }}
-                  className="pricing-tier-btn"
-                  style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '3px', cursor: 'pointer' }}
+                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md cursor-pointer tabular-nums hover:bg-emerald-100"
                 >
                   نقدي ({getItemPriceForTier(cardItem, 'cash').toFixed(2)})
                 </button>
@@ -2485,8 +2539,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     const q = parseFloat(cardQty) || 1;
                     setCardTotal((p * q).toFixed(2));
                   }}
-                  className="pricing-tier-btn"
-                  style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#e0e7ff', color: '#3730a3', border: '1px solid #a5b4fc', borderRadius: '3px', cursor: 'pointer' }}
+                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-800 border border-indigo-300 rounded-md cursor-pointer tabular-nums hover:bg-indigo-100"
                 >
                   جملة ({getItemPriceForTier(cardItem, 'wholesale').toFixed(2)})
                 </button>
@@ -2499,8 +2552,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     const q = parseFloat(cardQty) || 1;
                     setCardTotal((p * q).toFixed(2));
                   }}
-                  className="pricing-tier-btn"
-                  style={{ flex: 1, padding: '3px', fontSize: '8px', fontWeight: 'bold', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '3px', cursor: 'pointer' }}
+                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-300 rounded-md cursor-pointer tabular-nums hover:bg-rose-100"
                 >
                   شراء ({getItemPriceForTier(cardItem, 'buy').toFixed(2)})
                 </button>
@@ -2515,13 +2567,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={cardPrice}
                     onChange={(e) => handleCardPriceChange(e.target.value)}
                     placeholder="سعر الوحدة..."
-                    style={{
-                      fontWeight: 'bold',
-                      color: '#16a34a',
-                      textAlign: 'center',
-                      height: '24px',
-                      fontSize: '9.5px',
-                    }}
+                    className="!font-semibold !text-emerald-700 text-center tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -2530,21 +2576,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     type="number"
                     readOnly
                     value={cardItem.wholesalePrice || 0}
-                    style={{
-                      background: '#e2e8f0',
-                      fontWeight: 'bold',
-                      color: '#d97706',
-                      textAlign: 'center',
-                      height: '24px',
-                      fontSize: '9.5px',
-                    }}
+                    className="!bg-slate-100 !font-semibold !text-amber-700 text-center tabular-nums"
                   />
                 </div>
               </div>
               <div className="edit-card-grid">
                 <div className="field-inline">
                   <label>العدد المطلوب:</label>
-                  {/* 🎯 التركيز التلقائي والتحديد على حقل العدد فور فتح الكارت ومفتاح Enter يضيف الصنف */}
                   <input
                     ref={cardQtyInputRef}
                     id="input-card-qty"
@@ -2553,11 +2591,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={cardQty}
                     onChange={(e) => handleCardQtyChange(e.target.value)}
-                    style={{ textAlign: 'center', fontWeight: 'bold', height: '24px', fontSize: '9.5px' }}
+                    className="text-center !font-semibold tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
-                  <label style={{ color: '#047857', fontWeight: 'bold' }}>
+                  <label className="!text-emerald-800">
                     الإجمالي (حساب عكسي للسعر):
                   </label>
                   <input
@@ -2568,37 +2606,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     onChange={(e) => handleCardTotalChange(e.target.value)}
                     placeholder="اكتب الإجمالي..."
                     title="أدخل الإجمالي هنا ليتم تقسيم السعر على الكمية تلقائياً"
-                    style={{
-                      background: '#ecfdf5',
-                      border: '1.5px solid #10b981',
-                      fontWeight: 'bold',
-                      color: '#047857',
-                      textAlign: 'center',
-                      height: '24px',
-                      fontSize: '9.5px',
-                    }}
+                    className="!bg-emerald-50 !border-emerald-400 !font-semibold !text-emerald-800 text-center tabular-nums"
                   />
                 </div>
               </div>
 
               {/* شريط توضيح ميزة الحساب العكسي التلقائي */}
-              <div
-                style={{
-                  background: '#f0fdf4',
-                  border: '1px dashed #86efac',
-                  borderRadius: '4px',
-                  padding: '4px 6px',
-                  margin: '3px 0 5px 0',
-                  fontSize: '8.5px',
-                  color: '#166534',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontWeight: 'bold',
-                }}
-              >
-                <span>⚡ ميزة الحساب العكسي:</span>
-                <span>اكتب الإجمالي ليتم ترتيب سعر الوحدة تلقائياً (السعر = الإجمالي ÷ الكمية)</span>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-800 flex flex-wrap items-center justify-between gap-1 font-medium">
+                <span>الحساب العكسي:</span>
+                <span>اكتب الإجمالي ليتم ضبط سعر الوحدة تلقائياً (السعر = الإجمالي ÷ الكمية)</span>
               </div>
               <div className="field-inline">
                 <label>الوصف / البيان / ملاحظات البند:</label>
@@ -2607,16 +2623,16 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   value={cardSpec}
                   onChange={(e) => setCardSpec(e.target.value)}
                   placeholder="ملاحظات..."
-                  style={{ height: '24px', fontSize: '9.5px' }}
                 />
               </div>
               <button
                 type="button"
-                className="btn-action-top"
-                style={{ background: '#16a34a', marginTop: '6px', padding: '6px', fontSize: '9.5px' }}
+                className="btn-action-top mt-1"
+                style={{ background: '#16a34a' }}
                 onClick={confirmAddDetailedItem}
               >
-                <i className="fa-solid fa-check ml-1"></i> إضافة للفاتورة
+                <i className="fa-solid fa-check"></i>
+                <span>إضافة للفاتورة</span>
               </button>
             </div>
           </div>
@@ -2629,11 +2645,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           <div className="lookup-modal-box">
             <div className="modal-header">
               <span>
-                <i className="fa-solid fa-boxes-stacked ml-1"></i> إضافة صنف (التنقل الهرمي)
+                <i className="fa-solid fa-boxes-stacked ml-1.5"></i> إضافة صنف (التنقل الهرمي)
               </span>
-              <span style={{ cursor: 'pointer', fontSize: '18px' }} onClick={() => setIsLookupModalOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsLookupModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
 
             <div className="search-quick-bar">
@@ -2650,23 +2670,24 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   }
                 }}
                 placeholder="بحث سريع بالاسم أو الكود في أي وقت..."
-                style={{ height: '24px', flex: 1, fontSize: '9.5px' }}
+                className="flex-1 min-w-[200px] min-h-[38px] px-3 py-1.5 text-base md:text-xs border border-slate-300 rounded-md focus:outline-none focus:border-blue-600"
               />
               <button
                 type="button"
-                className="hier-btn"
+                className="hier-btn !bg-emerald-600 !text-white !border-emerald-700"
                 onClick={openNewHierarchyModal}
-                style={{ background: '#059669', color: '#fff', fontWeight: 'bold' }}
                 title="إضافة مجموعة وبداخلها تصنيف وبداخلة نوع وبداخلة الصنف للتنقل الهرمي السريع"
               >
-                <i className="fa-solid fa-sitemap ml-1"></i> + إضافة مجموعة وتصنيف ونوع وصنف
+                <i className="fa-solid fa-sitemap"></i>
+                <span>+ إضافة مجموعة وتصنيف ونوع وصنف</span>
               </button>
               <button
                 type="button"
                 className="hier-btn success"
                 onClick={openEditModalForNewItem}
               >
-                <i className="fa-solid fa-plus ml-1"></i> صنف جديد
+                <i className="fa-solid fa-plus"></i>
+                <span>صنف جديد</span>
               </button>
             </div>
 
@@ -2691,7 +2712,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     setGlobalLookupSearch('');
                   }}
                 >
-                  <i className="fa-solid fa-house ml-1"></i> الرئيسية
+                  <i className="fa-solid fa-house"></i>
+                  <span>الرئيسية</span>
                 </button>
                 {hierarchyState.step !== 'groups' && (
                   <button
@@ -2707,7 +2729,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       }
                     }}
                   >
-                    <i className="fa-solid fa-arrow-right ml-1"></i> رجوع
+                    <i className="fa-solid fa-arrow-right"></i>
+                    <span>رجوع</span>
                   </button>
                 )}
               </div>
@@ -2723,7 +2746,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   );
                   if (results.length === 0) {
                     return (
-                      <div style={{ textAlign: 'center', padding: '25px', color: '#94a3b8', fontSize: '9.5px' }}>
+                      <div className="text-center py-8 text-slate-400 text-sm">
                         لا توجد أصناف مطابقة للبحث
                       </div>
                     );
@@ -2731,32 +2754,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   return results.map((item) => (
                     <div
                       key={item.code}
-                      className="hierarchy-card-item"
-                      style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}
+                      className="hierarchy-card-item flex-col !items-stretch gap-2"
                       onClick={() => openItemDetailCard(item)}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '10px', color: '#1e293b' }}>
+                      <div className="flex justify-between items-center font-semibold text-sm text-slate-800">
                         <span>{item.name}</span>
-                        {/* ⚠️ كود بدون أي أقواس نهائياً */}
-                        <span style={{ color: '#2563eb', fontSize: '8.5px' }}>كود: {item.code}</span>
+                        <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(4, 1fr)',
-                          gap: '2px',
-                          fontSize: '8px',
-                          textAlign: 'center',
-                          background: '#f1f5f9',
-                          padding: '4px',
-                          borderRadius: '3px',
-                          fontWeight: 'normal',
-                        }}
-                      >
-                        <div>المخزون: <strong style={{ color: '#2563eb' }}>{item.stock}</strong></div>
-                        <div>شراء: <strong style={{ color: '#dc2626' }}>{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
-                        <div>قطاعي: <strong style={{ color: '#16a34a' }}>{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
-                        <div>جملة: <strong style={{ color: '#d97706' }}>{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                        <div>المخزون: <strong className="text-blue-600">{item.stock}</strong></div>
+                        <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        <div>قطاعي: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
+                        <div>جملة: <strong className="text-amber-600">{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
                   ));
@@ -2774,9 +2783,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       onClick={() => setHierarchyState({ step: 'companies', selectedGroup: g, selectedCompany: null, selectedType: null })}
                     >
                       <span>
-                        <i className="fa-solid fa-folder ml-1" style={{ color: '#2563eb' }}></i> {g}
+                        <i className="fa-solid fa-folder ml-2 text-blue-600"></i> {g}
                       </span>
-                      <i className="fa-solid fa-chevron-left" style={{ fontSize: '9px', color: '#64748b' }}></i>
+                      <i className="fa-solid fa-chevron-left text-xs text-slate-400"></i>
                     </div>
                   ));
                 })()
@@ -2797,9 +2806,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       onClick={() => setHierarchyState((prev) => ({ ...prev, step: 'types', selectedCompany: c }))}
                     >
                       <span>
-                        <i className="fa-solid fa-building ml-1" style={{ color: '#d97706' }}></i> {c}
+                        <i className="fa-solid fa-building ml-2 text-amber-600"></i> {c}
                       </span>
-                      <i className="fa-solid fa-chevron-left" style={{ fontSize: '9px', color: '#64748b' }}></i>
+                      <i className="fa-solid fa-chevron-left text-xs text-slate-400"></i>
                     </div>
                   ));
                 })()
@@ -2822,9 +2831,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       onClick={() => setHierarchyState((prev) => ({ ...prev, step: 'items', selectedType: t }))}
                     >
                       <span>
-                        <i className="fa-solid fa-tag ml-1" style={{ color: '#16a34a' }}></i> {t}
+                        <i className="fa-solid fa-tag ml-2 text-emerald-600"></i> {t}
                       </span>
-                      <i className="fa-solid fa-chevron-left" style={{ fontSize: '9px', color: '#64748b' }}></i>
+                      <i className="fa-solid fa-chevron-left text-xs text-slate-400"></i>
                     </div>
                   ));
                 })()
@@ -2841,7 +2850,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   );
                   if (items.length === 0) {
                     return (
-                      <div style={{ textAlign: 'center', padding: '25px', color: '#94a3b8', fontSize: '9.5px' }}>
+                      <div className="text-center py-8 text-slate-400 text-sm">
                         لا توجد أصناف في هذا النوع
                       </div>
                     );
@@ -2849,32 +2858,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   return items.map((item) => (
                     <div
                       key={item.code}
-                      className="hierarchy-card-item"
-                      style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}
+                      className="hierarchy-card-item flex-col !items-stretch gap-2"
                       onClick={() => openItemDetailCard(item)}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '10px', color: '#1e293b' }}>
+                      <div className="flex justify-between items-center font-semibold text-sm text-slate-800">
                         <span>{item.name}</span>
-                        {/* ⚠️ كود بدون أقواس */}
-                        <span style={{ color: '#2563eb', fontSize: '8.5px' }}>كود: {item.code}</span>
+                        <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(4, 1fr)',
-                          gap: '2px',
-                          fontSize: '8px',
-                          textAlign: 'center',
-                          background: '#f1f5f9',
-                          padding: '4px',
-                          borderRadius: '3px',
-                          fontWeight: 'normal',
-                        }}
-                      >
-                        <div>المخزون: <strong style={{ color: '#2563eb' }}>{item.stock}</strong></div>
-                        <div>شراء: <strong style={{ color: '#dc2626' }}>{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
-                        <div>قطاعي: <strong style={{ color: '#16a34a' }}>{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
-                        <div>جملة: <strong style={{ color: '#d97706' }}>{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                        <div>المخزون: <strong className="text-blue-600">{item.stock}</strong></div>
+                        <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        <div>قطاعي: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
+                        <div>جملة: <strong className="text-amber-600">{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
                   ));
@@ -2891,9 +2886,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           <div className="modal-box">
             <div className="modal-header">
               <span>إضافة صنف جديد للمخزون</span>
-              <span style={{ cursor: 'pointer', fontSize: '18px' }} onClick={() => setIsNewItemModalOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsNewItemModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
             <div className="modal-body">
               <div className="edit-card-grid">
@@ -2903,17 +2902,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     type="text"
                     value={newInputItemName}
                     onChange={(e) => setNewInputItemName(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
                   />
                 </div>
                 <div className="field-inline span-2">
                   <label>الكود الفريد</label>
-                  {/* ⚠️ كود الصنف بدون أقواس */}
                   <input
                     type="text"
                     readOnly
                     value={newInputItemCode}
-                    style={{ background: '#f1f5f9', fontWeight: 'bold', height: '24px', fontSize: '9.5px' }}
+                    className="!bg-slate-100 !font-semibold tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -2924,7 +2921,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={editBuyPrice}
                     onChange={(e) => setEditBuyPrice(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -2932,7 +2929,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   <select
                     value={editItemCategory}
                     onChange={(e) => setEditItemCategory(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
                   >
                     {[...new Set(localItemsDatabase.map((i) => i.group))].map((g) => (
                       <option key={g} value={g}>
@@ -2949,7 +2945,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={editCashPriceManual}
                     onChange={(e) => setEditCashPriceManual(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -2960,7 +2956,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={editWholesalePriceManual}
                     onChange={(e) => setEditWholesalePriceManual(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="field-inline span-2">
@@ -2971,90 +2967,87 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={editQty}
                     onChange={(e) => setEditQty(e.target.value)}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="tabular-nums"
                   />
                 </div>
               </div>
               <button
                 type="button"
-                className="btn-action-top"
-                style={{ background: '#16a34a', marginTop: '4px', padding: '6px', fontSize: '9.5px' }}
+                className="btn-action-top mt-1"
+                style={{ background: '#16a34a' }}
                 onClick={saveNewItemData}
               >
-                <i className="fa-solid fa-check ml-1"></i> حفظ الصنف
+                <i className="fa-solid fa-check"></i>
+                <span>حفظ الصنف</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 🌳 نافذة إضافة هيكل شجري متكامل (مجموعة > تصنيف/شركة > نوع > صنف) */}
+      {/* 🌳 نافذة إضافة هيكل شجري متكامل */}
       {isNewHierarchyModalOpen && (
         <div className="modal-overlay" id="newHierarchyModal">
-          <div className="modal-box" style={{ maxWidth: '360px' }}>
-            <div className="modal-header" style={{ background: '#ffffff', color: '#0f172a', borderBottom: '1.5px solid #e2e8f0' }}>
-              <span style={{ fontWeight: 800 }}>
-                <i className="fa-solid fa-sitemap ml-1" style={{ color: '#059669' }}></i> إضافة شجرة صنف (مجموعة &gt; تصنيف &gt; نوع &gt; صنف)
+          <div className="modal-box" style={{ maxWidth: '500px' }}>
+            <div className="modal-header" style={{ background: '#ffffff', color: '#0f172a', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="font-semibold">
+                <i className="fa-solid fa-sitemap ml-1.5 text-emerald-600"></i> إضافة شجرة صنف (مجموعة &gt; تصنيف &gt; نوع &gt; صنف)
               </span>
-              <span style={{ cursor: 'pointer', fontSize: '18px', color: '#64748b' }} onClick={() => setIsNewHierarchyModalOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsNewHierarchyModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
             <div className="modal-body">
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '5px 7px', marginBottom: '4px', fontSize: '8.5px', color: '#334155', lineHeight: 1.4 }}>
-                💡 اكتب اسم المجموعة والتصنيف والنوع والصنف النهائي ليتم تثبيته فوراً كفرع نشط في شجرة الفاتورة والمخزون.
+              <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-xs text-slate-600 leading-relaxed">
+                اكتب اسم المجموعة والتصنيف والنوع والصنف النهائي ليتم تثبيته فوراً في شجرة الفاتورة والمخزون.
               </div>
 
               <div className="edit-card-grid">
-                {/* 1. المجموعة */}
                 <div className="field-inline span-2">
-                  <label style={{ color: '#0f766e', fontWeight: 'bold' }}>1. المجموعة الرئيسية</label>
+                  <label className="!text-teal-700">1. المجموعة الرئيسية</label>
                   <input
                     type="text"
                     value={hierGroup}
                     onChange={(e) => setHierGroup(e.target.value)}
                     placeholder="اكتب اسم المجموعة الرئيسية..."
-                    style={{ height: '24px', fontSize: '9.5px', fontWeight: 'bold' }}
                   />
                 </div>
 
-                {/* 2. التصنيف / الشركة */}
                 <div className="field-inline span-2">
-                  <label style={{ color: '#0369a1', fontWeight: 'bold' }}>2. التصنيف / الشركة / الماركة</label>
+                  <label className="!text-sky-700">2. التصنيف / الشركة / الماركة</label>
                   <input
                     type="text"
                     value={hierCompany}
                     onChange={(e) => setHierCompany(e.target.value)}
                     placeholder="اكتب اسم التصنيف أو الشركة..."
-                    style={{ height: '24px', fontSize: '9.5px', fontWeight: 'bold' }}
                   />
                 </div>
 
-                {/* 3. النوع / القسم الفرعي */}
                 <div className="field-inline span-2">
-                  <label style={{ color: '#6d28d9', fontWeight: 'bold' }}>3. النوع / القسم الفرعي</label>
+                  <label className="!text-violet-700">3. النوع / القسم الفرعي</label>
                   <input
                     type="text"
                     value={hierType}
                     onChange={(e) => setHierType(e.target.value)}
                     placeholder="اكتب اسم النوع أو القسم الفرعي..."
-                    style={{ height: '24px', fontSize: '9.5px', fontWeight: 'bold' }}
                   />
                 </div>
 
-                {/* 4. اسم الصنف */}
                 <div className="field-inline span-2">
-                  <label style={{ color: '#1e293b', fontWeight: 'bold' }}>4. اسم الصنف النهائي</label>
+                  <label className="!text-slate-900">4. اسم الصنف النهائي</label>
                   <input
                     type="text"
                     value={hierItemName}
                     onChange={(e) => setHierItemName(e.target.value)}
                     placeholder="اكتب اسم الصنف النهائي..."
-                    style={{ height: '24px', fontSize: '9.5px', fontWeight: 'bold', border: '1.5px solid #2563eb' }}
+                    className="!border-blue-500"
                   />
                 </div>
 
-                {/* كود الصنف */}
                 <div className="field-inline">
                   <label>كود الصنف</label>
                   <input
@@ -3062,11 +3055,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={hierItemCode}
                     onChange={(e) => setHierItemCode(e.target.value)}
                     placeholder="كود..."
-                    style={{ height: '24px', fontSize: '9px', textAlign: 'center' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
 
-                {/* العدد بالمخزن */}
                 <div className="field-inline">
                   <label>العدد بالمخزن</label>
                   <input
@@ -3076,11 +3068,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={hierStock}
                     onChange={(e) => setHierStock(e.target.value)}
                     placeholder="0"
-                    style={{ height: '24px', fontSize: '9.5px', textAlign: 'center' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
 
-                {/* سعر الشراء */}
                 <div className="field-inline">
                   <label>سعر الشراء (التكلفة)</label>
                   <input
@@ -3090,11 +3081,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={hierBuyPrice}
                     onChange={(e) => setHierBuyPrice(e.target.value)}
                     placeholder="0.00"
-                    style={{ height: '24px', fontSize: '9.5px', textAlign: 'center' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
 
-                {/* سعر البيع النقدي */}
                 <div className="field-inline">
                   <label>سعر القطاعي (نقدي)</label>
                   <input
@@ -3104,11 +3094,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={hierCashPrice}
                     onChange={(e) => setHierCashPrice(e.target.value)}
                     placeholder="0.00"
-                    style={{ height: '24px', fontSize: '9.5px', textAlign: 'center' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
 
-                {/* سعر الجملة */}
                 <div className="field-inline span-2">
                   <label>سعر بيع الجملة</label>
                   <input
@@ -3118,24 +3107,24 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={hierWholesalePrice}
                     onChange={(e) => setHierWholesalePrice(e.target.value)}
                     placeholder="0.00"
-                    style={{ height: '24px', fontSize: '9.5px', textAlign: 'center' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+              <div className="flex gap-2 mt-2">
                 <button
                   type="button"
-                  className="btn-action-top"
-                  style={{ background: '#059669', flex: 1, padding: '7px', fontSize: '10px' }}
+                  className="btn-action-top flex-1"
+                  style={{ background: '#059669' }}
                   onClick={saveNewHierarchyModal}
                 >
-                  <i className="fa-solid fa-check ml-1"></i> حفظ وتثبيت في الشجرة
+                  <i className="fa-solid fa-check"></i>
+                  <span>حفظ وتثبيت في الشجرة</span>
                 </button>
                 <button
                   type="button"
-                  className="btn-action-top btn-action-alt"
-                  style={{ width: '60px', padding: '7px', fontSize: '9.5px' }}
+                  className="btn-action-top btn-action-alt !w-24"
                   onClick={() => setIsNewHierarchyModalOpen(false)}
                 >
                   إلغاء
@@ -3152,11 +3141,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           <div className="modal-box">
             <div className="modal-header">
               <span>
-                <i className="fa-solid fa-pen-to-square ml-1"></i> تعديل صنف في الفاتورة
+                <i className="fa-solid fa-pen-to-square ml-1.5"></i> تعديل صنف في الفاتورة
               </span>
-              <span style={{ cursor: 'pointer', fontSize: '18px' }} onClick={() => setIsModifyModalOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsModifyModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+              >
                 &times;
-              </span>
+              </button>
             </div>
             <div className="modal-body">
               <input type="hidden" value={modifyItemIndex} />
@@ -3166,10 +3159,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   type="text"
                   readOnly
                   value={modifyItemName}
-                  style={{ background: '#f1f5f9', height: '24px', fontSize: '9.5px' }}
+                  className="!bg-slate-100 !font-semibold"
                 />
               </div>
-              <div className="edit-card-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="field-inline">
                   <label>العدد (الكمية)</label>
                   <input
@@ -3189,7 +3182,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         setModifyItemPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
                       }
                     }}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -3205,7 +3198,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       const q = parseFloat(modifyItemQty) || 0;
                       if (q > 0 && p > 0) setModifyItemTotal((q * p).toFixed(2));
                     }}
-                    style={{ height: '24px', fontSize: '9.5px' }}
+                    className="text-center tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -3227,27 +3220,27 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     }}
                     placeholder="1000..."
                     title="اكتب الإجمالي وسيتم حسابه وقسمته على الكمية تلقائياً لتحديث سعر الوحدة"
-                    style={{ height: '24px', fontSize: '9.5px', background: '#ecfdf5', borderColor: '#10b981', color: '#065f46', fontWeight: 'bold' }}
+                    className="text-center tabular-nums !bg-emerald-50 !border-emerald-400 !text-emerald-900 !font-semibold"
                   />
                 </div>
               </div>
-              <div className="field-inline span-2">
+              <div className="field-inline">
                 <label>الوصف / البيان</label>
                 <input
                   type="text"
                   value={modifyItemSpec}
                   onChange={(e) => setModifyItemSpec(e.target.value)}
                   placeholder="اختياري..."
-                  style={{ height: '24px', fontSize: '9.5px' }}
                 />
               </div>
               <button
                 type="button"
-                className="btn-action-top"
-                style={{ background: '#16a34a', marginTop: '6px', padding: '6px', fontSize: '9.5px' }}
+                className="btn-action-top mt-1"
+                style={{ background: '#16a34a' }}
                 onClick={saveModifiedInvoiceItem}
               >
-                <i className="fa-solid fa-check ml-1"></i> حفظ التعديل
+                <i className="fa-solid fa-check"></i>
+                <span>حفظ التعديل</span>
               </button>
             </div>
           </div>

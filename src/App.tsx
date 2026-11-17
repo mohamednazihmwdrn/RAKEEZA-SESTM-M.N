@@ -1842,7 +1842,7 @@ export default function App() {
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 bg-black/50 z-35 backdrop-blur-xs transition-opacity"
+          className="lg:hidden fixed inset-0 bg-slate-950/50 z-35 transition-opacity"
           aria-hidden="true"
         />
       )}
@@ -1866,23 +1866,23 @@ export default function App() {
       <main
         className={`${
           appData.viewingClosedYear ? 'mt-[105px]' : 'mt-[56px]'
-        } p-2.5 sm:p-4 md:p-6 pb-6 transition-all duration-300 flex-1 min-w-0 max-w-full overflow-x-hidden ${
-          isSidebarOpen ? 'lg:mr-[290px]' : 'mr-0'
+        } p-3 sm:p-5 md:p-6 pb-6 transition-all duration-300 flex-1 min-w-0 max-w-full overflow-x-hidden ${
+          isSidebarOpen ? 'lg:mr-[280px]' : 'mr-0'
         }`}
       >
         <div className="w-full max-w-7xl mx-auto min-w-0 flex flex-col">
           {/* Subscription Status Banner if expired or warning */}
           {session?.subscription?.isExpired && (
-            <div className="mb-4 p-3.5 bg-amber-500/15 border-2 border-amber-500/40 rounded-2xl text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
+            <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-800">
-                  <AlertTriangle className="w-5 h-5 shrink-0" />
+                <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div className="text-xs sm:text-sm">
-                  <p className="font-extrabold text-amber-950">
+                  <p className="font-semibold text-amber-950">
                     تنبيه: انتهت صلاحية اشتراك المنظومة لشركة ({session?.company?.name || 'الشركة'})
                   </p>
-                  <p className="text-amber-800 text-xs">
+                  <p className="text-amber-800 text-xs mt-0.5">
                     بياناتك ومستنداتك محفوظة بأمان تام في السحابة. لتجديد الترخيص ومتابعة العمل، يرجى إدخال كود التفعيل المعتمد.
                   </p>
                 </div>
@@ -1890,17 +1890,17 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsLicenseModalOpen(true)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                className="min-h-[40px] px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold rounded-lg text-xs transition cursor-pointer whitespace-nowrap"
               >
-                🔑 إدخال كود الترخيص
+                إدخال كود الترخيص
               </button>
             </div>
           )}
 
           {/* Page Top Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-5 pb-3 border-b-2 border-slate-200 gap-3">
-            <div className="w-full sm:w-auto">
-              <h2 className="text-base sm:text-lg md:text-xl font-black text-[#1a237e] flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-5 pb-3 border-b border-slate-200 gap-3">
+            <div className="w-full sm:w-auto min-w-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                 {getPageTitle(currentPage)}
               </h2>
             </div>
@@ -1916,27 +1916,27 @@ export default function App() {
                       handleNavigate('home');
                     }
                   }}
-                  className="min-h-[40px] bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial"
+                  className="min-h-[40px] bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-300 px-3.5 py-2 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-initial"
                   title="الرجوع إلى الصفحة السابقة (أو استخدم زر الرجوع بهاتفك)"
                 >
-                  <span>↩️</span>
+                  <span>↩</span>
                   <span>رجوع</span>
                 </button>
               )}
               {currentPage !== 'pos' && (
                 <button
                   onClick={() => handleNavigate('pos')}
-                  className="min-h-[40px] bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-black px-3.5 py-2 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1 shadow-xs flex-1 sm:flex-initial"
+                  className="min-h-[40px] bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-semibold px-3.5 py-2 rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1 flex-1 sm:flex-initial"
                 >
-                  ⚡ POS سريع
+                  POS سريع
                 </button>
               )}
               {currentPage !== 'home' && (
                 <button
                   onClick={() => handleNavigate('home')}
-                  className="min-h-[40px] bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1 flex-1 sm:flex-initial"
+                  className="min-h-[40px] bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-300 px-3.5 py-2 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1 flex-1 sm:flex-initial"
                 >
-                  🏠 الرئيسية
+                  الرئيسية
                 </button>
               )}
             </div>
@@ -1949,15 +1949,15 @@ export default function App() {
 
       {/* System Footer & Developer Copyright */}
       <footer
-        className={`no-print py-3.5 px-4 sm:px-6 bg-white border-t border-slate-200 text-xs text-slate-600 transition-all duration-300 shadow-xs mb-0 ${
-          isSidebarOpen ? 'lg:mr-[290px]' : 'mr-0'
+        className={`no-print py-3.5 px-4 sm:px-6 bg-white border-t border-slate-200 text-xs text-slate-600 transition-all duration-300 mb-0 ${
+          isSidebarOpen ? 'lg:mr-[280px]' : 'mr-0'
         }`}
       >
-        <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-center sm:text-right">
+        <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 text-center sm:text-right flex-wrap justify-center">
             <span
               onClick={handleFooterSecretClicks}
-              className="font-bold text-[#1a237e] text-sm cursor-pointer select-none hover:text-blue-800 transition"
+              className="font-semibold text-slate-900 text-sm cursor-pointer select-none hover:text-blue-700 transition"
               title="منظومة ركيزة RAKEEZA ERP"
             >
               منظومة ركيزة | RAKEEZA ERP
@@ -1965,10 +1965,10 @@ export default function App() {
             <span className="text-slate-300">|</span>
             <span>جميع الحقوق محفوظة © {new Date().getFullYear()}</span>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 font-semibold text-slate-700 bg-slate-100 px-3.5 py-1.5 rounded-full border border-slate-200 text-center">
-            <span>👨‍💻 تطوير: <strong className="text-[#0d47a1]">Mohamed Nazih</strong></span>
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 font-normal text-slate-600 text-center">
+            <span>تطوير: <strong className="font-medium text-slate-900">Mohamed Nazih</strong></span>
             <span className="text-slate-300">|</span>
-            <span>📱 للتواصل: <strong className="text-emerald-700 font-mono text-sm" dir="ltr">01029190615</strong></span>
+            <span>للتواصل: <strong className="font-medium text-slate-900 financial-num" dir="ltr">01029190615</strong></span>
           </div>
         </div>
       </footer>

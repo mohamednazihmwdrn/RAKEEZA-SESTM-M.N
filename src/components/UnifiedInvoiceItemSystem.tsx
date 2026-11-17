@@ -731,26 +731,26 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
   ]);
 
   return (
-    <div className="w-full flex flex-col gap-4 text-slate-800" dir="rtl">
+    <div className="w-full flex flex-col gap-4 text-slate-800 tabular-nums" dir="rtl">
       {/* 1. Large Touch-Friendly Button to Open Catalog / Categories */}
       <button
         type="button"
         id="btn-open-catalog-lookup"
         onClick={openLookupModal}
-        className="w-full min-h-[48px] py-3.5 px-4 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 hover:from-blue-800 hover:to-indigo-900 active:scale-[0.99] text-white rounded-xl font-black text-sm sm:text-base shadow-md transition-all cursor-pointer flex items-center justify-center gap-2.5 touch-manipulation"
+        className="w-full min-h-[48px] py-3 px-4 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white rounded-xl font-semibold text-sm sm:text-base transition-colors cursor-pointer flex items-center justify-center gap-2 touch-manipulation"
       >
-        <Boxes className="w-5 h-5 text-amber-300 shrink-0" />
+        <Boxes className="w-5 h-5 text-blue-100 shrink-0" />
         <span>إضافة صنف</span>
       </button>
 
       {/* 2. Items List / Table with Touch Optimization */}
-      <div className="w-full bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+      <div className="w-full bg-white rounded-xl border border-slate-200 overflow-hidden">
         {currentInvoiceItems.length === 0 ? (
           <div className="p-8 text-center text-slate-400 flex flex-col items-center justify-center gap-2.5">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Boxes className="w-6 h-6" />
             </div>
-            <p className="font-bold text-slate-700 text-sm">لم يتم إدراج أي أصناف في الفاتورة بعد</p>
+            <p className="font-semibold text-slate-700 text-sm">لم يتم إدراج أي أصناف في الفاتورة بعد</p>
             <p className="text-xs text-slate-400">
               اضغط على زر "إضافة صنف" أعلاه لاختيار وتعديل الأصناف بسهولة
             </p>
@@ -758,18 +758,18 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
         ) : (
           <div>
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto max-h-[320px] border border-slate-300 rounded-lg">
-              <table className="w-full border-collapse text-xs text-center border border-slate-300">
+            <div className="hidden md:block overflow-x-auto max-h-[320px]">
+              <table className="w-full border-collapse text-xs text-center">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-800 font-bold sticky top-0 border-b-2 border-slate-300 z-10">
-                    <th className="py-3 px-3 text-right border border-slate-300 font-black text-slate-900">الوصف / الصنف</th>
-                    <th className="py-3 px-2 text-center w-16 border border-slate-300 font-bold text-slate-800">العدد</th>
-                    <th className="py-3 px-2 text-center w-24 border border-slate-300 font-bold text-slate-800">سعر</th>
-                    <th className="py-3 px-2 text-center w-20 border border-slate-300 font-bold text-slate-800">الخصم</th>
-                    <th className="py-3 px-2 text-center w-20 border border-slate-300 font-bold text-slate-800">الضريبة</th>
-                    <th className="py-3 px-3 text-right border border-slate-300 font-bold text-slate-800">ملاحظات</th>
-                    <th className="py-3 px-3 text-center w-24 border border-slate-300 font-black text-slate-900">اجمالي</th>
-                    <th className="py-3 px-2 text-center w-20 border border-slate-300 font-bold text-slate-800">إجراء</th>
+                  <tr className="bg-slate-50 text-slate-700 font-semibold sticky top-0 border-b border-slate-200 z-10">
+                    <th className="py-3 px-3 text-right border-l border-slate-200 font-semibold">الوصف / الصنف</th>
+                    <th className="py-3 px-2 text-center w-20 border-l border-slate-200 font-semibold">العدد</th>
+                    <th className="py-3 px-2 text-center w-24 border-l border-slate-200 font-semibold">سعر</th>
+                    <th className="py-3 px-2 text-center w-20 border-l border-slate-200 font-semibold">الخصم</th>
+                    <th className="py-3 px-2 text-center w-20 border-l border-slate-200 font-semibold">الضريبة</th>
+                    <th className="py-3 px-3 text-right border-l border-slate-200 font-semibold">ملاحظات</th>
+                    <th className="py-3 px-3 text-center w-28 border-l border-slate-200 font-semibold">اجمالي</th>
+                    <th className="py-3 px-2 text-center w-20 font-semibold">إجراء</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -784,52 +784,52 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                       buyPrice: item.price,
                     };
                     return (
-                      <tr key={index} className="bg-white hover:bg-slate-100 transition-colors border-b border-slate-200">
-                        <td className="py-2.5 px-3 text-right font-black text-black border border-slate-300 text-xs sm:text-sm">{item.name}</td>
-                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                      <tr key={index} className="bg-white hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3 text-right font-semibold text-slate-900 border-l border-slate-200 text-xs sm:text-sm">{item.name}</td>
+                        <td className="py-1.5 px-1.5 font-mono font-semibold border-l border-slate-200">
                           <input
                             type="number"
                             min="0.001"
                             step="any"
                             value={item.qty}
                             onChange={(e) => updateTableItemQty(index, e.target.value)}
-                            className="w-14 h-8 text-center font-mono font-black text-black border border-slate-300 rounded focus:border-blue-700 bg-white"
+                            className="w-16 h-9 text-center font-mono font-semibold text-slate-900 border border-slate-300 rounded-md focus:border-blue-600 focus:outline-none bg-white"
                           />
                         </td>
-                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                        <td className="py-1.5 px-1.5 font-mono font-semibold border-l border-slate-200">
                           <input
                             type="number"
                             step="any"
                             value={item.price}
                             onChange={(e) => updateTableItemPrice(index, e.target.value)}
-                            className="w-20 h-8 text-center font-mono font-black text-black border border-slate-300 rounded focus:border-blue-700 bg-white"
+                            className="w-20 h-9 text-center font-mono font-semibold text-slate-900 border border-slate-300 rounded-md focus:border-blue-600 focus:outline-none bg-white"
                           />
                         </td>
-                        <td className="py-2.5 px-2 font-mono text-black font-black border border-slate-300">
+                        <td className="py-2.5 px-2 font-mono text-slate-700 font-medium border-l border-slate-200">
                           {item.discVal > 0 ? `${item.discVal}${item.discType === 'percent' ? '%' : ' ج'}` : '-'}
                         </td>
-                        <td className="py-2.5 px-2 font-mono text-black font-black border border-slate-300">
+                        <td className="py-2.5 px-2 font-mono text-slate-700 font-medium border-l border-slate-200">
                           {item.taxVal > 0 ? `${item.taxVal}${item.taxType === 'percent' ? '%' : ' ج'}` : '-'}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-black font-bold border border-slate-300 truncate max-w-[160px]">
+                        <td className="py-2.5 px-3 text-right text-slate-600 border-l border-slate-200 truncate max-w-[160px]">
                           {item.spec || '-'}
                         </td>
-                        <td className="py-1 px-1 font-mono font-black border border-slate-300">
+                        <td className="py-1.5 px-1.5 font-mono font-semibold border-l border-slate-200">
                           <input
                             type="number"
                             step="any"
                             value={item.total}
                             onChange={(e) => updateTableItemTotal(index, e.target.value)}
                             title="تعديل الإجمالي يقسم تلقائياً على العدد ويضبط سعر الوحدة فوراً"
-                            className="w-24 h-8 text-center font-mono font-black text-emerald-950 border-2 border-emerald-500 rounded focus:border-emerald-700 bg-emerald-50/70"
+                            className="w-24 h-9 text-center font-mono font-semibold text-emerald-900 border border-emerald-400 rounded-md focus:border-emerald-600 focus:outline-none bg-emerald-50/70"
                           />
                         </td>
-                        <td className="py-2.5 px-2 border border-slate-300">
+                        <td className="py-2 px-2">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => openEditModal(catalogMatch, index)}
-                              className="w-8 h-8 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-400 flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center transition-colors cursor-pointer"
                               title="تعديل الصنف"
                             >
                               <Edit className="w-4 h-4" />
@@ -837,7 +837,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                             <button
                               type="button"
                               onClick={() => removeItem(index)}
-                              className="w-8 h-8 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-400 flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center justify-center transition-colors cursor-pointer"
                               title="حذف الصنف"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -852,7 +852,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
             </div>
 
             {/* Mobile Touch-Friendly Cards View */}
-            <div className="block md:hidden p-2 space-y-2.5 max-h-[380px] overflow-y-auto">
+            <div className="block md:hidden p-2.5 space-y-2.5 max-h-[380px] overflow-y-auto">
               {currentInvoiceItems.map((item, index) => {
                 const catalogMatch = fullCatalog.find((c) => c.code === item.code) || {
                   code: item.code,
@@ -955,11 +955,11 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
         )}
       </div>
 
-      {/* 3. Extra Sections (Discount, Tax, Extra Revenue, Multi-Payment) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-100 p-3.5 rounded-xl border-2 border-slate-300">
+      {/* 3. Extra Sections */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
         {/* Global Invoice Discount & Tax */}
-        <div className="bg-white p-3.5 rounded-xl border-2 border-slate-300 flex flex-col gap-2.5 shadow-xs">
-          <div className="text-xs font-black text-black border-b-2 border-slate-200 pb-1.5 flex items-center justify-between">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2.5">
+          <div className="text-xs font-semibold text-slate-900 border-b border-slate-100 pb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Tag className="w-4 h-4 text-amber-600" />
               <span>خصم / ضريبة الفاتورة الكلية</span>
@@ -967,15 +967,15 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {/* Global Discount */}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-black">خصم الفاتورة</label>
-                <div className="flex border-2 border-blue-700 rounded overflow-hidden">
+                <label className="text-xs font-semibold text-slate-700">خصم الفاتورة</label>
+                <div className="flex border border-blue-600 rounded overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setInvDiscType('val')}
-                    className={`px-2 py-0.5 text-xs font-black transition cursor-pointer ${
-                      invDiscType === 'val' ? 'bg-blue-700 text-white' : 'bg-white text-blue-900 hover:bg-blue-50'
+                    className={`px-2 py-0.5 text-xs font-semibold transition cursor-pointer ${
+                      invDiscType === 'val' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'
                     }`}
                   >
                     ج.م
@@ -983,8 +983,8 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   <button
                     type="button"
                     onClick={() => setInvDiscType('percent')}
-                    className={`px-2 py-0.5 text-xs font-black transition cursor-pointer ${
-                      invDiscType === 'percent' ? 'bg-blue-700 text-white' : 'bg-white text-blue-900 hover:bg-blue-50'
+                    className={`px-2 py-0.5 text-xs font-semibold transition cursor-pointer ${
+                      invDiscType === 'percent' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'
                     }`}
                   >
                     %
@@ -998,20 +998,20 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                 value={globalInvDisc === 0 ? '' : globalInvDisc}
                 placeholder="0.00"
                 onChange={(e) => setGlobalInvDisc(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-                className="w-full p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 font-mono shadow-xs"
+                className="w-full min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
               />
             </div>
 
             {/* Global Tax */}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-black">ضريبة الفاتورة</label>
-                <div className="flex border-2 border-blue-700 rounded overflow-hidden">
+                <label className="text-xs font-semibold text-slate-700">ضريبة الفاتورة</label>
+                <div className="flex border border-blue-600 rounded overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setInvTaxType('percent')}
-                    className={`px-2 py-0.5 text-xs font-black transition cursor-pointer ${
-                      invTaxType === 'percent' ? 'bg-blue-700 text-white' : 'bg-white text-blue-900 hover:bg-blue-50'
+                    className={`px-2 py-0.5 text-xs font-semibold transition cursor-pointer ${
+                      invTaxType === 'percent' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'
                     }`}
                   >
                     %
@@ -1019,8 +1019,8 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   <button
                     type="button"
                     onClick={() => setInvTaxType('val')}
-                    className={`px-2 py-0.5 text-xs font-black transition cursor-pointer ${
-                      invTaxType === 'val' ? 'bg-blue-700 text-white' : 'bg-white text-blue-900 hover:bg-blue-50'
+                    className={`px-2 py-0.5 text-xs font-semibold transition cursor-pointer ${
+                      invTaxType === 'val' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 hover:bg-blue-50'
                     }`}
                   >
                     ج.م
@@ -1034,30 +1034,30 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                 value={globalInvTax === 0 ? '' : globalInvTax}
                 placeholder="0.00"
                 onChange={(e) => setGlobalInvTax(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-                className="w-full p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 font-mono shadow-xs"
+                className="w-full min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
               />
             </div>
           </div>
         </div>
 
         {/* Extra Income / Delivery / Shipping */}
-        <div className="bg-white p-3.5 rounded-xl border-2 border-slate-300 flex flex-col gap-2.5 shadow-xs">
-          <div className="text-xs font-black text-black border-b-2 border-slate-200 pb-1.5 flex items-center justify-between">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2.5">
+          <div className="text-xs font-semibold text-slate-900 border-b border-slate-100 pb-2 flex items-center justify-between">
             <span>الإيراد الإضافي (مصاريف شحن/خدمة)</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-black text-black">اسم الإيراد</label>
+              <label className="text-xs font-semibold text-slate-700">اسم الإيراد</label>
               <input
                 type="text"
                 placeholder="خدمة توصيل / شحن..."
                 value={extraIncomeName}
                 onChange={(e) => setExtraIncomeName(e.target.value)}
-                className="w-full p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 placeholder:text-slate-500 shadow-xs"
+                className="w-full min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-medium text-slate-900 focus:outline-none focus:border-blue-600 placeholder:text-slate-400"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-black text-black">مبلغ الإيراد (ج.م)</label>
+              <label className="text-xs font-semibold text-slate-700">مبلغ الإيراد (ج.م)</label>
               <input
                 type="number"
                 min="0"
@@ -1065,20 +1065,20 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                 value={extraIncomeVal === 0 ? '' : extraIncomeVal}
                 placeholder="0.00"
                 onChange={(e) => setExtraIncomeVal(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-                className="w-full p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 font-mono shadow-xs"
+                className="w-full min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
               />
             </div>
           </div>
         </div>
 
         {/* Multi-Payment Methods Row */}
-        <div className="md:col-span-2 bg-white p-3.5 rounded-xl border-2 border-slate-300 flex flex-col gap-2.5 shadow-xs">
-          <div className="text-xs font-black text-black border-b-2 border-slate-200 pb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="md:col-span-2 bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2.5">
+          <div className="text-xs font-semibold text-slate-900 border-b border-slate-100 pb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-blue-700" />
-              <span>تحديد طريقة / طرق الدفع المتعددة:</span>
+              <CreditCard className="w-4 h-4 text-blue-600" />
+              <span>تحديد طرق الدفع المتعددة</span>
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1090,14 +1090,14 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                     setPaymentRows([{ id: `pay_${Date.now()}`, method: 'نقدي / كاش', amount: netTotal }]);
                   }
                 }}
-                className="px-2.5 py-1 text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 rounded-lg cursor-pointer transition shadow-xs"
+                className="min-h-[38px] px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg cursor-pointer transition"
               >
-                ⚡ سداد كامل الصافي كاش
+                سداد كامل الصافي كاش
               </button>
               <button
                 type="button"
                 onClick={() => addPaymentRow('نقدي / كاش')}
-                className="px-3 py-1.5 text-xs font-black bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white rounded-lg cursor-pointer transition-colors shadow-xs flex items-center gap-1 touch-manipulation"
+                className="min-h-[38px] px-3 py-1.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg cursor-pointer transition-colors flex items-center gap-1 touch-manipulation"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>إضافة طريقة دفع</span>
@@ -1111,7 +1111,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                 <select
                   value={row.method}
                   onChange={(e) => updatePaymentRowMethod(row.id, e.target.value)}
-                  className="w-44 sm:w-60 p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 shadow-xs cursor-pointer"
+                  className="w-40 sm:w-56 min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
                 >
                   {PAYMENT_METHODS.map((m) => (
                     <option key={m} value={m}>
@@ -1127,14 +1127,14 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   value={row.amount === 0 ? '' : row.amount}
                   placeholder="المبلغ المدفوع (0.00)"
                   onChange={(e) => updatePaymentRowAmount(row.id, e.target.value)}
-                  className="flex-1 p-2.5 bg-white border-2 border-slate-400 rounded-lg text-xs font-black text-black focus:outline-none focus:border-blue-700 font-mono shadow-xs"
+                  className="flex-1 min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
                 />
 
                 {paymentRows.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removePaymentRow(row.id)}
-                    className="p-2 text-rose-700 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-300 transition-colors cursor-pointer"
+                    className="w-10 h-10 flex items-center justify-center text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer"
                     title="حذف طريقة الدفع"
                   >
                     <X className="w-4 h-4" />
@@ -1146,54 +1146,54 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
         </div>
       </div>
 
-      {/* 4. Summary Bar (خالٍ تماماً من الألوان الغامقة - تصميم فاتح، مشرق، عالي التباين) */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-slate-300 shadow-xs flex flex-wrap items-center justify-between gap-2.5 text-xs sm:text-sm">
-        <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-          <span className="text-slate-700 font-bold">إجمالي الأصناف:</span>
-          <span className="font-mono font-black text-slate-950 text-sm sm:text-base">{itemsSubTotal.toFixed(2)}</span>
+      {/* 4. Summary Bar */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs sm:text-sm">
+        <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+          <span className="text-slate-600 font-medium">إجمالي الأصناف:</span>
+          <span className="font-mono font-semibold text-slate-900 text-sm sm:text-base">{itemsSubTotal.toFixed(2)}</span>
         </div>
-        <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-xl border border-amber-200">
-          <span className="text-amber-900 font-bold">الخصومات:</span>
-          <span className="font-mono font-black text-amber-950 text-sm sm:text-base">{totalDisc.toFixed(2)}</span>
+        <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+          <span className="text-amber-900 font-medium">الخصومات:</span>
+          <span className="font-mono font-semibold text-amber-950 text-sm sm:text-base">{totalDisc.toFixed(2)}</span>
         </div>
-        <div className="flex items-center gap-2 bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200">
-          <span className="text-indigo-900 font-bold">الضرائب:</span>
-          <span className="font-mono font-black text-indigo-950 text-sm sm:text-base">{totalTax.toFixed(2)}</span>
+        <div className="flex items-center gap-2 bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-200">
+          <span className="text-indigo-900 font-medium">الضرائب:</span>
+          <span className="font-mono font-semibold text-indigo-950 text-sm sm:text-base">{totalTax.toFixed(2)}</span>
         </div>
         {extraIncomeVal > 0 && (
-          <div className="flex items-center gap-2 bg-teal-50 px-3 py-2 rounded-xl border border-teal-200">
-            <span className="text-teal-900 font-bold">الإيراد الإضافي:</span>
-            <span className="font-mono font-black text-teal-950 text-sm sm:text-base">{extraIncomeVal.toFixed(2)}</span>
+          <div className="flex items-center gap-2 bg-teal-50 px-3 py-2 rounded-lg border border-teal-200">
+            <span className="text-teal-900 font-medium">الإيراد الإضافي:</span>
+            <span className="font-mono font-semibold text-teal-950 text-sm sm:text-base">{extraIncomeVal.toFixed(2)}</span>
           </div>
         )}
-        <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2.5 rounded-xl border-2 border-emerald-400 shadow-xs">
-          <span className="text-emerald-950 font-black text-sm sm:text-base">الصافي النهائي:</span>
-          <span className="font-mono font-black text-emerald-950 text-base sm:text-lg">{netTotal.toFixed(2)} ج.م</span>
+        <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-300">
+          <span className="text-emerald-900 font-semibold text-sm sm:text-base">الصافي النهائي:</span>
+          <span className="font-mono font-bold text-emerald-950 text-base sm:text-lg">{netTotal.toFixed(2)} ج.م</span>
         </div>
-        <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200">
-          <span className="text-blue-900 font-bold">المدفوع:</span>
-          <span className="font-mono font-black text-blue-950 text-sm sm:text-base">{paidTotal.toFixed(2)}</span>
+        <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+          <span className="text-blue-900 font-medium">المدفوع:</span>
+          <span className="font-mono font-semibold text-blue-950 text-sm sm:text-base">{paidTotal.toFixed(2)}</span>
         </div>
         <div
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
             remainTotal > 0
-              ? 'bg-rose-50 border-rose-300 text-rose-950'
-              : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+              ? 'bg-rose-50 border-rose-200 text-rose-900'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-900'
           }`}
         >
-          <span className="font-bold">المتبقي:</span>
-          <span className="font-mono font-black text-sm sm:text-base">{remainTotal.toFixed(2)}</span>
+          <span className="font-medium">المتبقي:</span>
+          <span className="font-mono font-semibold text-sm sm:text-base">{remainTotal.toFixed(2)}</span>
         </div>
       </div>
 
-      {/* 5. Action Bar (تظهر فقط عند عدم وجود زر الحفظ في النافذة الرئيسية لمنع أي تكرار) */}
+      {/* 5. Action Bar */}
       {!hideSaveButton && onSaveInvoice && (
         <div className="flex items-center gap-3 pt-1">
           <button
             type="button"
             onClick={onSaveInvoice}
             disabled={isSaving || currentInvoiceItems.length === 0}
-            className="flex-1 min-h-[48px] py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-sm sm:text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
+            className="flex-1 min-h-[46px] py-3 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm sm:text-base transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
           >
             <Save className="w-5 h-5" />
             <span>{isSaving ? 'جاري الحفظ والترحيل...' : 'حفظ وترحيل الحسابات'}</span>

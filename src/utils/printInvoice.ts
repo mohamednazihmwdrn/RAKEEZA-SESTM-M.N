@@ -1,10 +1,10 @@
 import { SaleInvoice, PurchaseInvoice, Settings } from '../types';
-import { openCentralizedInvoicePrint, PaperSize } from '../services/centralizedPrintService';
+import { openCentralizedInvoicePrint, PaperSize, resolveInvoiceFinancials } from '../services/centralizedPrintService';
 import { generateUnifiedReportHtml } from './printUnified';
 
 /**
- * 🖨️ Generate Invoice Print HTML conforming strictly to the Standard Unified Template
- * Includes dynamic adaptation for A4, A5, and 80mm Thermal with single-page guarantee.
+ * 🖨️ Generate Invoice Print HTML conforming to the Official Unified Light Template
+ * Supports A4, A5 (portrait/landscape), 80mm/58mm Thermal and multi-page pagination.
  */
 export function generateInvoicePrintHtml(
   inv: SaleInvoice | PurchaseInvoice,
@@ -18,16 +18,21 @@ export function generateInvoicePrintHtml(
   const partyName = isSaleInv
     ? (inv as SaleInvoice).customerName || 'عميل نقدي'
     : (inv as PurchaseInvoice).supplierName || 'مورد عام';
-  const partyCode = (inv as any).customerId || (inv as any).supplierId || (inv as any).customerCode || (inv as any).supplierCode || '-';
+  const partyCode =
+    (inv as any).customerId ||
+    (inv as any).supplierId ||
+    (inv as any).customerCode ||
+    (inv as any).supplierCode ||
+    '-';
   const partyPhone = inv.phone || (inv as any).customerPhone || (inv as any).supplierPhone || '-';
 
-  const companyName = settings.companyName || 'شركة ركيزة للحلول البرمجية';
-  const companyAddress = settings.address || 'القاهرة - مصر';
+  const companyName = settings.companyName || 'المنظومة المحاسبية';
+  const companyAddress = settings.address || '';
   const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
-  const finalPhones = phones.length > 0 ? phones : ['01029190615'];
+  const finalPhones = phones.length > 0 ? phones : ['-'];
 
   const invoiceNumber = `${inv.id}`;
-  const invoiceDate = inv.date || new Date().toLocaleDateString('ar-EG');
+  const invoiceDate = inv.date || new Date().toISOString().split('T')[0];
   const invoiceTime =
     inv.time ||
     new Date().toLocaleTimeString('ar-EG', {
@@ -46,65 +51,35 @@ export function generateInvoicePrintHtml(
     invoiceTypeTitle = isSaleInv ? 'مرتجع مبيعات آجل' : 'مرتجع مشتريات آجل';
   }
 
-  let paymentMethodType = 'كاش';
-  if (inv.type === 'ajel' || inv.type === 'return_ajel') {
-    paymentMethodType = 'آجل';
-  } else if (inv.paidAmount && inv.remainingAmount && inv.remainingAmount > 0) {
-    paymentMethodType = 'سداد جزئي';
-  } else if (inv.paymentMethod === 'drawer') {
-    paymentMethodType = 'كاش (الخزينة)';
-  } else if (inv.paymentMethod === 'vodafone') {
-    paymentMethodType = 'فودافون كاش';
-  } else if (inv.paymentMethod === 'instapay') {
-    paymentMethodType = 'إنستاباي';
-  } else if (inv.paymentMethod === 'bank') {
-    paymentMethodType = 'تحويل بنكي';
-  } else if (inv.paymentMethod) {
-    paymentMethodType = inv.paymentMethod;
-  }
+  const fin = resolveInvoiceFinancials(inv);
+  const curSymbol = settings.currencySymbol || 'ج.م';
 
   const items = inv.items || [];
-  const grandTotal = Number(inv.total || 0);
-  const taxVal = Number(inv.tax || 0);
-  const discountVal = Number(inv.discount || 0);
-
-  let paidVal = Number(inv.paidAmount);
-  let remainingVal = Number(inv.remainingAmount);
-  if (isNaN(paidVal)) {
-    if (inv.type === 'nagdi' || inv.type === 'return_nagdi') {
-      paidVal = grandTotal;
-      remainingVal = 0;
-    } else {
-      paidVal = 0;
-      remainingVal = grandTotal;
-    }
-  }
-  if (isNaN(remainingVal)) {
-    remainingVal = Math.max(0, grandTotal - paidVal);
-  }
-
   const statementNote = (inv as any).notes || (inv as any).description || (inv as any).note || '';
   const footerTermsNote =
     settings.invoiceFooterNote ||
     (inv as any).footerNote ||
-    '* تطابق هذه المستندات الأرصدة والبيانات مع السجلات الرسمية بالنظام. | صفحة 1 من 1';
+    'البضاعة المباعة ترد وتستبدل وفقاً لشروط الفاتورة وحالتها الأصلية.';
 
-  const columns = ['اسم الصنف / البند', 'البيان', 'العدد', 'السعر', 'الإجمالي'];
-  const rows = items.map((item) => [
+  const columns = ['رقم', 'اسم الصنف', 'البيان / الوصف', 'الكمية', 'الوحدة', 'السعر', 'الإجمالي'];
+  const rows = items.map((item, idx) => [
+    idx + 1,
     item.name || '-',
-    item.spec || item.notes || (item as any).desc || (item as any).unit || '-',
-    item.qty,
+    item.spec || item.notes || (item as any).desc || '-',
+    Number((item as any).quantity ?? item.qty ?? 0),
+    (item as any).unit || 'قطعة',
     Number(item.price || 0).toFixed(2),
     Number(item.total !== undefined ? item.total : Number(item.qty || 0) * Number(item.price || 0)).toFixed(2),
   ]);
 
   const summary = [
-    { label: 'إجمالي الأصناف', value: `${(grandTotal - taxVal + discountVal).toFixed(2)} ج.م` },
-    ...(discountVal > 0 ? [{ label: 'الخصم', value: `${discountVal.toFixed(2)} ج.م` }] : []),
-    ...(taxVal > 0 ? [{ label: 'ضريبة القيمة المضافة', value: `${taxVal.toFixed(2)} ج.م` }] : []),
-    { label: 'الإجمالي الصافي', value: `${grandTotal.toFixed(2)} ج.م`, isTotal: true, isHighlight: true },
-    { label: 'المدفوع', value: `${paidVal.toFixed(2)} ج.م` },
-    { label: 'المتبقي', value: `${remainingVal.toFixed(2)} ج.م` },
+    { label: 'المجموع الفرعي', value: `${fin.subtotalVal.toFixed(2)} ${curSymbol}` },
+    ...(fin.discountVal > 0 ? [{ label: 'الخصم', value: `${fin.discountVal.toFixed(2)} ${curSymbol}` }] : []),
+    ...(fin.taxVal > 0 ? [{ label: 'الضريبة', value: `${fin.taxVal.toFixed(2)} ${curSymbol}` }] : []),
+    ...(fin.extraChargesVal > 0 ? [{ label: 'مصاريف إضافية', value: `${fin.extraChargesVal.toFixed(2)} ${curSymbol}` }] : []),
+    { label: 'الصافي المستحق', value: `${fin.grandTotal.toFixed(2)} ${curSymbol}`, isTotal: true, isHighlight: true },
+    { label: 'المدفوع', value: `${fin.paidVal.toFixed(2)} ${curSymbol}` },
+    { label: 'المتبقي', value: `${fin.remainingVal.toFixed(2)} ${curSymbol}` },
   ];
 
   return generateUnifiedReportHtml({
@@ -113,24 +88,30 @@ export function generateInvoicePrintHtml(
     serial: invoiceNumber,
     date: invoiceDate,
     time: invoiceTime,
-    branch: (inv as any).branchName || 'الفرع الرئيسي',
+    branch: (inv as any).branchName || '',
     company: {
       name: companyName,
       address: companyAddress,
       phones: finalPhones,
-      logo: (settings as any).logo || (settings as any).logoUrl || '',
+      logo: settings.showLogoInPrint !== false ? (settings as any).logo || (settings as any).logoUrl || '' : '',
+      taxNumber: settings.taxNumber,
+      commercialReg: settings.commercialReg,
     },
     partyLabel,
     partyName,
     partyCode,
     partyCodeLabel,
     partyPhone,
-    paymentMethod: paymentMethodType,
+    paymentMethod: `${fin.paymentMethodLabel} (${fin.paymentStatus})`,
     statementNote,
     columns,
     rows,
     summary,
-    preferredPaperSize: preferredPaperSize.toLowerCase().includes('4') ? 'A4' : preferredPaperSize.toLowerCase().includes('therm') ? 'thermal' : 'A5',
+    preferredPaperSize: preferredPaperSize.toLowerCase().includes('4')
+      ? 'A4'
+      : preferredPaperSize.toLowerCase().includes('therm') || preferredPaperSize.includes('80') || preferredPaperSize.includes('58')
+      ? 'thermal'
+      : 'A5',
     footerNote: footerTermsNote,
   });
 }
@@ -142,7 +123,7 @@ export function printInvoiceWindow(
   inv: SaleInvoice | PurchaseInvoice,
   isSales: boolean,
   settings: Settings,
-  showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void,
+  _showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void,
   preferredPaperSize?: 'A4' | 'A5' | 'thermal' | '80mm' | '58mm'
 ) {
   const normPaperSize: PaperSize =
@@ -162,7 +143,6 @@ export function printInvoiceWindow(
     localStorage.setItem('sys_print_pref_size', normPaperSize);
   } catch {}
 
-  // Centralized in-app high-fidelity preview modal
   openCentralizedInvoicePrint({
     invoice: inv,
     isSales,

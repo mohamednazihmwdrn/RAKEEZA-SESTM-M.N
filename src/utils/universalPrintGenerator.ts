@@ -96,6 +96,9 @@ export function generateUniversalPrintHtml(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${payload.title} ${docSerial} - ${companyName}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     ${pageCss}
 
@@ -108,15 +111,16 @@ export function generateUniversalPrintHtml(
     }
 
     body {
-      font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-family: 'Tajawal', system-ui, -apple-system, 'Segoe UI', Tahoma, Arial, sans-serif;
+      font-weight: 400;
       direction: rtl;
       background-color: #f1f5f9;
       color: #0f172a;
-      line-height: 1.35;
-      font-size: 11.5px;
+      line-height: 1.45;
+      font-size: 12px;
     }
 
-    /* Interactive Top Preview Toolbar (Hidden in Print) */
+    /* Interactive Top Preview Toolbar (Hidden in Print, wraps on mobile) */
     .preview-toolbar {
       position: sticky;
       top: 0;
@@ -124,24 +128,27 @@ export function generateUniversalPrintHtml(
       right: 0;
       background-color: #0f172a;
       color: #f8fafc;
-      padding: 8px 16px;
+      padding: 10px 12px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px 12px;
       z-index: 9999;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 100vw;
     }
 
     .toolbar-left, .toolbar-right {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
     }
 
     .size-select-label {
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 12.5px;
+      font-weight: 500;
       color: #cbd5e1;
     }
 
@@ -149,54 +156,59 @@ export function generateUniversalPrintHtml(
       background-color: #1e293b;
       color: #ffffff;
       border: 1px solid #475569;
-      padding: 6px 12px;
+      min-height: 38px;
+      padding: 6px 10px;
       border-radius: 6px;
-      font-size: 12px;
-      font-weight: bold;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
       outline: none;
       cursor: pointer;
+      max-width: 100%;
     }
 
     .btn-print {
-      background-color: #16a34a;
-      hover: #15803d;
+      background-color: #1d4ed8;
       color: white;
       border: none;
+      min-height: 38px;
       padding: 6px 16px;
       border-radius: 6px;
-      font-weight: bold;
-      font-size: 12px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 12.5px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3);
     }
-    .btn-print:hover { background-color: #15803d; }
+    .btn-print:hover { background-color: #1e40af; }
 
     .btn-close {
-      background-color: #475569;
+      background-color: #334155;
       color: #f8fafc;
-      border: none;
+      border: 1px solid #475569;
+      min-height: 38px;
       padding: 6px 14px;
       border-radius: 6px;
-      font-size: 12px;
+      font-family: inherit;
+      font-size: 12.5px;
       cursor: pointer;
-      font-weight: bold;
+      font-weight: 500;
     }
-    .btn-close:hover { background-color: #334155; }
+    .btn-close:hover { background-color: #475569; }
 
     /* Printable Page Container */
     .sheet-wrapper {
       display: flex;
       justify-content: center;
-      padding: 16px 8px;
+      padding: 14px 8px;
     }
 
     .print-sheet {
       background-color: #ffffff;
       border: 1px solid #cbd5e1;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
       padding: 12px 14px;
       width: 100%;
       max-width: ${getSheetMaxWidth(activeSize)};
@@ -206,7 +218,6 @@ export function generateUniversalPrintHtml(
       justify-content: space-between;
     }
 
-    /* Header Section */
     .header-table {
       width: 100%;
       border-collapse: collapse;
@@ -220,15 +231,15 @@ export function generateUniversalPrintHtml(
 
     .comp-name {
       font-size: 16px;
-      font-weight: 800;
+      font-weight: 600;
       color: #0f172a;
-      line-height: 1.2;
+      line-height: 1.3;
     }
 
     .comp-sub {
-      font-size: 10.5px;
+      font-size: 11px;
       color: #475569;
-      font-weight: 600;
+      font-weight: 400;
       margin-top: 2px;
     }
 
@@ -284,32 +295,33 @@ export function generateUniversalPrintHtml(
 
     .data-table th {
       background-color: #f1f5f9;
-      color: #0f172a;
-      font-weight: 800;
-      border: 1px solid #94a3b8;
-      padding: 5px 6px;
-      font-size: 10.5px;
+      color: #1e293b;
+      font-weight: 600;
+      border: 1px solid #cbd5e1;
+      padding: 6px;
+      font-size: 11px;
       text-align: center;
       white-space: nowrap;
     }
 
     .data-table td {
       border: 1px solid #cbd5e1;
-      padding: 4.5px 6px;
-      font-size: 10px;
-      color: #1e293b;
+      padding: 5px 6px;
+      font-size: 10.5px;
+      color: #0f172a;
+      font-weight: 400;
     }
 
     .data-table tr:nth-child(even) {
-      background-color: #fcfcfd;
+      background-color: #f8fafc;
     }
 
     .col-center { text-align: center; }
     .col-right { text-align: right; }
     .col-left { text-align: left; }
-    .col-bold { font-weight: 700; }
+    .col-bold { font-weight: 600; }
 
-    /* Summaries Section (Cards with green/red borders matching reference) */
+    /* Summaries Section */
     .summaries-container {
       display: flex;
       flex-wrap: wrap;
@@ -317,13 +329,15 @@ export function generateUniversalPrintHtml(
       justify-content: flex-start;
       gap: 8px;
       margin-bottom: 6px;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
 
     .summary-card {
       border-radius: 4px;
-      padding: 4px 12px;
+      padding: 5px 12px;
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 600;
       background-color: #ffffff;
       min-width: 130px;
       text-align: center;

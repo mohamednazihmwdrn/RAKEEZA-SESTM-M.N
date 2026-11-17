@@ -170,164 +170,69 @@ export function generateCashClosingPrintHtml(data: CashClosingData): string {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تقفيل يومية الخزينة متعدد الوسائل</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --page-size: ${paperSize === 'A5' ? 'A5 portrait' : paperSize === 'Letter' ? 'letter portrait' : 'A4 portrait'};
     --page-margin: ${pageMargin}mm;
   }
+  @page { size: var(--page-size, auto); margin: var(--page-margin, 5mm); }
+  * { box-sizing: border-box; font-family: 'Tajawal', system-ui, -apple-system, sans-serif; }
 
-  /* ضبط إعدادات الصفحة للطباعة المتوافقة مع A4 و A5 */
-  @page {
-    size: var(--page-size, auto);
-    margin: var(--page-margin, 4mm);
+  html, body {
+    background-color: #f1f5f9; margin: 0; padding: 10px; color: #0f172a;
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 
-  * { box-sizing: border-box; }
-  
-  html, body { 
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-    background-color: #f0f2f5; 
-    margin: 0; 
-    padding: 0; 
-    color: #000;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  .cash-container, .report-container {
+    background: #fff; width: 100%; max-width: 210mm; min-height: auto;
+    margin: 0 auto; padding: 8mm 10mm; border: 1px solid #cbd5e1; border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.06);
+    display: flex; flex-direction: column; justify-content: space-between;
   }
 
-  .cash-container, .report-container { 
-    background: #fff; 
-    width: 100vw;
-    height: 100vh;
-    min-height: 98vh;
-    max-width: 100%;
-    margin: 0 auto; 
-    padding: 5mm 7mm; 
-    border: 3px solid #000; 
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
-  /* 1. الترويسة الديناميكية */
-  .header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    border-bottom: 2px solid #000; 
-    padding-bottom: 4px; 
-    margin-bottom: 5px;
-    width: 100%;
-  }
-  
+  .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #1e293b; padding-bottom: 6px; margin-bottom: 8px; width: 100%; gap: 8px; }
   .header.is-empty { display: none !important; }
-  .header-right h2 { margin: 0 0 2px 0; font-size: 1.1rem; font-weight: bold; }
-  .header-right p { margin: 0; font-size: 0.75rem; color: #333; }
+  .header-right h2 { margin: 0 0 2px 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; }
+  .header-right p { margin: 0; font-size: 0.78rem; color: #475569; }
+  .header-center { display: flex; justify-content: center; align-items: center; min-width: 60px; }
+  .logo-img { max-width: 85px; max-height: 48px; object-fit: contain; }
+  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; color: #334155; }
+  .phones-list li { margin-bottom: 1px; font-weight: 500; }
 
-  .header-center { display: flex; justify-content: center; align-items: center; min-width: 80px; }
-  .logo-img { max-width: 85px; max-height: 50px; object-fit: contain; }
-
-  .phones-list { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; direction: ltr; text-align: left; }
-  .phones-list li { margin-bottom: 1px; font-weight: 600; }
-
-  /* 2. مستطيل البيانات */
-  .info-box { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center;
-    border: 1.5px solid #000; 
-    padding: 3px 8px; 
-    margin-bottom: 5px; 
-    font-size: 0.78rem;
-    line-height: 1.3;
-    width: 100%;
-    background-color: #fafafa;
+  .info-box {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;
+    border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;
+    font-size: 0.78rem; line-height: 1.45; width: 100%; background-color: #f8fafc;
   }
   .info-item p { margin: 1px 0; }
 
-  /* جداول الصفحة */
-  .section-title {
-    font-size: 0.78rem;
-    font-weight: bold;
-    margin: 4px 0 2px 0;
-    border-bottom: 1px solid #000;
-    display: inline-block;
-  }
+  .section-title { font-size: 0.82rem; font-weight: 600; color: #0f172a; margin: 6px 0 4px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; display: inline-block; }
 
-  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  th, td { border: 1px solid #000; padding: 2px 4px; text-align: center; font-size: 0.76rem; }
-  th { background-color: #ededed; font-weight: bold; }
+  .table-wrapper { width: 100%; overflow-x: auto; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 4px 5px; text-align: center; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
+  th { background-color: #f1f5f9; color: #0f172a; font-weight: 600; }
 
-  /* 3. تجميع وسائل الدفع */
-  .methods-table th { background-color: #e2e8f0; }
+  .bottom-section { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 8px; margin-bottom: 6px; width: 100%; }
+  .signatures-box { font-size: 0.76rem; font-weight: 600; display: flex; flex-wrap: wrap; gap: 16px; }
+  .summary-vertical-list { width: 100%; max-width: 280px; display: flex; flex-direction: column; gap: 2px; font-size: 0.78rem; font-weight: 600; text-align: left; font-variant-numeric: tabular-nums; }
+  .summary-line { display: flex; justify-content: space-between; align-items: center; padding: 3px 5px; border-bottom: 1px dashed #e2e8f0; }
+  .summary-line.total-line { border: 1px solid #1e293b; border-radius: 4px; background-color: #f8fafc; padding: 5px; font-size: 0.88rem; }
 
-  /* 4. الحركات التفصيلية */
-  .table-wrapper { width: 100%; flex-grow: 1; display: flex; flex-direction: column; }
-
-  /* 5. الملخص والتوقيعات */
-  .bottom-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-top: 4px;
-    margin-bottom: 4px;
-    width: 100%;
-  }
-
-  .signatures-box { font-size: 0.75rem; font-weight: bold; display: flex; gap: 20px; }
-  .summary-vertical-list { width: 250px; display: flex; flex-direction: column; gap: 1px; font-size: 0.78rem; font-weight: bold; text-align: left; }
-  .summary-line { display: flex; justify-content: space-between; align-items: center; padding: 1px 3px; }
-  .summary-line.total-line { border: 1.5px solid #000; background-color: #f8f9fa; padding: 3px; font-size: 0.88rem; }
-
-  /* التذييل الداخلي */
-  .cash-footer-note {
-    border-top: 1.5px solid #000;
-    padding-top: 3px;
-    margin-top: auto; 
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.72rem;
-    font-weight: 600;
-    width: 100%;
-  }
-
-  /* حقوق الملكية خارج الإطار الخارجي */
-  .copyright-outside {
-    width: 100%;
-    text-align: center;
-    font-size: 0.72rem;
-    font-weight: bold;
-    color: #444;
-    margin-top: auto;
-    padding: 2px 0;
-    direction: rtl;
-  }
+  .cash-footer-note { border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 0.72rem; font-weight: 500; color: #475569; width: 100%; }
+  .copyright-outside { width: 100%; text-align: center; font-size: 0.72rem; font-weight: 500; color: #64748b; padding: 6px 0; direction: rtl; }
 
   @media print {
-    html, body { 
-      background: #fff !important; 
-      padding: 0 !important; 
-      margin: 0 !important; 
-      width: 100% !important;
-      height: 100% !important;
-      overflow: hidden !important;
-    }
-    .cash-container { 
-      border: 3px solid #000 !important; 
-      width: 100vw !important; 
-      height: 99.5% !important; 
-      min-height: 99.5% !important;
-      max-height: 100% !important;
-      padding: 4mm !important;
-      box-sizing: border-box !important;
-      box-shadow: none !important;
-      page-break-after: avoid !important;
-      page-break-inside: avoid !important;
-    }
+    html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; }
+    .no-print-toolbar, .no-print { display: none !important; }
+    .cash-container, .report-container { border: none !important; width: 100% !important; max-width: 100% !important; height: auto !important; min-height: auto !important; padding: 0 !important; box-shadow: none !important; }
+    .table-wrapper { overflow: visible !important; }
   }
   ${getPrintToolbarStyles()}
 </style>

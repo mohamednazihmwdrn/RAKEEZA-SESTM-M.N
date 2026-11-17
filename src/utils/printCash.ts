@@ -129,18 +129,19 @@ export function generateCashVoucherPrintHtml(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${voucherTitle} #${serialNo}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Tajawal', system-ui, -apple-system, sans-serif;
         }
 
         body {
-            background-color: #e2e8f0;
-            color: #000;
+            background-color: #f1f5f9;
+            color: #0f172a;
             padding: 12px;
             display: flex;
             flex-direction: column;
@@ -149,16 +150,16 @@ export function generateCashVoucherPrintHtml(
             print-color-adjust: exact;
         }
 
-        /* شريط التحكم بالمعاينة والطباعة (يظهر على الشاشة فقط ويختفي عند الطباعة) */
+        /* شريط التحكم بالمعاينة والطباعة */
         .no-print-toolbar {
             width: 100%;
             max-width: 148mm;
             background: #0f172a;
             color: #fff;
-            padding: 8px 12px;
+            padding: 10px 12px;
             border-radius: 10px;
             margin-bottom: 12px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+            box-shadow: 0 4px 14px rgba(15,23,42,0.18);
             display: flex;
             flex-wrap: wrap;
             justify-content: space-between;
@@ -176,27 +177,29 @@ export function generateCashVoucherPrintHtml(
 
         .paper-btn {
             background: #1e293b;
-            color: #fff;
+            color: #e2e8f0;
             border: 1px solid #475569;
-            padding: 4px 10px;
+            min-height: 36px;
+            padding: 5px 10px;
             border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 12px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.15s ease;
         }
 
         .paper-btn:hover { background: #334155; }
-        .paper-btn.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
+        .paper-btn.active { background: #2563eb; border-color: #3b82f6; color: #fff; font-weight: 600; }
 
         .action-btn-print {
             background: #16a34a;
             color: #fff;
             border: none;
-            padding: 5px 14px;
+            min-height: 36px;
+            padding: 6px 14px;
             border-radius: 6px;
-            font-size: 11px;
-            font-weight: 800;
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
@@ -208,10 +211,11 @@ export function generateCashVoucherPrintHtml(
             background: #ea580c;
             color: #fff;
             border: none;
-            padding: 5px 12px;
+            min-height: 36px;
+            padding: 6px 12px;
             border-radius: 6px;
-            font-size: 11px;
-            font-weight: 700;
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
         }
         .action-btn-pdf:hover { background: #c2410c; }
@@ -220,371 +224,160 @@ export function generateCashVoucherPrintHtml(
             background: #475569;
             color: #fff;
             border: none;
-            padding: 5px 10px;
+            min-height: 36px;
+            padding: 6px 12px;
             border-radius: 6px;
-            font-size: 11px;
+            font-size: 12px;
+            font-weight: 500;
             cursor: pointer;
         }
 
-        /* حاوية المستند بمقاس A5 الأصلي المظبوط والمستقر تماماً */
+        /* حاوية المستند */
         .invoice-container {
             background: #fff;
             width: 100%;
             max-width: 148mm;
-            min-height: 210mm;
-            padding: 10mm;
-            border: 2px solid #000;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            min-height: auto;
+            padding: 8mm;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(15,23,42,0.06);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             margin: 0 auto;
-            transform-origin: top center;
-            transition: max-width 0.2s, min-height 0.2s, padding 0.2s;
+            transition: max-width 0.2s, padding 0.2s;
         }
 
-        .invoice-main-content {
-            width: 100%;
-        }
+        .invoice-main-content { width: 100%; }
 
-        /* 1. الترويسة العلوية الثلاثية */
         .company-header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2.5px solid #000;
+            border-bottom: 1.5px solid #1e293b;
             padding-bottom: 8px;
             margin-bottom: 8px;
             gap: 8px;
         }
 
-        .header-right {
-            flex: 1.2;
-            text-align: right;
-        }
+        .header-right { flex: 1.2; text-align: right; min-width: 120px; }
+        .header-right h2 { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 2px; }
+        .header-right p { font-size: 10.5px; font-weight: 400; color: #475569; line-height: 1.3; }
 
-        .header-right h2 {
-            font-size: 16px;
-            font-weight: 800;
-            color: #000;
-            margin-bottom: 2px;
-        }
+        .header-center { flex: 0 0 auto; text-align: center; }
+        .header-center img { max-height: 44px; max-width: 90px; object-fit: contain; }
 
-        .header-right p {
-            font-size: 10px;
-            font-weight: 600;
-            color: #222;
-            line-height: 1.2;
-        }
+        .header-left { flex: 1; text-align: left; font-size: 10.5px; font-weight: 500; color: #334155; line-height: 1.3; direction: ltr; }
+        .header-center:empty, .header-left:empty { display: none; }
 
-        .header-center {
-            flex: 0 0 auto;
-            text-align: center;
-        }
-
-        .header-center img {
-            max-height: 40px;
-            max-width: 80px;
-            object-fit: contain;
-        }
-
-        .header-left {
-            flex: 1;
-            text-align: left;
-            font-size: 10px;
-            font-weight: 600;
-            color: #000;
-            line-height: 1.2;
-        }
-
-        .header-center:empty,
-        .header-left:empty {
-            display: none;
-        }
-
-        /* 2. مربع بيانات المستند */
         .invoice-info-box {
-            border: 1.5px solid #000;
-            background-color: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #f8fafc;
             padding: 6px 8px;
             margin-bottom: 8px;
-            font-size: 10.5px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 500;
         }
 
         .info-grid {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: nowrap;
-            gap: 5px;
+            gap: 6px;
         }
 
-        .info-col-right {
-            flex: 1.3;
-            text-align: right;
-            line-height: 1.5;
-        }
+        .info-col-right { flex: 1.3; min-width: 120px; text-align: right; line-height: 1.5; }
+        .info-col-center { flex: 1; min-width: 100px; text-align: center; line-height: 1.5; border-right: 1px dashed #cbd5e1; border-left: 1px dashed #cbd5e1; padding: 0 6px; }
+        .info-col-left { flex: 1.1; min-width: 100px; text-align: left; line-height: 1.5; }
 
-        .info-col-center {
-            flex: 1;
-            text-align: center;
-            line-height: 1.5;
-            border-right: 1px dashed #666;
-            border-left: 1px dashed #666;
-            padding: 0 4px;
-        }
-
-        .info-col-left {
-            flex: 1.1;
-            text-align: left;
-            line-height: 1.5;
-        }
-
-        /* 3. مستطيل البيان (يختفي تماماً إذا ترك فارغاً) */
         .invoice-statement-box {
-            border: 1.5px solid #333;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
             padding: 6px 8px;
             margin-bottom: 8px;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 500;
             background-color: #fff;
             line-height: 1.4;
         }
+        .invoice-statement-box:empty { display: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
 
-        .invoice-statement-box:empty {
-            display: none !important;
-            border: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-        }
+        .table-wrapper { width: 100%; margin-bottom: 10px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        thead { display: table-header-group; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
+        table th, table td { border: 1px solid #cbd5e1; padding: 6px 7px; vertical-align: middle; font-weight: 500; font-variant-numeric: tabular-nums; }
+        table th { background-color: #f1f5f9; color: #0f172a; font-weight: 600; font-size: 11.5px; text-align: center; }
 
-        /* 4. جدول بنود السند المالي */
-        .table-wrapper {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-            table-layout: fixed;
-        }
-
-        table th, table td {
-            border: 1.5px solid #000;
-            padding: 6px 6px;
-            vertical-align: middle;
-            font-weight: 600;
-            word-wrap: break-word;
-        }
-
-        table th {
-            background-color: #e6e6e6;
-            color: #000;
-            font-weight: 800;
-            font-size: 11.5px;
-            white-space: nowrap;
-            text-align: center;
-        }
-
-        /* 5. قسم الإجماليات وتفاصيل الدفع */
         .totals-section {
             width: 100%;
-            border-top: 2.5px solid #000;
+            border-top: 1.5px solid #1e293b;
             padding-top: 6px;
             font-size: 11.5px;
-            font-weight: 800;
-            margin-bottom: 10px;
-        }
-
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 3px 0;
-        }
-
-        .payment-status-badge {
-            display: inline-block;
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            background: #e2e8f0;
-            color: #000;
-            border: 1px solid #000;
-            font-weight: 800;
-        }
-
-        /* 6. التزييل الداخلي */
-        .invoice-bottom-notes {
-            width: 100%;
-            font-size: 10px;
-            font-weight: 800;
-            color: #000;
-            border-top: 1.5px dashed #000;
-            padding-top: 6px;
-            margin-top: auto;
-        }
-
-        /* 7. حقوق الملكية الفكرية المعتمدة للمطور */
-        .copyright-footer {
-            text-align: center;
-            font-size: 9px;
             font-weight: 600;
-            color: #444;
-            margin-top: 6px;
-            width: 100%;
+            margin-bottom: 10px;
+            font-variant-numeric: tabular-nums;
         }
 
-        /* الأنماط الخاصة بالمقاسات المختلفة */
-        body[data-paper-size="A4"] .no-print-toolbar { max-width: 200mm; }
-        body[data-paper-size="A4"] .invoice-container {
-            max-width: 200mm;
-            min-height: 285mm;
-            padding: 12mm 14mm;
-            font-size: 12.5px;
-        }
+        .total-row { display: flex; justify-content: space-between; padding: 3px 0; }
+        .payment-status-badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10.5px; background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-weight: 600; }
+
+        .invoice-bottom-notes { width: 100%; font-size: 10px; font-weight: 500; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 6px; margin-top: auto; }
+        .copyright-footer { text-align: center; font-size: 9px; font-weight: 500; color: #64748b; margin-top: 6px; width: 100%; }
+
+        body[data-paper-size="A4"] .no-print-toolbar { max-width: 210mm; }
+        body[data-paper-size="A4"] .invoice-container { max-width: 210mm; padding: 10mm 12mm; font-size: 12.5px; }
         body[data-paper-size="A4"] table { font-size: 12px; }
 
-        body[data-paper-size="thermal"] .no-print-toolbar { max-width: 72mm; }
-        body[data-paper-size="thermal"] .invoice-container {
-            max-width: 72mm;
-            min-height: auto;
-            padding: 3mm;
-            border: 1px dashed #000;
-            font-size: 10px;
-        }
-        body[data-paper-size="thermal"] .company-header { flex-direction: column; text-align: center; }
-        body[data-paper-size="thermal"] .header-right, 
-        body[data-paper-size="thermal"] .header-left { text-align: center; }
-        body[data-paper-size="thermal"] .info-grid { flex-direction: column; gap: 4px; text-align: center; }
-        body[data-paper-size="thermal"] .info-col-center { border: none; padding: 2px 0; }
+        body[data-paper-size="thermal"] .no-print-toolbar { max-width: 96vw; }
+        body[data-paper-size="thermal"] .invoice-container { max-width: 76mm; padding: 3mm; border: 1px dashed #334155; font-size: 10px; box-shadow: none; }
+        body[data-paper-size="thermal"] .company-header,
+        body[data-paper-size="thermal"] .info-grid { flex-direction: column; text-align: center; }
+        body[data-paper-size="thermal"] .header-right,
+        body[data-paper-size="thermal"] .header-left,
+        body[data-paper-size="thermal"] .info-col-right,
         body[data-paper-size="thermal"] .info-col-left { text-align: center; }
+        body[data-paper-size="thermal"] .info-col-center { border: none; padding: 2px 0; }
 
-        body[data-paper-size="58mm"] .no-print-toolbar { max-width: 48mm; }
-        body[data-paper-size="58mm"] .invoice-container {
-            max-width: 48mm;
-            min-height: auto;
-            padding: 2mm 1.5mm;
-            border: 1px dashed #000;
-            font-size: 8.5px;
-        }
-        body[data-paper-size="58mm"] .company-header { flex-direction: column; text-align: center; }
-        body[data-paper-size="58mm"] .header-right, 
-        body[data-paper-size="58mm"] .header-left { text-align: center; }
-        body[data-paper-size="58mm"] .info-grid { flex-direction: column; gap: 2px; text-align: center; }
-        body[data-paper-size="58mm"] .info-col-center { border: none; padding: 1px 0; }
+        body[data-paper-size="58mm"] .no-print-toolbar { max-width: 96vw; }
+        body[data-paper-size="58mm"] .invoice-container { max-width: 54mm; padding: 2mm; border: 1px dashed #334155; font-size: 8.5px; box-shadow: none; }
+        body[data-paper-size="58mm"] .company-header,
+        body[data-paper-size="58mm"] .info-grid { flex-direction: column; text-align: center; }
+        body[data-paper-size="58mm"] .header-right,
+        body[data-paper-size="58mm"] .header-left,
+        body[data-paper-size="58mm"] .info-col-right,
         body[data-paper-size="58mm"] .info-col-left { text-align: center; }
+        body[data-paper-size="58mm"] .info-col-center { border: none; padding: 1px 0; }
 
-        /* ========================================================= */
-        /* إعدادات الطباعة النظيفة الموحدة (تمنع التقسيم لورقتين نهائياً) */
-        /* ========================================================= */
         @media print {
             html, body {
                 background: #ffffff !important;
                 padding: 0 !important;
                 margin: 0 !important;
                 width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-
-            body[data-paper-size="A5"],
-            body[data-paper-size="A4"] {
-                height: 100% !important;
-                max-height: 100% !important;
-                overflow: hidden !important;
-            }
-
-            body[data-paper-size="thermal"],
-            body[data-paper-size="58mm"] {
-                height: auto !important;
-                overflow: visible !important;
-            }
-
-            .no-print-toolbar,
-            .no-print,
-            button,
-            input,
-            select {
-                display: none !important;
-            }
-
+            .no-print-toolbar, .no-print { display: none !important; }
             .invoice-container {
-                border: 2px solid #000 !important;
-                border-radius: 4px !important;
-                box-shadow: none !important;
-                page-break-after: avoid !important;
-                page-break-inside: avoid !important;
-                page-break-before: avoid !important;
-                break-inside: avoid !important;
-                break-after: avoid !important;
-                box-sizing: border-box !important;
-                margin: 0 auto !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: space-between !important;
-            }
-
-            body[data-paper-size="A5"] .invoice-container {
-                width: 100% !important;
-                max-width: 138mm !important;
-                max-height: 198mm !important;
-                padding: 3mm 4mm !important;
-                border: 2px solid #000 !important;
-                font-size: 10px !important;
-            }
-
-            body[data-paper-size="A4"] .invoice-container {
-                width: 100% !important;
-                max-width: 194mm !important;
-                max-height: 280mm !important;
-                padding: 5mm 6mm !important;
-                border: 2px solid #000 !important;
-                font-size: 11.5px !important;
-            }
-
-            body[data-paper-size="thermal"] .invoice-container {
-                width: 76mm !important;
-                max-width: 76mm !important;
-                height: auto !important;
-                padding: 2mm !important;
-                border: 1px dashed #000 !important;
-                border-radius: 0 !important;
-                font-size: 9.5px !important;
-            }
-
-            body[data-paper-size="58mm"] .invoice-container {
-                width: 52mm !important;
-                max-width: 52mm !important;
-                height: auto !important;
-                padding: 1.5mm !important;
-                border: 1px dashed #000 !important;
-                border-radius: 0 !important;
-                font-size: 8px !important;
-            }
-
-            .print-hide-time {
-                display: none !important;
-            }
-
-            .invoice-statement-box:empty {
-                display: none !important;
                 border: none !important;
-                margin: 0 !important;
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                max-width: 100% !important;
                 padding: 0 !important;
+                height: auto !important;
             }
-
-            tr, th, td {
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-            }
-
-            @page {
-                size: A5 portrait;
-                margin: 4mm 5mm;
-            }
+            body[data-paper-size="thermal"] .invoice-container { width: 76mm !important; max-width: 76mm !important; padding: 2mm !important; border: 1px dashed #000 !important; }
+            body[data-paper-size="58mm"] .invoice-container { width: 52mm !important; max-width: 52mm !important; padding: 1.5mm !important; border: 1px dashed #000 !important; }
+            .print-hide-time { display: none !important; }
+            tr, th, td { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
     </style>
     <style id="dynamic-cash-print-style"></style>

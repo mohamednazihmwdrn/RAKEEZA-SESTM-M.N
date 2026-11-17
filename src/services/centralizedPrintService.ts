@@ -22,19 +22,101 @@ const UNIVERSAL_PRINT_EVENT = 'rakeeza_open_universal_print';
 const LEGACY_INVOICE_PRINT_EVENT = 'rakeeza_open_invoice_print';
 
 /**
+ * Resolve accurate paid, remaining, subtotal, discount, tax & payment status for an invoice.
+ */
+export function resolveInvoiceFinancials(inv: SaleInvoice | PurchaseInvoice) {
+  const grandTotal = Number(inv.total || 0);
+  const discountVal = Number(inv.discount || 0);
+  const taxVal = Number(inv.tax || 0);
+  const extraChargesVal = Number((inv as any).shipping || (inv as any).extraCharges || (inv as any).expenses || 0);
+
+  const itemsSum = (inv.items || []).reduce((sum, it) => {
+    const q = Number((it as any).quantity ?? (it as any).qty ?? 1);
+    const p = Number(it.price ?? 0);
+    const rowTotal = it.total !== undefined ? Number(it.total) : q * p;
+    return sum + (Number.isFinite(rowTotal) ? rowTotal : 0);
+  }, 0);
+
+  const subtotalVal =
+    Number((inv as any).subtotal) > 0
+      ? Number((inv as any).subtotal)
+      : itemsSum > 0
+      ? itemsSum
+      : Math.max(0, grandTotal + discountVal - taxVal - extraChargesVal);
+
+  const isCashType = inv.type === 'nagdi' || inv.type === 'return_nagdi';
+  let paidVal = inv.paidAmount !== undefined && inv.paidAmount !== null && !Number.isNaN(Number(inv.paidAmount))
+    ? Number(inv.paidAmount)
+    : isCashType
+    ? grandTotal
+    : 0;
+
+  let remainingVal = inv.remainingAmount !== undefined && inv.remainingAmount !== null && !Number.isNaN(Number(inv.remainingAmount))
+    ? Number(inv.remainingAmount)
+    : Math.max(0, grandTotal - paidVal);
+
+  const isReturn =
+    inv.type === 'return_nagdi' ||
+    inv.type === 'return_ajel' ||
+    (inv as any).isReturn === true;
+
+  const paymentStatus = isReturn
+    ? remainingVal <= 0.01
+      ? 'مرتجع مسوى'
+      : 'مرتجع آجل'
+    : remainingVal <= 0.01
+    ? 'مدفوعة بالكامل'
+    : paidVal > 0
+    ? 'مدفوعة جزئياً'
+    : 'آجل / مستحقة';
+
+  const treasuryOrBank =
+    (inv as any).treasuryName ||
+    (inv as any).drawerName ||
+    (inv as any).safeName ||
+    (inv.paymentMethod === 'bank' ? 'الحساب البنكي' : inv.paymentMethod === 'vodafone' ? 'فودافون كاش' : inv.paymentMethod === 'instapay' ? 'إنستاباي' : 'الخزينة الرئيسية');
+
+  const paymentMethodLabel =
+    inv.type === 'ajel' && paidVal <= 0
+      ? 'آجل'
+      : paidVal > 0 && remainingVal > 0.01
+      ? 'دفع جزئي'
+      : inv.paymentMethod === 'drawer' || inv.paymentMethod === 'cash'
+      ? 'كاش / نقدي'
+      : inv.paymentMethod === 'vodafone'
+      ? 'فودافون كاش'
+      : inv.paymentMethod === 'instapay'
+      ? 'إنستاباي'
+      : inv.paymentMethod === 'bank'
+      ? 'تحويل بنكي'
+      : inv.paymentMethod || (isCashType ? 'كاش / نقدي' : 'آجل');
+
+  return {
+    grandTotal,
+    subtotalVal,
+    discountVal,
+    taxVal,
+    extraChargesVal,
+    paidVal,
+    remainingVal,
+    paymentStatus,
+    treasuryOrBank,
+    paymentMethodLabel,
+    isReturn,
+  };
+}
+
+/**
  * 🖨️ Centralized Service function to open the Universal Print & Preview Modal
- * Supports any document kind (Invoices, Returns, Vouchers, Account Statements, Inventory, Treasury, Reports)
  */
 export function openUniversalPrint(payload: UniversalPrintPayload): void {
   if (typeof window === 'undefined') return;
 
-  // Auto-enrich amount in words (Tafqeet) if amount is present and amountInWords is missing
   if (payload.amount !== undefined && !payload.amountInWords) {
     const curName = payload.settings?.currencySymbol || 'جنيه مصري';
     payload.amountInWords = tafqeetNumber(payload.amount, curName, 'قرش');
   }
 
-  // Set default preferred paper size to A5 portrait for all invoices & vouchers if not specified
   if (!payload.preferredPaperSize) {
     const isVoucherOrInvoice = [
       'sales_invoice',
@@ -53,7 +135,7 @@ export function openUniversalPrint(payload: UniversalPrintPayload): void {
 }
 
 /**
- * 🎧 Subscribe to Universal Print requests (Used by UniversalPrintModal)
+ * 🎧 Subscribe to Universal Print requests
  */
 export function subscribeToUniversalPrint(
   callback: (payload: UniversalPrintPayload) => void
@@ -79,35 +161,26 @@ export function subscribeToUniversalPrint(
 export function openCentralizedInvoicePrint(payload: InvoicePrintPayload): void {
   if (typeof window === 'undefined') return;
 
-  // Also dispatch legacy event for backward compatibility
-  const legacyEvent = new CustomEvent(LEGACY_INVOICE_PRINT_EVENT, { detail: payload });
-  window.dispatchEvent(legacyEvent);
-
-  // Convert Invoice to UniversalPrintPayload
   const inv = payload.invoice;
   const isSale = payload.isSales !== false;
   const settings = payload.settings;
+  const fin = resolveInvoiceFinancials(inv);
 
-  const isReturn =
-    inv.type === 'return_nagdi' ||
-    inv.type === 'return_ajel' ||
-    (inv as any).isReturn === true;
-
-  let docKind: UniversalDocKind = isSale
-    ? isReturn
+  const docKind: UniversalDocKind = isSale
+    ? fin.isReturn
       ? 'sales_return'
       : 'sales_invoice'
-    : isReturn
+    : fin.isReturn
     ? 'purchase_return'
     : 'purchase_invoice';
 
-  let title = isSale
-    ? isReturn
+  const title = isSale
+    ? fin.isReturn
       ? 'سند مرتجع مبيعات'
       : inv.type === 'nagdi'
       ? 'فاتورة مبيعات نقدية'
       : 'فاتورة مبيعات آجلة'
-    : isReturn
+    : fin.isReturn
     ? 'سند مرتجع مشتريات'
     : inv.type === 'nagdi'
     ? 'فاتورة مشتريات نقدية'
@@ -117,47 +190,44 @@ export function openCentralizedInvoicePrint(payload: InvoicePrintPayload): void 
     ? (inv as SaleInvoice).customerName || 'عميل نقدي'
     : (inv as PurchaseInvoice).supplierName || 'مورد عام';
 
-  const grandTotal = Number(inv.total || 0);
-  const paidVal = Number(inv.paidAmount ?? grandTotal);
-  const remainingVal = Math.max(0, grandTotal - paidVal);
-
   const curSymbol = settings?.currencySymbol || 'ج.م';
   const currencyName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
 
-  // Map items
   const items: UniversalPrintItem[] = (inv.items || []).map((it, idx) => {
     const qtyVal = (it as any).quantity ?? (it as any).qty ?? 1;
     const priceVal = it.price ?? 0;
+    const descVal = (it as any).spec || (it as any).notes || (it as any).description || (it as any).desc || '-';
     return {
       index: idx + 1,
       code: (it as any).code || (it as any).itemCode || `ITEM-${idx + 1}`,
       name: it.name || (it as any).itemName || 'صنف',
-      unit: (it as any).unit || (it as any).spec || 'قطعة',
+      unit: (it as any).unit || 'قطعة',
       qty: qtyVal,
       price: priceVal,
       discount: (it as any).discount || 0,
       tax: (it as any).tax || 0,
-      total: it.total ?? (Number(qtyVal) * Number(priceVal)),
-      notes: (it as any).notes || '',
+      total: it.total ?? Number(qtyVal) * Number(priceVal),
+      notes: descVal,
     };
   });
 
-  // Map summaries
   const summaries: UniversalPrintSummaryItem[] = [
-    { label: 'عدد الأصناف', value: `${items.length} صنف`, color: '#16a34a' },
-    { label: 'إجمالي الفاتورة', value: `${grandTotal.toFixed(2)} ${curSymbol}`, isHighlight: true, isTotal: true, color: '#dc2626' },
+    { label: 'عدد الأصناف', value: `${items.length} صنف` },
+    { label: 'المجموع الفرعي', value: `${fin.subtotalVal.toFixed(2)} ${curSymbol}` },
   ];
 
-  if (Number(inv.discount || 0) > 0) {
-    summaries.push({ label: 'إجمالي الخصم', value: `${Number(inv.discount).toFixed(2)} ${curSymbol}`, color: '#64748b' });
+  if (fin.discountVal > 0) {
+    summaries.push({ label: 'الخصم', value: `${fin.discountVal.toFixed(2)} ${curSymbol}` });
   }
-  if (Number(inv.tax || 0) > 0) {
-    summaries.push({ label: 'ضريبة القيمة المضافة', value: `${Number(inv.tax).toFixed(2)} ${curSymbol}`, color: '#64748b' });
+  if (fin.taxVal > 0) {
+    summaries.push({ label: 'الضريبة', value: `${fin.taxVal.toFixed(2)} ${curSymbol}` });
   }
-  if (inv.type === 'ajel' || remainingVal > 0) {
-    summaries.push({ label: 'المبلغ المدفوع', value: `${paidVal.toFixed(2)} ${curSymbol}`, color: '#16a34a' });
-    summaries.push({ label: 'المتبقي المستحق', value: `${remainingVal.toFixed(2)} ${curSymbol}`, isHighlight: true, isTotal: true, color: '#dc2626' });
+  if (fin.extraChargesVal > 0) {
+    summaries.push({ label: 'مصاريف إضافية', value: `${fin.extraChargesVal.toFixed(2)} ${curSymbol}` });
   }
+  summaries.push({ label: 'الصافي المستحق', value: `${fin.grandTotal.toFixed(2)} ${curSymbol}`, isHighlight: true, isTotal: true });
+  summaries.push({ label: 'المدفوع', value: `${fin.paidVal.toFixed(2)} ${curSymbol}` });
+  summaries.push({ label: 'المتبقي', value: `${fin.remainingVal.toFixed(2)} ${curSymbol}`, isHighlight: fin.remainingVal > 0 });
 
   let prefSize: UniversalPaperSize = 'a5-portrait';
   if (payload.preferredPaperSize) {
@@ -170,21 +240,32 @@ export function openCentralizedInvoicePrint(payload: InvoicePrintPayload): void 
   const universalPayload: UniversalPrintPayload = {
     kind: docKind,
     title,
-    subTitle: isSale ? 'مبيعات وتوزيع' : 'مشتريات وتوريدات',
+    subTitle: isSale ? 'قسم المبيعات' : 'قسم المشتريات',
     docNumber: inv.id,
     date: inv.date || new Date().toISOString().split('T')[0],
     time: inv.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-    branch: inv.branchId || 'الفرع الرئيسي',
-    user: (inv as any).createdBy || (inv as any).cashierName || 'Mohamed Nazih',
+    branch: (inv as any).branchName || inv.branchId || '',
+    user: (inv as any).createdBy || (inv as any).cashierName || '',
     partyName,
     partyCode: (inv as any).customerId || (inv as any).supplierId || (inv as any).clientSyncId || '-',
-    partyPhone: inv.phone || '-',
+    partyPhone: inv.phone || (inv as any).customerPhone || (inv as any).supplierPhone || '-',
+    partyAddress: (inv as any).address || (inv as any).customerAddress || (inv as any).supplierAddress || '',
     partyLabel: isSale ? 'اسم العميل' : 'اسم المورد',
     partyCodeLabel: isSale ? 'كود العميل' : 'كود المورد',
-    paymentMethod: inv.paymentMethod || (inv.type === 'nagdi' ? 'نقداً' : 'آجل'),
-    amount: grandTotal,
-    amountInWords: tafqeetNumber(grandTotal, currencyName, 'قرش'),
+    paymentMethod: fin.paymentMethodLabel,
+    paymentStatus: fin.paymentStatus,
+    treasuryOrBank: fin.treasuryOrBank,
+    subtotal: fin.subtotalVal,
+    discountAmount: fin.discountVal,
+    taxAmount: fin.taxVal,
+    extraCharges: fin.extraChargesVal,
+    paidAmount: fin.paidVal,
+    remainingAmount: fin.remainingVal,
+    amount: fin.grandTotal,
+    amountInWords: tafqeetNumber(fin.grandTotal, currencyName, 'قرش'),
     notes: inv.notes || '',
+    authorizedBy: (inv as any).createdBy || (inv as any).cashierName || 'إدارة الحسابات',
+    receivedBy: partyName,
     items,
     summaries,
     preferredPaperSize: prefSize,

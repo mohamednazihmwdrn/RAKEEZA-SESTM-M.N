@@ -761,117 +761,114 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
-      {/* 🏛️ ترويسة قسم إدارة المشتريات والتوريد - خلفية بيضاء وكتابة سوداء متناسقة مع الواجهة الرئيسية */}
-      <div className="bg-white text-slate-900 p-3 sm:p-4 rounded-xl shadow-xs border-2 border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0 shadow-2xs">
-            <Building2 className="w-6 h-6 text-teal-600" />
+      {/* 🏛️ ترويسة قسم إدارة المشتريات والتوريد */}
+      <div className="bg-white text-slate-900 p-3.5 sm:p-4 rounded-xl border border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-teal-600" />
           </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-black tracking-wide flex items-center gap-2">
-              <span className="text-slate-900 font-black">إدارة فواتير المشتريات والتوريدات</span>
-              <span className="text-[10px] bg-teal-50 text-teal-800 border border-teal-200 px-2 py-0.5 rounded-full font-bold">
-                🛒 قسم المشتريات
-              </span>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">
+              إدارة فواتير المشتريات والتوريدات
             </h2>
-            <p className="text-[11px] text-slate-600 font-medium">
-              تسجيل وتدقيق فواتير الشراء النقدي والآجل والتوريدات ومستحقات الموردين بدقة متناهية
+            <p className="text-xs text-slate-500 font-normal">
+              قسم المشتريات · تسجيل وتدقيق فواتير الشراء النقدي والآجل ومستحقات الموردين
             </p>
           </div>
         </div>
 
-        {/* Quick KPI badges */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">عدد الفواتير</span>
-            <span className="text-xs font-black font-mono text-slate-900">{appData.purchaseInvoices?.length || 0}</span>
+        {/* Quick KPI Summary */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto tabular-nums">
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">عدد الفواتير</span>
+            <span className="text-xs sm:text-sm font-semibold text-slate-900">{appData.purchaseInvoices?.length || 0}</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">إجمالي المشتريات</span>
-            <span className="text-xs font-black font-mono text-emerald-600">{totalPurchasesAmount.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">إجمالي المشتريات</span>
+            <span className="text-xs sm:text-sm font-semibold text-emerald-700">{totalPurchasesAmount.toLocaleString()} ج.م</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">المسدد للموردين</span>
-            <span className="text-xs font-black font-mono text-teal-600">{totalPurchasesPaid.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">المسدد للموردين</span>
+            <span className="text-xs sm:text-sm font-semibold text-teal-700">{totalPurchasesPaid.toLocaleString()} ج.م</span>
           </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg flex flex-col items-center shadow-2xs">
-            <span className="text-[9px] text-slate-500 font-bold">مستحقات آجلة</span>
-            <span className="text-xs font-black font-mono text-amber-600">{totalPurchasesRemaining.toLocaleString()} ج.م</span>
+          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
+            <span className="text-[11px] text-slate-500 font-medium">مستحقات آجلة</span>
+            <span className="text-xs sm:text-sm font-semibold text-amber-700">{totalPurchasesRemaining.toLocaleString()} ج.م</span>
           </div>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="bg-teal-50/40 p-3 sm:p-4 rounded-xl shadow-xs border border-teal-200/80 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between">
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           {/* 1. شراء نقدي */}
           <button
             onClick={() => openCreateModal('nagdi', 'buy')}
-            className="min-h-[40px] bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-teal-800 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة شراء نقدي بسداد فوري للمورد من الخزينة"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            <span>🛒 شراء نقدي</span>
+            <span>شراء نقدي</span>
           </button>
 
           {/* 2. شراء جملة / توريد */}
           <button
             onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[40px] bg-cyan-800 hover:bg-cyan-900 active:bg-cyan-950 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-cyan-900 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-cyan-800 hover:bg-cyan-900 active:bg-cyan-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة توريد وشراء كميات جملة"
           >
             <Building2 className="w-4 h-4 shrink-0" />
-            <span>📦 شراء جملة / توريد</span>
+            <span>شراء جملة / توريد</span>
           </button>
 
           {/* 3. شراء أجل */}
           <button
             onClick={() => openCreateModal('ajel', 'buy')}
-            className="min-h-[40px] bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-amber-800 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فاتورة شراء آجل على حساب ومستحقات المورد"
           >
             <DollarSign className="w-4 h-4 shrink-0" />
-            <span>⏳ شراء أجل</span>
+            <span>شراء آجل</span>
           </button>
 
           {/* 4. مرتجع شراء نقدي */}
           <button
             onClick={() => openCreateModal('return_nagdi', 'buy')}
-            className="min-h-[40px] bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-rose-800 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع بضاعة واسترداد نقدي من المورد إلى الخزينة"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع نقدي</span>
+            <span>مرتجع نقدي</span>
           </button>
 
           {/* 5. مرتجع شراء جملة */}
           <button
             onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="min-h-[40px] bg-red-900 hover:bg-red-950 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-red-950 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-red-900 hover:bg-red-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع شراء جملة بسعر جملة الشراء"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع شراء جملة</span>
+            <span>مرتجع شراء جملة</span>
           </button>
 
           {/* 6. مرتجع أجل */}
           <button
             onClick={() => openCreateModal('return_ajel', 'buy')}
-            className="min-h-[40px] bg-slate-700 hover:bg-slate-800 active:bg-slate-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-slate-800 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-slate-700 hover:bg-slate-800 active:bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="مرتجع بضاعة وخصم من مستحقات المورد"
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>↩ مرتجع أجل</span>
+            <span>مرتجع آجل</span>
           </button>
 
           {/* 7. فحص وتطهير السندات المكررة */}
           <button
             onClick={handleRunAuditAndClean}
-            className="min-h-[40px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3 sm:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border border-indigo-900 hover:scale-[1.02]"
+            className="min-h-[44px] sm:min-h-[40px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
             title="فحص فوري لسندات الصرف والقبض وإزالة أي تكرار ناتج عن الشبكة وتوفيق أرصدة الخزائن"
           >
             <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-300" />
-            <span>🛡️ فحص وتطهير التكرار</span>
+            <span>فحص وتطهير التكرار</span>
           </button>
 
           <TableActionButtons
@@ -881,12 +878,12 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             exportTitle="تصدير المشتريات إلى Excel"
           />
         </div>
-        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
+        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
           {appData.branches && appData.branches.length > 1 && (
             <select
               value={selectedBranchFilter}
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="min-h-[40px] px-3 py-2 border border-teal-300 bg-white text-teal-950 font-semibold rounded-lg text-xs focus:ring-2 focus:ring-teal-600/30 focus:border-teal-600 focus:outline-none cursor-pointer"
+              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
             >
               <option value="all">جميع الفروع ({appData.purchaseInvoices?.length || 0})</option>
               {appData.branches.map((b) => (
@@ -897,13 +894,13 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             </select>
           )}
           <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-teal-600 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="بحث برقم الفاتورة أو اسم المورد..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full min-h-[40px] pr-9 pl-3 py-2 border border-teal-300 bg-white rounded-lg text-xs focus:ring-2 focus:ring-teal-600/40 focus:border-teal-600 focus:outline-none placeholder:text-slate-400"
+              className="w-full min-h-[44px] sm:min-h-[40px] pr-9 pl-3 py-2 border border-slate-300 bg-white rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -912,37 +909,35 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
       {/* Mobile Card List View (< md) */}
       <div className="block md:hidden space-y-3">
         {paginatedInvoices.length === 0 ? (
-          <div className="bg-white rounded-xl p-6 text-center text-black font-bold text-sm border-2 border-slate-300">
+          <div className="bg-white rounded-xl p-6 text-center text-slate-600 font-semibold text-sm border border-slate-200">
             لا توجد فواتير مشتريات مسجلة
           </div>
         ) : (
           paginatedInvoices.map((inv) => (
             <div
               key={inv.id}
-              className="bg-white rounded-xl p-4 shadow-xs border-2 border-teal-200/90 space-y-3 hover:border-teal-400 transition"
+              className="bg-white rounded-xl p-4 border border-slate-200 space-y-3 hover:border-slate-300 transition"
             >
-              {/* Top Row: Invoice ID, Date & Type Badge */}
-              <div className="flex items-center justify-between border-b border-teal-100 pb-2">
+              {/* Top Row */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
                 <div
                   onClick={() => {
                     setSelectedInvoice(inv);
                     setActiveModal('view');
                   }}
-                  className="flex items-center gap-1.5 cursor-pointer"
+                  className="flex items-center gap-2 cursor-pointer min-w-0"
                 >
-                  <span className="text-teal-900 font-black font-mono text-sm">#{inv.id}</span>
-                  <span className="text-slate-600 font-bold text-xs font-mono">| {inv.date}</span>
-                  <span className="text-[10px] bg-teal-100 text-teal-900 border border-teal-300 px-1.5 py-0.2 rounded font-bold">
-                    مشتريات
-                  </span>
+                  <span className="text-teal-700 font-semibold font-mono text-sm tabular-nums">#{inv.id}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="text-slate-600 font-medium text-xs tabular-nums">{inv.date}</span>
                 </div>
                 <span
-                  className={`px-2.5 py-0.5 rounded text-xs font-black border ${
+                  className={`px-2 py-0.5 rounded-md text-xs font-semibold border shrink-0 ${
                     inv.type === 'nagdi'
-                      ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                       : inv.type === 'ajel'
-                      ? 'bg-amber-50 text-amber-950 border-amber-300'
-                      : 'bg-rose-50 text-rose-950 border-rose-300'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-rose-50 text-rose-800 border-rose-200'
                   }`}
                 >
                   {inv.type === 'nagdi'
@@ -951,55 +946,55 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                     ? 'آجل'
                     : inv.type === 'return_nagdi'
                     ? 'مرتجع نقدي'
-                    : 'مرتجع أجل'}
+                    : 'مرتجع آجل'}
                 </span>
               </div>
 
-              {/* Middle Info: Supplier & Financials */}
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-black text-black text-sm">{inv.supplierName}</div>
+              {/* Middle Info */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900 text-sm truncate">{inv.supplierName}</div>
                   {inv.salesRep && (
-                    <div className="text-xs text-blue-950 font-bold flex items-center gap-1 mt-0.5">
-                      <UserIcon className="w-3.5 h-3.5 text-blue-700" />
+                    <div className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+                      <UserIcon className="w-3.5 h-3.5 text-blue-600" />
                       <span>مسؤول: {inv.salesRep}</span>
                     </div>
                   )}
                   {inv.notes && (
-                    <div className="text-xs text-black font-medium mt-0.5 line-clamp-1 flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-1 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>{inv.notes}</span>
                     </div>
                   )}
                   {inv.type === 'ajel' && inv.remainingAmount !== undefined && (
-                    <div className="text-xs mt-1 font-mono">
+                    <div className="text-xs mt-1.5 font-mono tabular-nums">
                       {inv.remainingAmount > 0 ? (
-                        <span className="text-amber-950 font-black bg-amber-50 px-2 py-0.5 rounded border border-amber-300">
+                        <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                           متبقي للمورد: {inv.remainingAmount.toFixed(2)} ج.م
                         </span>
                       ) : (
-                        <span className="text-emerald-950 font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                        <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           <span>مسددة بالكامل</span>
                         </span>
                       )}
                     </div>
                   )}
                 </div>
-                <div className="text-left shrink-0">
-                  <div className="text-xs text-slate-800 font-bold">القيمة الإجمالية</div>
-                  <div className="font-black text-black text-base font-mono tabular-nums">
+                <div className="text-left shrink-0 tabular-nums">
+                  <div className="text-[11px] text-slate-500 font-medium">القيمة الإجمالية</div>
+                  <div className="font-semibold text-slate-900 text-base">
                     {(inv.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons with 40px min-height */}
+              {/* Action Buttons */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
                 {inv.type === 'ajel' && (inv.remainingAmount ?? (inv.total - (inv.paidAmount || 0))) > 0 && (
                   <button
                     onClick={() => handleOpenPayModal(inv)}
-                    className="min-h-[40px] bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-lg text-xs transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                    className="min-h-[44px] bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                     title="تسديد دفعة للمورد"
                   >
                     <DollarSign className="w-4 h-4" />
@@ -1011,30 +1006,30 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                     setSelectedInvoice(inv);
                     setActiveModal('view');
                   }}
-                  className="min-h-[40px] bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Eye className="w-3.5 h-3.5 text-blue-700" />
+                  <Eye className="w-4 h-4 text-blue-600" />
                   <span>عرض</span>
                 </button>
                 <button
                   onClick={() => openEditModal(inv)}
-                  className="min-h-[40px] bg-blue-100 hover:bg-blue-200 text-blue-950 border border-blue-400 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="min-h-[44px] bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Pencil className="w-3.5 h-3.5 text-blue-700" />
+                  <Pencil className="w-4 h-4 text-blue-600" />
                   <span>تعديل</span>
                 </button>
                 <button
                   onClick={() => handlePrintInvoice(inv)}
-                  className="min-h-[40px] bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5 text-slate-700" />
+                  <Printer className="w-4 h-4 text-slate-700" />
                   <span>طباعة</span>
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(inv.id)}
-                  className="min-h-[40px] bg-rose-100 hover:bg-rose-200 text-rose-950 border border-rose-400 font-bold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="min-h-[44px] bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 font-semibold rounded-lg text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-700" />
+                  <Trash2 className="w-4 h-4 text-rose-600" />
                   <span>حذف</span>
                 </button>
               </div>
@@ -1044,24 +1039,24 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
       </div>
 
       {/* Invoices Desktop Table (>= md) */}
-      <div className="hidden md:block bg-white rounded-xl shadow-xs border-2 border-slate-300 overflow-x-auto">
-        <table className="w-full text-right text-xs md:text-sm border-collapse border border-slate-300">
+      <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table className="w-full text-right text-xs md:text-sm border-collapse tabular-nums">
           <thead>
-            <tr className="bg-slate-100 text-slate-900 font-bold border-b-2 border-slate-300">
-              <th className="p-3 font-black border border-slate-300 text-slate-900">رقم الفاتورة</th>
-              <th className="p-3 font-black border border-slate-300 text-slate-900">المورد</th>
-              {appData.branches && appData.branches.length > 1 && <th className="p-3 font-black border border-slate-300 text-slate-900">الفرع</th>}
-              <th className="p-3 font-black border border-slate-300 text-slate-900">التاريخ</th>
-              <th className="p-3 font-black border border-slate-300 text-slate-900">القيمة (ج.م)</th>
-              <th className="p-3 font-black border border-slate-300 text-slate-900">المسدد / المتبقي</th>
-              <th className="p-3 font-black border border-slate-300 text-slate-900">النوع</th>
-              <th className="p-3 font-black border border-slate-300 text-slate-900">الإجراءات</th>
+            <tr className="bg-slate-50 text-slate-700 border-b border-slate-200">
+              <th className="p-3 font-semibold border-l border-slate-200">رقم الفاتورة</th>
+              <th className="p-3 font-semibold border-l border-slate-200">المورد</th>
+              {appData.branches && appData.branches.length > 1 && <th className="p-3 font-semibold border-l border-slate-200">الفرع</th>}
+              <th className="p-3 font-semibold border-l border-slate-200">التاريخ</th>
+              <th className="p-3 font-semibold border-l border-slate-200">القيمة (ج.م)</th>
+              <th className="p-3 font-semibold border-l border-slate-200">المسدد / المتبقي</th>
+              <th className="p-3 font-semibold border-l border-slate-200">النوع</th>
+              <th className="p-3 font-semibold">الإجراءات</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-300 bg-white">
+          <tbody className="divide-y divide-slate-200 bg-white">
             {paginatedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-black font-bold">
+                <td colSpan={8} className="text-center py-8 text-slate-500 font-medium">
                   لا توجد فواتير مشتريات مسجلة
                 </td>
               </tr>
@@ -1070,50 +1065,48 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                 const rem = inv.remainingAmount ?? (inv.type === 'ajel' ? inv.total - (inv.paidAmount || 0) : 0);
                 const paid = inv.paidAmount ?? (inv.type === 'nagdi' ? inv.total : 0);
                 return (
-                  <tr key={inv.id} className="bg-white hover:bg-slate-100 transition border-b border-slate-300">
+                  <tr key={inv.id} className="bg-white hover:bg-slate-50 transition">
                     <td
                       onClick={() => {
                         setSelectedInvoice(inv);
                         setActiveModal('view');
                       }}
-                      className="p-3 text-blue-900 font-black font-mono cursor-pointer hover:underline border border-slate-300"
+                      className="p-3 text-teal-700 font-semibold font-mono cursor-pointer hover:underline border-l border-slate-200"
                     >
                       #{inv.id}
                     </td>
-                    <td className="p-3 border border-slate-300">
-                      <div className="font-black text-black">{inv.supplierName}</div>
+                    <td className="p-3 border-l border-slate-200">
+                      <div className="font-semibold text-slate-900">{inv.supplierName}</div>
                       {inv.salesRep && (
-                        <div className="text-xs text-blue-950 font-bold flex items-center gap-1 mt-0.5">
-                          <UserIcon className="w-3.5 h-3.5 text-blue-700" />
+                        <div className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+                          <UserIcon className="w-3.5 h-3.5 text-blue-600" />
                           <span>مسؤول: {inv.salesRep}</span>
                         </div>
                       )}
                       {inv.notes && (
-                        <div className="text-xs text-black font-medium truncate max-w-[160px] flex items-center gap-1 mt-0.5" title={inv.notes}>
-                          <FileText className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                        <div className="text-xs text-slate-500 truncate max-w-[180px] flex items-center gap-1 mt-0.5" title={inv.notes}>
+                          <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>{inv.notes}</span>
                         </div>
                       )}
                     </td>
                     {appData.branches && appData.branches.length > 1 && (
-                      <td className="p-3 border border-slate-300">
-                        <span className="text-xs font-black px-2 py-0.5 rounded bg-blue-100 text-blue-950 border border-blue-300">
-                          {appData.branches.find((b) => b.id === inv.branchId)?.name || 'الفرع الرئيسي'}
-                        </span>
+                      <td className="p-3 border-l border-slate-200 text-xs font-medium text-slate-700">
+                        {appData.branches.find((b) => b.id === inv.branchId)?.name || 'الفرع الرئيسي'}
                       </td>
                     )}
-                    <td className="p-3 font-mono font-bold text-black border border-slate-300">{inv.date}</td>
-                    <td className="p-3 font-black font-mono text-black tabular-nums border border-slate-300 text-sm">
+                    <td className="p-3 font-mono font-medium text-slate-700 border-l border-slate-200">{inv.date}</td>
+                    <td className="p-3 font-semibold font-mono text-slate-900 border-l border-slate-200">
                       {(inv.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="p-3 border border-slate-300">
+                    <td className="p-3 border-l border-slate-200">
                       {inv.type === 'ajel' ? (
                         <div className="text-xs space-y-0.5 font-mono">
-                          <div className="text-emerald-950 font-black tabular-nums">مسدد: {paid.toFixed(2)}</div>
+                          <div className="text-emerald-800 font-semibold">مسدد: {paid.toFixed(2)}</div>
                           {rem > 0 ? (
-                            <div className="text-rose-950 font-black tabular-nums">متبقي: {rem.toFixed(2)}</div>
+                            <div className="text-rose-700 font-semibold">متبقي: {rem.toFixed(2)}</div>
                           ) : (
-                            <div className="text-emerald-950 font-black text-xs inline-flex items-center gap-1 font-sans">
+                            <div className="text-emerald-700 font-semibold text-xs inline-flex items-center gap-1 font-sans">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               <span>مسددة بالكامل</span>
                             </div>
@@ -1123,14 +1116,14 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                         <span className="text-slate-500 text-xs">سداد فوري</span>
                       )}
                     </td>
-                    <td className="p-3">
+                    <td className="p-3 border-l border-slate-200">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold border ${
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-semibold border ${
                           inv.type === 'nagdi'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             : inv.type === 'ajel'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
                         }`}
                       >
                         {inv.type === 'nagdi'
@@ -1139,7 +1132,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                           ? 'آجل'
                           : inv.type === 'return_nagdi'
                           ? 'مرتجع نقدي'
-                          : 'مرتجع أجل'}
+                          : 'مرتجع آجل'}
                       </span>
                     </td>
                     <td className="p-3">
@@ -1299,27 +1292,27 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
       {/* Modal for Supplier Payment (Pay Modal) */}
       <Modal
         isOpen={activeModal === 'pay'}
-        title={`💰 تسديد دفعة لمورد - فاتورة مشتريات #${selectedInvoice?.id}`}
+        title={`تسديد دفعة لمورد - فاتورة مشتريات #${selectedInvoice?.id}`}
         onClose={() => setActiveModal(null)}
       >
         {selectedInvoice && (
-          <div className="space-y-4 text-xs md:text-sm">
-            <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl space-y-1 text-slate-800">
+          <div className="space-y-4 text-xs md:text-sm tabular-nums">
+            <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl space-y-1 text-slate-800">
               <div className="flex justify-between">
                 <span>المورد:</span>
-                <span className="font-bold">{selectedInvoice.supplierName}</span>
+                <span className="font-semibold">{selectedInvoice.supplierName}</span>
               </div>
               <div className="flex justify-between">
                 <span>إجمالي الفاتورة:</span>
-                <span className="font-mono font-bold">{selectedInvoice.total.toFixed(2)} ج.م</span>
+                <span className="font-mono font-semibold">{selectedInvoice.total.toFixed(2)} ج.م</span>
               </div>
               <div className="flex justify-between">
                 <span>المسدد سابقاً:</span>
-                <span className="font-mono text-emerald-700 font-bold">
+                <span className="font-mono text-emerald-700 font-semibold">
                   {(selectedInvoice.paidAmount || 0).toFixed(2)} ج.م
                 </span>
               </div>
-              <div className="flex justify-between border-t border-amber-200 pt-1 text-rose-700 font-bold">
+              <div className="flex justify-between border-t border-amber-200 pt-1.5 text-rose-700 font-semibold">
                 <span>المبلغ المتبقي للمورد:</span>
                 <span className="font-mono">
                   {(selectedInvoice.total - (selectedInvoice.paidAmount || 0)).toFixed(2)} ج.م
@@ -1328,7 +1321,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             </div>
 
             <div>
-              <label className="block font-bold mb-1 text-gray-700">المبلغ المراد سداده للمورد (ج.م)</label>
+              <label className="block font-semibold mb-1 text-slate-700">المبلغ المراد سداده للمورد (ج.م)</label>
               <input
                 type="number"
                 min="0.01"
@@ -1336,21 +1329,21 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
                 step="any"
                 value={payAmount}
                 onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
-                className="w-full p-2.5 border-2 border-emerald-400 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono font-bold text-base"
+                className="w-full min-h-[42px] px-3 py-2 border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none font-mono font-semibold text-base sm:text-sm"
               />
             </div>
 
             <div>
-              <label className="block font-bold mb-1 text-gray-700">وسيلة السداد والصرف</label>
+              <label className="block font-semibold mb-1 text-slate-700">وسيلة السداد والصرف</label>
               <select
                 value={payMethod}
                 onChange={(e) => setPayMethod(e.target.value as any)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-semibold"
+                className="w-full min-h-[42px] px-3 py-2 border border-slate-300 bg-white rounded-lg focus:border-teal-600 focus:outline-none font-medium text-base sm:text-sm"
               >
-                <option value="drawer">💵 نقدي (الدرج / الخزينة الرئيسية)</option>
-                <option value="vodafone">📱 فودافون كاش (محفظة إلكترونية)</option>
-                <option value="instapay">⚡ إنستاباي (InstaPay)</option>
-                <option value="bank">💳 حساب بنكي</option>
+                <option value="drawer">نقدي (الدرج / الخزينة الرئيسية)</option>
+                <option value="vodafone">فودافون كاش (محفظة إلكترونية)</option>
+                <option value="instapay">إنستاباي (InstaPay)</option>
+                <option value="bank">حساب بنكي</option>
               </select>
             </div>
 
@@ -1358,13 +1351,13 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
               <button
                 onClick={handleConfirmPayment}
                 disabled={isSubmitting}
-                className="min-h-[44px] bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-bold transition shadow-xs flex-1 sm:flex-initial text-center cursor-pointer"
+                className="min-h-[44px] bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg font-semibold transition flex-1 sm:flex-initial text-center cursor-pointer"
               >
-                {isSubmitting ? 'جاري المعالجة المحاسبية...' : `✓ تأكيد سداد ${payAmount.toFixed(2)} ج.م`}
+                {isSubmitting ? 'جاري المعالجة المحاسبية...' : `تأكيد سداد ${payAmount.toFixed(2)} ج.م`}
               </button>
               <button
                 onClick={() => setActiveModal(null)}
-                className="min-h-[44px] bg-gray-400 hover:bg-gray-500 text-white px-6 py-2.5 rounded-xl font-bold transition flex-1 sm:flex-initial text-center cursor-pointer"
+                className="min-h-[44px] bg-slate-200 hover:bg-slate-300 text-slate-800 px-6 py-2 rounded-lg font-semibold transition flex-1 sm:flex-initial text-center cursor-pointer"
               >
                 إلغاء
               </button>

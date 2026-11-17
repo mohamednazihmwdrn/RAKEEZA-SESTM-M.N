@@ -58,32 +58,36 @@ export function printWebOrderReceipt(
     <html lang="ar" dir="rtl">
     <head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>إيصال طلب إلكتروني #${orderNumber}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
         @page {
           size: ${format === '80mm' ? '80mm auto' : 'A4 portrait'};
           margin: ${format === '80mm' ? '3mm' : '12mm'};
         }
         body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, system-ui;
+          font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif;
           direction: rtl;
           margin: 0;
           padding: ${format === '80mm' ? '4px' : '20px'};
-          color: #000;
+          color: #0f172a;
           background: #fff;
           font-size: ${format === '80mm' ? '12px' : '14px'};
-          line-height: 1.35;
+          line-height: 1.4;
+          font-variant-numeric: tabular-nums;
+          -webkit-font-smoothing: antialiased;
         }
         .text-center { text-align: center; }
         .text-left { text-align: left; }
         .text-right { text-align: right; }
-        .font-bold { font-weight: bold; }
+        .font-bold { font-weight: 700; }
         .dashed-line {
-          border-top: 1px dashed #333;
+          border-top: 1px dashed #64748b;
           margin: 8px 0;
         }
         .double-line {
-          border-top: 2px solid #000;
+          border-top: 1.5px solid #0f172a;
           margin: 8px 0;
         }
         table {
@@ -91,26 +95,32 @@ export function printWebOrderReceipt(
           border-collapse: collapse;
           margin: 6px 0;
         }
+        thead { display: table-header-group; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
         th {
-          border-bottom: 1.5px solid #000;
-          padding: 4px 2px;
+          border-bottom: 1.5px solid #0f172a;
+          padding: 5px 3px;
           font-size: ${format === '80mm' ? '11px' : '13px'};
+          font-weight: 600;
+        }
+        td {
+          font-variant-numeric: tabular-nums;
         }
         .badge {
           display: inline-block;
-          background: #000;
+          background: #0f172a;
           color: #fff;
-          padding: 2px 8px;
+          padding: 3px 10px;
           border-radius: 4px;
           font-size: ${format === '80mm' ? '11px' : '13px'};
-          font-weight: bold;
+          font-weight: 600;
           margin: 4px 0;
         }
         .highlight-box {
-          background: #f4f4f5;
-          border: 1px solid #d4d4d8;
-          padding: 6px;
-          border-radius: 6px;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 8px;
+          border-radius: 4px;
           margin: 6px 0;
         }
         @media print {
@@ -121,17 +131,17 @@ export function printWebOrderReceipt(
     </head>
     <body>
       <div class="text-center">
-        <h2 style="margin: 2px 0 4px 0; font-size: ${format === '80mm' ? '16px' : '22px'}; font-weight: 900;">
+        <h2 style="margin: 2px 0 4px 0; font-size: ${format === '80mm' ? '16px' : '22px'}; font-weight: 700;">
           ${companyName}
         </h2>
-        ${companyAddress ? `<div style="font-size: 11px; color: #444;">${companyAddress}</div>` : ''}
-        ${companyPhone ? `<div style="font-size: 11px; font-weight: bold;">هاتف / واتساب: ${companyPhone}</div>` : ''}
-        
-        <div class="badge">🛒 إيصال طلب من المتجر الإلكتروني (WEB ORDER)</div>
-        <div style="font-size: ${format === '80mm' ? '13px' : '16px'}; font-weight: 900; margin: 2px 0;">
+        ${companyAddress ? `<div style="font-size: 11px; color: #475569;">${companyAddress}</div>` : ''}
+        ${companyPhone ? `<div style="font-size: 11px; font-weight: 600;">هاتف / واتساب: ${companyPhone}</div>` : ''}
+
+        <div class="badge">إيصال طلب من المتجر الإلكتروني (WEB ORDER)</div>
+        <div style="font-size: ${format === '80mm' ? '13px' : '16px'}; font-weight: 700; margin: 2px 0;">
           رقم الطلب: ${orderNumber}
         </div>
-        <div style="font-size: 11px; color: #333;">
+        <div style="font-size: 11px; color: #475569;">
           التاريخ: <strong>${orderDate}</strong> | الوقت: <strong>${orderTime}</strong>
         </div>
       </div>
@@ -218,7 +228,7 @@ export function printWebOrderReceipt(
         <div class="double-line"></div>
         <div style="display: flex; justify-content: space-between; font-size: ${
           format === '80mm' ? '15px' : '18px'
-        }; font-weight: 900;">
+        }; font-weight: 700;">
           <span>الصافي المطلوب:</span>
           <span>${Number(order.total).toFixed(2)} ${currency}</span>
         </div>

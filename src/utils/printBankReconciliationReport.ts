@@ -144,254 +144,103 @@ export function generateBankReconciliationReportHtml(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نموذج الطباعة الموحد - مذكرة تسوية ${data.selectedBank.name}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* =========================================================
-           1. الإعدادات الأساسية وإعادة الضبط
-           ========================================================= */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', system-ui, -apple-system, sans-serif; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             direction: rtl;
-            background-color: #eef2f5;
-            color: #222;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            padding: 10px;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
         }
-
-        /* شريط التحكم (للمعاينة فقط ولا يظهر في الطباعة) */
         .preview-toolbar {
-            background: #111;
+            background: #0f172a;
             color: #fff;
-            padding: 10px;
-            text-align: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin: 0 auto 12px auto;
+            max-width: 100%;
             display: flex;
+            flex-wrap: wrap;
             justify-content: center;
-            gap: 15px;
+            gap: 10px;
             align-items: center;
             position: sticky;
             top: 0;
             z-index: 999;
         }
-
         .preview-toolbar select, .preview-toolbar button {
+            min-height: 36px;
             padding: 6px 12px;
-            border-radius: 4px;
-            border: none;
-            font-weight: bold;
+            border-radius: 6px;
+            border: 1px solid #475569;
+            font-weight: 500;
+            font-size: 12.5px;
             cursor: pointer;
         }
+        .preview-toolbar select { background: #1e293b; color: #fff; }
+        .preview-toolbar button { background-color: #16a34a; color: #fff; border: none; font-weight: 600; }
 
-        .preview-toolbar button {
-            background-color: #28a745;
-            color: #fff;
-        }
-
-        /* =========================================================
-           2. حاويات الأوراق والمقاسات (A4, A5, Thermal)
-           ========================================================= */
         .print-page {
             background: #fff;
-            margin: 20px auto;
-            border: 1px solid #ccc;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            margin: 0 auto 16px auto;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(15,23,42,0.06);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             position: relative;
-            overflow: hidden;
-            page-break-after: avoid;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            break-after: avoid;
         }
+        .print-page.a4 { width: 100%; max-width: 210mm; min-height: auto; padding: 8mm 10mm; }
+        .print-page.a5 { width: 100%; max-width: 148mm; min-height: auto; padding: 6mm; }
+        .print-page.thermal { width: 80mm; max-width: 80mm; min-height: auto; padding: 4mm; border: 1px dashed #334155; box-shadow: none; }
 
-        /* مقاس A4 */
-        .print-page.a4 {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 10mm;
-        }
-
-        /* مقاس A5 */
-        .print-page.a5 {
-            width: 210mm;
-            min-height: 148mm;
-            padding: 6mm;
-        }
-
-        /* مقاس حراري 80mm */
-        .print-page.thermal {
-            width: 80mm;
-            min-height: auto;
-            padding: 4mm;
-        }
-
-        /* =========================================================
-           3. التصميم الداخلي الموحد (مطابق لهوية صورك)
-           ========================================================= */
-        /* الهيدر */
         .doc-header {
             width: 100%;
-            border-bottom: 2px solid #222;
-            padding-bottom: 6px;
+            border-bottom: 1.5px solid #1e293b;
+            padding-bottom: 8px;
             margin-bottom: 8px;
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: flex-start;
+            gap: 8px;
         }
+        .doc-header .company-info h2 { font-size: 16px; font-weight: 700; color: #0f172a; }
+        .doc-header .company-info p { font-size: 11px; color: #475569; }
+        .doc-header .doc-meta-top { font-size: 11px; text-align: left; color: #334155; }
 
-        .doc-header .company-info h2 {
-            font-size: 15px;
-            font-weight: bold;
-            color: #000;
-        }
+        .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 11px; }
+        .meta-table th, .meta-table td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: right; font-variant-numeric: tabular-nums; }
+        .meta-table th { background-color: #f1f5f9; font-weight: 600; color: #0f172a; }
 
-        .doc-header .company-info p {
-            font-size: 10px;
-            color: #555;
-        }
+        .dynamic-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 11px; }
+        .dynamic-table thead { display: table-header-group; }
+        .dynamic-table tr { break-inside: avoid; page-break-inside: avoid; }
+        .dynamic-table th { background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600; }
+        .dynamic-table td { border: 1px solid #cbd5e1; padding: 5px 6px; text-align: center; font-variant-numeric: tabular-nums; }
 
-        .doc-header .doc-meta-top {
-            font-size: 10px;
-            text-align: left;
-        }
+        .summary-section { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .summary-box-item { flex: 1; min-width: 140px; border: 1px solid #cbd5e1; border-radius: 4px; background-color: #f8fafc; padding: 6px; text-align: center; }
 
-        /* بطاقة معلومات الحركة */
-        .meta-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 8px;
-            font-size: 10px;
-        }
+        .doc-footer { margin-top: auto; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
+        .signatures-grid { width: 100%; font-size: 10px; border-collapse: collapse; }
+        .signatures-grid td { text-align: center; width: 33.33%; padding-top: 6px; }
+        .footer-note { font-size: 9px; color: #475569; text-align: center; margin-top: 6px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
+        .copyright-tag { font-size: 8.5px; color: #64748b; text-align: center; margin-top: 3px; }
 
-        .meta-table th, .meta-table td {
-            border: 1px solid #999;
-            padding: 4px 6px;
-            text-align: right;
-        }
-
-        .meta-table th {
-            background-color: #f1f1f1;
-            font-weight: bold;
-            color: #333;
-        }
-
-        /* جدول بيانات الحركة الديناميكي */
-        .dynamic-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 8px;
-            font-size: 10px;
-        }
-
-        .dynamic-table th {
-            background-color: #e2e6ea;
-            border: 1px solid #777;
-            padding: 5px;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .dynamic-table td {
-            border: 1px solid #bbb;
-            padding: 5px;
-            text-align: center;
-        }
-
-        /* ملخص الأرقام والمجاميع */
-        .summary-section {
-            display: flex;
-            justify-content: space-between;
-            gap: 6px;
-            margin-bottom: 8px;
-            font-size: 10px;
-        }
-
-        .summary-box-item {
-            flex: 1;
-            border: 1px solid #28a745;
-            background-color: #f8fff9;
-            padding: 5px;
-            text-align: center;
-            border-radius: 2px;
-        }
-
-        /* التذييل والتوقيعات */
-        .doc-footer {
-            margin-top: auto;
-            border-top: 1px dashed #777;
-            padding-top: 8px;
-        }
-
-        .signatures-grid {
-            width: 100%;
-            font-size: 9px;
-            border-collapse: collapse;
-        }
-
-        .signatures-grid td {
-            text-align: center;
-            width: 33.33%;
-            padding-top: 5px;
-        }
-
-        .footer-note {
-            font-size: 8px;
-            color: #555;
-            text-align: center;
-            margin-top: 5px;
-            border-top: 1px solid #eee;
-            padding-top: 3px;
-        }
-
-        .copyright-tag {
-            font-size: 7.5px;
-            color: #777;
-            text-align: center;
-            margin-top: 3px;
-        }
-
-        /* =========================================================
-           4. قواعد الطباعة الصارمة (منع الخوارج والأزرار تماماً)
-           ========================================================= */
         @media print {
-            .preview-toolbar {
-                display: none !important;
-            }
-
-            body {
-                background: none !important;
-                margin: 0 !important;
-            }
-
-            .print-page {
-                box-shadow: none !important;
-                border: none !important;
-                margin: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                page-break-after: avoid !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-                break-after: avoid !important;
-            }
-
-            /* إخفاء أي أجزاء غير مطلوب طباعتها */
-            .no-print {
-                display: none !important;
-            }
+            .preview-toolbar, .no-print { display: none !important; }
+            html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+            .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; height: auto !important; min-height: auto !important; }
         }
 
-        /* تحديد المقاسات الفعلية عند إعطاء أمر الطباعة للورق */
-        @page a4-page { size: A4 portrait; margin: 5mm; }
-        @page a5-page { size: A5 landscape; margin: 4mm; }
-        @page thermal-page { size: 80mm auto; margin: 0; }
-
+        @page a4-page { size: A4 portrait; margin: 6mm; }
+        @page a5-page { size: A5 landscape; margin: 5mm; }
+        @page thermal-page { size: 80mm auto; margin: 2mm; }
         body.mode-a4 { page: a4-page; }
         body.mode-a5 { page: a5-page; }
         body.mode-thermal { page: thermal-page; }

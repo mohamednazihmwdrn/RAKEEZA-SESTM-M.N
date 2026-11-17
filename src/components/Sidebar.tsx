@@ -8,7 +8,6 @@ import {
   Target,
   Inbox,
   ShoppingBag,
-  Globe,
   Package,
   Wallet,
   Users,
@@ -18,11 +17,9 @@ import {
   UserCheck,
   Briefcase,
   Building2,
-  Factory,
   Scale,
   FolderTree,
   Boxes,
-  GitBranch,
   BookOpen,
   Receipt,
   TrendingUp,
@@ -34,7 +31,6 @@ import {
   ShieldCheck,
   LogOut,
   ChevronDown,
-  ChevronLeft,
   Folder,
   FileBarChart,
   X,
@@ -100,7 +96,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   companyName,
   branchesCount,
   usersCount,
-  activeBranchName,
 }) => {
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({
     items: false,
@@ -108,8 +103,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     accounting_tree: false,
     reports_group: false,
   });
-
-  const [openReportsSub, setOpenReportsSub] = useState<Record<string, boolean>>({});
 
   const [secretClicks, setSecretClicks] = useState(0);
   const [lastSecretTime, setLastSecretTime] = useState(0);
@@ -135,10 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setOpenItems((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const toggleReportSub = (key: string) => {
-    setOpenReportsSub((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleNav = (page: string) => {
     onNavigate(page);
     if (typeof window !== 'undefined' && window.innerWidth < 1024 && onClose) {
@@ -151,39 +140,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (isActive) {
       return (
         extraActiveStyle ||
-        'bg-slate-100 text-black font-black border-r-4 border-black shadow-xs'
+        'bg-blue-50/80 text-blue-900 font-semibold border-r-[3px] border-blue-700'
       );
     }
-    return 'text-black hover:text-black hover:bg-slate-100 active:bg-slate-200 font-bold';
+    return 'text-slate-700 hover:text-slate-950 hover:bg-slate-50 active:bg-slate-100 font-medium';
   };
 
   return (
     <nav
-      className={`fixed top-0 lg:top-[56px] right-0 bottom-0 w-[85vw] max-w-[320px] lg:w-[280px] bg-white text-black overflow-y-auto transition-all duration-300 z-50 lg:z-40 py-0 lg:py-1 shadow-2xl border-l border-slate-200 no-print ${
+      className={`fixed top-0 lg:top-[56px] right-0 bottom-0 w-[85vw] max-w-[300px] lg:w-[280px] bg-white text-slate-900 overflow-y-auto transition-transform duration-300 z-50 lg:z-40 flex flex-col border-l border-slate-200 shadow-lg lg:shadow-none no-print ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}
       dir="rtl"
     >
-      <div className="flex flex-col text-sm">
+      <div className="flex flex-col text-sm flex-1">
         {/* Mobile & Tablet Drawer Top Bar */}
         <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-10">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0 cursor-pointer" onClick={handleSecretRakeezaClicks}>
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
               <Building2 className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <span className="font-black text-black text-xs sm:text-sm tracking-wide block truncate">
+              <span className="font-semibold text-slate-900 text-sm block truncate">
                 {companyName || 'المنظومة المحاسبية'}
-              </span>
-              <span className="text-[10px] text-blue-700 font-bold block truncate">
-                🏢 {activeBranchName || 'الفرع الرئيسي'}
               </span>
             </div>
           </div>
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-black flex items-center justify-center transition cursor-pointer font-bold"
+              className="w-10 h-10 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center transition cursor-pointer"
               aria-label="إغلاق القائمة"
             >
               <X className="w-4 h-4" />
@@ -192,16 +179,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Desktop Sidebar System Branding Header */}
-        <div className="hidden lg:flex items-center gap-2.5 px-4 py-3 bg-white border-b border-slate-200 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+        <div
+          className="hidden lg:flex items-center gap-2.5 px-4 py-3 bg-white border-b border-slate-200 cursor-pointer"
+          onClick={handleSecretRakeezaClicks}
+        >
+          <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
             <Building2 className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <span className="font-black text-black text-xs sm:text-sm tracking-wider block truncate">
+            <span className="font-semibold text-slate-900 text-sm block truncate">
               {companyName || 'المنظومة المحاسبية'}
-            </span>
-            <span className="text-[10px] text-blue-700 font-bold block truncate">
-              🏢 {activeBranchName || 'الفرع الرئيسي'}
             </span>
           </div>
         </div>
@@ -210,12 +197,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'home') && (
           <div
             onClick={() => handleNav('home')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'home'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('home')}`}
           >
-            <LayoutDashboard className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">الرئيسية ولوحة التحكم</span>
+            <LayoutDashboard className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">الرئيسية ولوحة التحكم</span>
           </div>
         )}
 
@@ -223,15 +208,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'pos') && (
           <div
             onClick={() => handleNav('pos')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'pos'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('pos')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Zap className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">نقطة البيع (POS)</span>
-            </div>
-            <span className="bg-slate-900 text-white text-[10px] px-1.5 py-0.5 rounded font-black">سريع</span>
+            <Zap className="w-4 h-4 shrink-0 text-amber-600" />
+            <span className="text-[13.5px]">نقطة البيع (POS)</span>
           </div>
         )}
 
@@ -239,12 +219,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'sales') && (
           <div
             onClick={() => handleNav('sales')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'sales'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('sales')}`}
           >
-            <ShoppingCart className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">إدارة المبيعات والفواتير</span>
+            <ShoppingCart className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">إدارة المبيعات والفواتير</span>
           </div>
         )}
 
@@ -252,15 +230,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'price_management') && (
           <div
             onClick={() => handleNav('price_management')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'price_management'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('price_management')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Tag className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">إدارة الأسعار والتسعير</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">تسعير</span>
+            <Tag className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">إدارة الأسعار والتسعير</span>
           </div>
         )}
 
@@ -268,15 +241,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'company_prices') && (
           <div
             onClick={() => handleNav('company_prices')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'company_prices'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('company_prices')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Building2 className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">أسعار الشركات والتصنيفات</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">شركات</span>
+            <Building2 className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">أسعار الشركات والتصنيفات</span>
           </div>
         )}
 
@@ -284,12 +252,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'quotes_orders') && (
           <div
             onClick={() => handleNav('quotes_orders')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'quotes_orders'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('quotes_orders')}`}
           >
-            <FileText className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">عروض الأسعار والطلبيات</span>
+            <FileText className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">عروض الأسعار والطلبيات</span>
           </div>
         )}
 
@@ -297,15 +263,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'crm_pipeline') && (
           <div
             onClick={() => handleNav('crm_pipeline')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'crm_pipeline'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('crm_pipeline')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Target className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">علاقات العملاء (CRM)</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">فرص</span>
+            <Target className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">علاقات العملاء (CRM)</span>
           </div>
         )}
 
@@ -313,20 +274,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'web_orders') && (
           <div
             onClick={() => handleNav('web_orders')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'web_orders'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass('web_orders')}`}
           >
             <div className="flex items-center gap-2.5">
-              <Inbox className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">طلبات الويب سايت</span>
+              <Inbox className="w-4 h-4 shrink-0 text-slate-500" />
+              <span className="text-[13.5px]">طلبات الويب سايت</span>
             </div>
-            {(pendingWebOrdersCount ?? 0) > 0 ? (
-              <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded font-black animate-pulse">
-                {pendingWebOrdersCount} جديد
+            {(pendingWebOrdersCount ?? 0) > 0 && (
+              <span className="bg-rose-600 text-white text-[11px] px-2 py-0.5 rounded font-semibold financial-num">
+                {pendingWebOrdersCount}
               </span>
-            ) : (
-              <span className="bg-slate-100 text-black text-[10px] px-1.5 py-0.5 rounded font-bold">وارد</span>
             )}
           </div>
         )}
@@ -335,15 +292,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'catalog_manager') && (
           <div
             onClick={() => handleNav('catalog_manager')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'catalog_manager'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('catalog_manager')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <ShoppingBag className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">المتجر والكتالوج الإلكتروني</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">متجر</span>
+            <ShoppingBag className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">المتجر والكتالوج الإلكتروني</span>
           </div>
         )}
 
@@ -351,12 +303,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'purchases') && (
           <div
             onClick={() => handleNav('purchases')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'purchases'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('purchases')}`}
           >
-            <Package className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">إدارة المشتريات والتوريد</span>
+            <Package className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">إدارة المشتريات والتوريد</span>
           </div>
         )}
 
@@ -364,15 +314,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'accounts') && (
           <div
             onClick={() => handleNav('accounts')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center justify-between ${navItemClass(
-              'accounts'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('accounts')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Users className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">حسابات العملاء والموردين</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">دليل</span>
+            <Users className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">حسابات العملاء والموردين</span>
           </div>
         )}
 
@@ -380,12 +325,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'customers') && (
           <div
             onClick={() => handleNav('customers')}
-            className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
-              'customers'
-            )}`}
+            className={`min-h-[40px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass('customers')}`}
           >
-            <Users className="w-3.5 h-3.5 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs text-black">إدارة العملاء</span>
+            <Users className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span className="text-[13px]">إدارة العملاء</span>
           </div>
         )}
 
@@ -393,29 +336,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'suppliers') && (
           <div
             onClick={() => handleNav('suppliers')}
-            className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
-              'suppliers'
-            )}`}
+            className={`min-h-[40px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass('suppliers')}`}
           >
-            <Building2 className="w-3.5 h-3.5 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs text-black">إدارة الموردين</span>
+            <Building2 className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span className="text-[13px]">إدارة الموردين</span>
           </div>
         )}
 
-        {/* قسم الخزينة والسيولة النقدية والبنوك */}
         {/* سندات القبض والصرف */}
         {canAccessPage(currentUser, 'cash') && (
           <div
             onClick={() => handleNav('cash')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center justify-between ${navItemClass(
-              'cash'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('cash')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Wallet className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">سندات القبض والصرف والخزينة</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">خزينة</span>
+            <Wallet className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">سندات القبض والصرف والخزينة</span>
           </div>
         )}
 
@@ -423,12 +358,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'receipts') && (
           <div
             onClick={() => handleNav('receipts')}
-            className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
-              'receipts'
-            )}`}
+            className={`min-h-[40px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass('receipts')}`}
           >
-            <ArrowDownLeft className="w-3.5 h-3.5 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs text-black">سندات القبض (التحصيل)</span>
+            <ArrowDownLeft className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span className="text-[13px]">سندات القبض (التحصيل)</span>
           </div>
         )}
 
@@ -436,28 +369,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'payments') && (
           <div
             onClick={() => handleNav('payments')}
-            className={`min-h-[38px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
-              'payments'
-            )}`}
+            className={`min-h-[40px] pr-8 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass('payments')}`}
           >
-            <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs text-black">سندات الصرف والمصروفات</span>
+            <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span className="text-[13px]">سندات الصرف والمصروفات</span>
           </div>
         )}
 
-        {/* مصفوفة أرصدة الخزينة والحسابات البنكية */}
+        {/* أرصدة الخزائن والبنوك */}
         {canAccessPage(currentUser, 'treasury') && (
           <div
             onClick={() => handleNav('treasury')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'treasury'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('treasury')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Landmark className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">أرصدة الخزائن والبنوك</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">أرصدة</span>
+            <Landmark className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">أرصدة الخزائن والبنوك</span>
           </div>
         )}
 
@@ -465,15 +391,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'cheques') && (
           <div
             onClick={() => handleNav('cheques')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'cheques'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('cheques')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <CreditCard className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">الشيكات وأوراق الدفع والقبض</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">شيكات</span>
+            <CreditCard className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">الشيكات وأوراق الدفع والقبض</span>
           </div>
         )}
 
@@ -481,12 +402,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'bank_reconciliation') && (
           <div
             onClick={() => handleNav('bank_reconciliation')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'bank_reconciliation'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('bank_reconciliation')}`}
           >
-            <Scale className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">التسوية البنكية والاعتمادات</span>
+            <Scale className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">التسوية البنكية والاعتمادات</span>
           </div>
         )}
 
@@ -495,80 +414,66 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div
               onClick={() => toggleItem('items')}
-              className="min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-100 flex justify-between items-center text-black"
+              className="min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-50 flex justify-between items-center text-slate-700 font-medium"
             >
               <div className="flex items-center gap-2.5">
-                <Boxes className="w-4 h-4 shrink-0 text-slate-800" />
-                <span className="font-bold text-xs sm:text-sm text-black">المخزون والأصناف والمستودعات</span>
+                <Boxes className="w-4 h-4 shrink-0 text-slate-500" />
+                <span className="text-[13.5px]">المخزون والأصناف والمستودعات</span>
               </div>
               <ChevronDown
-                className={`w-4 h-4 transition-transform text-slate-800 ${
-                  openItems.items ? 'rotate-180 text-black' : ''
+                className={`w-4 h-4 transition-transform text-slate-500 ${
+                  openItems.items ? 'rotate-180 text-slate-800' : ''
                 }`}
               />
             </div>
             {openItems.items && (
-              <div className="bg-slate-50 border-y border-slate-200 text-xs">
+              <div className="bg-slate-50/70 border-y border-slate-200 text-[13px]">
                 {canAccessPage(currentUser, 'items') && (
                   <div
                     onClick={() => handleNav('items')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'items'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('items')}`}
                   >
-                    <span className="font-bold text-black">دليل الأصناف والباركود</span>
+                    <span>دليل الأصناف والباركود</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'items') && (
                   <div
                     onClick={() => handleNav('item_movement')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'item_movement'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('item_movement')}`}
                   >
-                    <span className="font-bold text-black">سجل حركة الصنف</span>
+                    <span>سجل حركة الصنف</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'inventory') && (
                   <div
                     onClick={() => handleNav('inventory')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'inventory'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('inventory')}`}
                   >
-                    <span className="font-bold text-black">تقييم المخزون الإجمالي</span>
+                    <span>تقييم المخزون الإجمالي</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'physical_inventory') && (
                   <div
                     onClick={() => handleNav('physical_inventory')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'physical_inventory'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('physical_inventory')}`}
                   >
-                    <span className="font-bold text-black">الجرد الفعلي وتسوية المخازن</span>
+                    <span>الجرد الفعلي وتسوية المخازن</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'serial_warranty') && (
                   <div
                     onClick={() => handleNav('serial_warranty')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-                      'serial_warranty'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('serial_warranty')}`}
                   >
-                    <span className="font-bold text-black">الأرقام التسلسلية وتتبع الضمان (S/N)</span>
-                    <span className="bg-slate-200 text-black text-[9px] px-1.5 py-0.5 rounded font-bold">سيريال</span>
+                    <span>الأرقام التسلسلية وتتبع الضمان</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'manufacturing') && (
                   <div
                     onClick={() => handleNav('manufacturing')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-                      'manufacturing'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('manufacturing')}`}
                   >
-                    <span className="font-bold text-black">التصنيع ومعادلات الإنتاج (BOM)</span>
-                    <span className="bg-slate-200 text-black border border-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold">BOM</span>
+                    <span>التصنيع ومعادلات الإنتاج (BOM)</span>
                   </div>
                 )}
               </div>
@@ -580,17 +485,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'branches') && (
           <div
             onClick={() => handleNav('branches')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'branches'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass('branches')}`}
           >
             <div className="flex items-center gap-2.5">
-              <Building2 className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">إدارة الفروع والتحويلات</span>
+              <Building2 className="w-4 h-4 shrink-0 text-slate-500" />
+              <span className="text-[13.5px]">إدارة الفروع والتحويلات</span>
             </div>
             {branchesCount !== undefined && (
-              <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold font-mono">
-                {branchesCount} {branchesCount === 1 ? 'فرع' : 'فروع'}
+              <span className="text-xs text-slate-500 font-medium financial-num">
+                {branchesCount}
               </span>
             )}
           </div>
@@ -601,112 +504,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div
               onClick={() => toggleItem('operations')}
-              className="min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-100 flex justify-between items-center text-black"
+              className="min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-50 flex justify-between items-center text-slate-700 font-medium"
             >
               <div className="flex items-center gap-2.5">
-                <BookOpen className="w-4 h-4 shrink-0 text-slate-800" />
-                <span className="font-bold text-xs sm:text-sm text-black">المحاسبة والقيود والقوائم المالية</span>
+                <BookOpen className="w-4 h-4 shrink-0 text-slate-500" />
+                <span className="text-[13.5px]">المحاسبة والقيود والقوائم المالية</span>
               </div>
               <ChevronDown
-                className={`w-4 h-4 transition-transform text-slate-800 ${
-                  openItems.operations ? 'rotate-180 text-black' : ''
+                className={`w-4 h-4 transition-transform text-slate-500 ${
+                  openItems.operations ? 'rotate-180 text-slate-800' : ''
                 }`}
               />
             </div>
             {openItems.operations && (
-              <div className="bg-slate-50 border-y border-slate-200 text-xs">
+              <div className="bg-slate-50/70 border-y border-slate-200 text-[13px]">
                 {canAccessPage(currentUser, 'accounts_tree') && (
                   <div
                     onClick={() => handleNav('accounts_tree')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass(
-                      'accounts_tree'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${navItemClass('accounts_tree')}`}
                   >
-                    <FolderTree className="w-3.5 h-3.5 text-slate-800 shrink-0" />
-                    <span className="font-bold text-black">دليل الحسابات ومراكز التكلفة</span>
+                    <FolderTree className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span>دليل الحسابات ومراكز التكلفة</span>
                   </div>
                 )}
                 {(canAccessPage(currentUser, 'daily_operations') || canAccessPage(currentUser, 'daily_entries')) && (
                   <div
                     onClick={() => handleNav('daily_operations')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'daily_operations'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('daily_operations')}`}
                   >
-                    <span className="font-bold text-black">العمليات اليومية ودفتر القيود</span>
+                    <span>العمليات اليومية ودفتر القيود</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'trial_balance') && (
                   <div
                     onClick={() => handleNav('trial_balance')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'trial_balance'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('trial_balance')}`}
                   >
-                    <span className="font-bold text-black">ميزان المراجعة</span>
+                    <span>ميزان المراجعة</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'income_statement') && (
                   <div
                     onClick={() => handleNav('income_statement')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'income_statement'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('income_statement')}`}
                   >
-                    <span className="font-bold text-black">قائمة الدخل والأرباح والخسائر (P&L)</span>
+                    <span>قائمة الدخل والأرباح والخسائر</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'balance_sheet') && (
                   <div
                     onClick={() => handleNav('balance_sheet')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'balance_sheet'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('balance_sheet')}`}
                   >
-                    <span className="font-bold text-black">الميزانية العمومية</span>
+                    <span>الميزانية العمومية</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'monthly_profit_report') && (
                   <div
                     onClick={() => handleNav('monthly_profit_report')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-                      'monthly_profit_report'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('monthly_profit_report')}`}
                   >
-                    <span className="font-bold text-black">تقرير الأرباح وتكلفة المبيعات (COGS)</span>
-                    <span className="bg-slate-200 text-black border border-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold">معتمد</span>
+                    <span>تقرير الأرباح وتكلفة المبيعات (COGS)</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'cash_flow_closing') && (
                   <div
                     onClick={() => handleNav('cash_flow_closing')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-                      'cash_flow_closing'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('cash_flow_closing')}`}
                   >
-                    <span className="font-bold text-black">قائمة التدفقات النقدية المعيارية</span>
-                    <span className="bg-slate-200 text-black border border-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold">EAS</span>
+                    <span>قائمة التدفقات النقدية</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'fixed_assets') && (
                   <div
                     onClick={() => handleNav('fixed_assets')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass(
-                      'fixed_assets'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('fixed_assets')}`}
                   >
-                    <span className="font-bold text-black">الأصول الثابتة والإهلاكات</span>
+                    <span>الأصول الثابتة والإهلاكات</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'year_end_closing') && (
                   <div
                     onClick={() => handleNav('year_end_closing')}
-                    className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-                      'year_end_closing'
-                    )}`}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('year_end_closing')}`}
                   >
-                    <span className="font-bold text-black">الإقفال السنوي والترحيل المالي</span>
-                    <span className="bg-slate-200 text-black text-[9px] px-1.5 py-0.5 rounded font-bold">الختامي</span>
+                    <span>الإقفال السنوي والترحيل المالي</span>
                   </div>
                 )}
               </div>
@@ -718,12 +600,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'e_invoicing') && (
           <div
             onClick={() => handleNav('e_invoicing')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'e_invoicing'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('e_invoicing')}`}
           >
-            <Receipt className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">الفاتورة الإلكترونية والضرائب</span>
+            <Receipt className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">الفاتورة الإلكترونية والضرائب</span>
           </div>
         )}
 
@@ -731,12 +611,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'sales_reps') && (
           <div
             onClick={() => handleNav('sales_reps')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'sales_reps'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('sales_reps')}`}
           >
-            <UserCheck className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">المندوبين والعمولات وسقف الائتمان</span>
+            <UserCheck className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">المندوبين والعمولات وسقف الائتمان</span>
           </div>
         )}
 
@@ -744,15 +622,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'hr_payroll') && (
           <div
             onClick={() => handleNav('hr_payroll')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'hr_payroll'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('hr_payroll')}`}
           >
-            <div className="flex items-center gap-2.5">
-              <Briefcase className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">الموارد البشرية والرواتب (HR)</span>
-            </div>
-            <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold">HR</span>
+            <Briefcase className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">الموارد البشرية والرواتب</span>
           </div>
         )}
 
@@ -760,12 +633,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'bi_analytics') && (
           <div
             onClick={() => handleNav('bi_analytics')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'bi_analytics'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('bi_analytics')}`}
           >
-            <TrendingUp className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">ذكاء الأعمال والتحليلات (BI)</span>
+            <TrendingUp className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">ذكاء الأعمال والتحليلات (BI)</span>
           </div>
         )}
 
@@ -774,28 +645,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <div
               onClick={() => toggleItem('reports_group')}
-              className="min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-100 flex justify-between items-center text-black"
+              className="min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition hover:bg-slate-50 flex justify-between items-center text-slate-700 font-medium"
             >
               <div className="flex items-center gap-2.5">
-                <BarChart3 className="w-4 h-4 shrink-0 text-slate-800" />
-                <span className="font-bold text-xs sm:text-sm text-black">التقارير الشاملة والمصنفة</span>
+                <BarChart3 className="w-4 h-4 shrink-0 text-slate-500" />
+                <span className="text-[13.5px]">التقارير الشاملة والمصنفة</span>
               </div>
               <ChevronDown
-                className={`w-4 h-4 transition-transform text-slate-800 ${
-                  openItems.reports_group ? 'rotate-180 text-black' : ''
+                className={`w-4 h-4 transition-transform text-slate-500 ${
+                  openItems.reports_group ? 'rotate-180 text-slate-800' : ''
                 }`}
               />
             </div>
             {openItems.reports_group && (
-              <div className="bg-slate-50 border-y border-slate-200 text-xs">
+              <div className="bg-slate-50/70 border-y border-slate-200 text-[13px]">
                 <div
                   onClick={() => handleNav('reports_group')}
-                  className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 text-black font-bold ${
-                    activePage === 'reports_group' ? 'bg-slate-200 text-black font-black border-r-4 border-black' : 'hover:bg-slate-100'
+                  className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center gap-2 ${
+                    activePage === 'reports_group'
+                      ? 'bg-blue-50/80 text-blue-900 font-semibold border-r-[3px] border-blue-700'
+                      : 'text-slate-700 hover:bg-slate-100 font-medium'
                   }`}
                 >
-                  <FileBarChart className="w-3.5 h-3.5 text-slate-800" />
-                  <span className="font-bold text-black">نظرة عامة على جميع التقارير</span>
+                  <FileBarChart className="w-3.5 h-3.5 text-slate-500" />
+                  <span>نظرة عامة على جميع التقارير</span>
                 </div>
                 {reportGroups.map((group) => {
                   const catPageId = `reports_${group.key}`;
@@ -804,17 +677,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div
                       key={group.key}
                       onClick={() => handleNav(catPageId)}
-                      className={`min-h-[36px] pr-9 pl-4 py-1.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${
+                      className={`min-h-[38px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${
                         isCatActive
-                          ? 'bg-slate-200 text-black font-black border-r-4 border-black'
-                          : 'text-black hover:text-black hover:bg-slate-100 font-bold'
+                          ? 'bg-blue-50/80 text-blue-900 font-semibold border-r-[3px] border-blue-700'
+                          : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100 font-normal'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <Folder className="w-3.5 h-3.5 text-slate-800 shrink-0" />
-                        <span className="font-bold text-black">{group.label}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{group.label}</span>
                       </div>
-                      <span className="text-[10px] bg-slate-200 text-black font-bold px-1.5 py-0.5 rounded font-mono border border-slate-300">
+                      <span className="text-[11px] text-slate-500 font-medium financial-num">
                         {group.reports.length}
                       </span>
                     </div>
@@ -829,12 +702,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'audit_trail') && (
           <div
             onClick={() => handleNav('audit_trail')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'audit_trail'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('audit_trail')}`}
           >
-            <History className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">سجل التدقيق والأمان والرقابة</span>
+            <History className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">سجل التدقيق والأمان والرقابة</span>
           </div>
         )}
 
@@ -842,12 +713,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'settings') && (
           <div
             onClick={() => handleNav('settings')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'settings'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('settings')}`}
           >
-            <Settings className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">الإعدادات العامة للنظام</span>
+            <Settings className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">الإعدادات العامة للنظام</span>
           </div>
         )}
 
@@ -855,17 +724,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'users') && (
           <div
             onClick={() => handleNav('users')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass(
-              'users'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex justify-between items-center ${navItemClass('users')}`}
           >
             <div className="flex items-center gap-2.5">
-              <UserCog className="w-4 h-4 shrink-0 text-slate-800" />
-              <span className="font-bold text-xs sm:text-sm text-black">المستخدمين والصلاحيات</span>
+              <UserCog className="w-4 h-4 shrink-0 text-slate-500" />
+              <span className="text-[13.5px]">المستخدمين والصلاحيات</span>
             </div>
             {usersCount !== undefined && (
-              <span className="bg-slate-100 text-black border border-slate-300 text-[10px] px-1.5 py-0.5 rounded font-bold font-mono">
-                {usersCount} {usersCount === 1 ? 'مستخدم' : 'مستخدمين'}
+              <span className="text-xs text-slate-500 font-medium financial-num">
+                {usersCount}
               </span>
             )}
           </div>
@@ -875,28 +742,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {canAccessPage(currentUser, 'backup') && (
           <div
             onClick={() => handleNav('backup')}
-            className={`min-h-[42px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass(
-              'backup'
-            )}`}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('backup')}`}
           >
-            <ShieldCheck className="w-4 h-4 shrink-0 text-slate-800" />
-            <span className="font-bold text-xs sm:text-sm text-black">النسخ الاحتياطي والأمان</span>
+            <ShieldCheck className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">النسخ الاحتياطي والأمان</span>
           </div>
         )}
       </div>
 
       {/* Pinned Bottom User & Logout Section */}
-      <div className="sticky bottom-0 mt-auto bg-slate-50 border-t border-slate-200 p-3 shadow-lg z-20">
+      <div className="sticky bottom-0 mt-auto bg-slate-50 border-t border-slate-200 p-3 z-20">
         <div className="flex items-center gap-2.5 mb-2.5 px-0.5">
-          <div className="w-8 h-8 rounded-lg bg-black text-white font-black text-xs flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shrink-0">
             {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-black text-black truncate leading-tight">
+            <p className="text-xs font-semibold text-slate-900 truncate leading-tight">
               {currentUser?.name || 'مدير المنظومة'}
             </p>
-            <p className="text-[10px] text-black font-semibold truncate leading-tight mt-0.5">
-              {companyName || 'الفرع الرئيسي'}
+            <p className="text-[11px] text-slate-500 font-normal truncate leading-tight mt-0.5">
+              {companyName || 'المنظومة المحاسبية'}
             </p>
           </div>
         </div>
@@ -908,10 +773,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onClose) onClose();
               onLogout();
             }}
-            className="w-full min-h-[38px] flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer border border-rose-700 shadow-xs"
+            className="w-full min-h-[40px] flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white py-2 px-3 rounded-lg text-xs font-medium transition cursor-pointer"
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span>تسجيل الخروج من الحساب</span>
+            <span>تسجيل الخروج</span>
           </button>
         )}
       </div>
