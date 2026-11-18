@@ -585,7 +585,7 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
           </div>
 
           <div className="copyright-outside text-center text-xs font-bold text-gray-500">
-            حقوق الملكية محفوظة Mohamed Nazih 01029190615
+            جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
           </div>
         </div>
       ) : (

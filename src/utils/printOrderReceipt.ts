@@ -249,6 +249,9 @@ export function printWebOrderReceipt(
       <div class="text-center" style="margin-top: 10px; font-size: 10px; color: #444;">
         <div style="font-weight: bold;">نظام ركيزة لإدارة المبيعات والمتاجر الإلكترونية (Rakeeza ERP)</div>
         <div>يرجى مراجعة الأصناف والتجهيز فوراً للتسليم أو الشحن</div>
+        <div style="margin-top: 4px; font-size: 9.5px; color: #475569; font-weight: 600;">
+          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
+        </div>
         <div style="margin-top: 6px; letter-spacing: 2px; font-family: monospace; font-size: 11px;">
           *${orderNumber}*
         </div>

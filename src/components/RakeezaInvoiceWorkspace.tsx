@@ -26,6 +26,7 @@ export interface WorkspaceItemRow {
   rowId: string;
   code: string;
   name: string;
+  unit?: string;
   spec: string;
   qty: number;
   price: number;
@@ -215,8 +216,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
   // Party State (Customer in Sales, Supplier in Purchases)
   const [custCode, setCustCode] = useState<string>(() => {
-    if (isSale) return (editingInvoice as any)?.customerCode || '1';
-    return (editingInvoice as any)?.supplierCode || '1';
+    if (isSale) return (editingInvoice as any)?.customerCode || (editingInvoice as any)?.customerId || '';
+    return (editingInvoice as any)?.supplierCode || (editingInvoice as any)?.supplierId || '';
   });
   const [custName, setCustName] = useState<string>(() => {
     if (isSale) return (editingInvoice as SaleInvoice)?.customerName || 'عميل نقدي';
@@ -225,6 +226,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const [custPhone, setCustPhone] = useState<string>(editingInvoice?.phone || '');
   const [jobSite, setJobSite] = useState<string>(
     (editingInvoice as any)?.jobSite || editingInvoice?.notes || ''
+  );
+
+  // Return Traceability State (Optional Original Invoice Ref & Full/Partial Return Kind)
+  const [originalInvoiceId, setOriginalInvoiceId] = useState<number | undefined>(() =>
+    (editingInvoice as any)?.originalInvoiceId ? Number((editingInvoice as any).originalInvoiceId) : undefined
+  );
+  const [returnKind, setReturnKind] = useState<'full' | 'partial'>(() =>
+    (editingInvoice as any)?.returnKind === 'full' ? 'full' : 'partial'
   );
 
   // Autocomplete Suggestions State
@@ -349,6 +358,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         rowId: (i as any).rowId || `row_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         code: i.code || '',
         name: i.name,
+        unit: (i as any).unit || 'قطعة',
         spec: i.spec || i.notes || '',
         qty: Number(i.qty || (i as any).quantity || 1),
         price: Number(i.price || 0),
@@ -794,6 +804,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         rowId: `row_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         code: cardItem.code,
         name: cardItem.name,
+        unit: cardItem.typeName || 'قطعة',
         spec: s,
         qty: q,
         price: p,
@@ -1126,6 +1137,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         amount: Number(r.amount) || 0,
       }));
 
+    const activeBranchName =
+      appData.branches?.find((b) => b.id === activeBranchId)?.name || 'الفرع الرئيسي';
+    const resolvedPartyCode = custCode.trim() || matchedParty?.code || matchedParty?.id || undefined;
+
     if (isSale) {
       const invoiceData: SaleInvoice = {
         id: editingInvoice?.id || invoiceId,
@@ -1133,6 +1148,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         time: invTime,
         type: selectedInvoiceType,
         salesType: activePricingTier === 'wholesale' ? 'wholesale' : 'cash',
+        customerId: matchedParty?.id,
+        customerCode: resolvedPartyCode,
         customerName: defaultPartyName,
         phone: custPhone,
         notes: jobSite,
@@ -1140,6 +1157,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           itemId: i.itemId || i.code,
           code: i.code,
           name: i.name,
+          unit: i.unit || 'قطعة',
           qty: i.qty,
           price: i.price,
           total: i.total,
@@ -1159,8 +1177,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
         paymentSplits,
+        originalInvoiceId: isReturn && originalInvoiceId ? originalInvoiceId : undefined,
+        returnKind: isReturn ? returnKind : undefined,
+        classificationStatus: 'classified',
         status: 'approved',
         branchId: activeBranchId,
+        branchName: activeBranchName,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
         createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
       };
@@ -1182,6 +1204,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         date: invDate,
         time: invTime,
         type: selectedInvoiceType,
+        purchaseType: activePricingTier === 'wholesale' ? 'wholesale' : 'cash',
+        supplierId: matchedParty?.id,
+        supplierCode: resolvedPartyCode,
         supplierName: defaultPartyName,
         phone: custPhone,
         notes: jobSite,
@@ -1189,6 +1214,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           itemId: i.itemId || i.code,
           code: i.code,
           name: i.name,
+          unit: i.unit || 'قطعة',
           qty: i.qty,
           price: i.price,
           total: i.total,
@@ -1208,8 +1234,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         remainingAmount: totals.remain,
         paymentMethod: primaryMethodKey,
         paymentSplits,
+        originalInvoiceId: isReturn && originalInvoiceId ? originalInvoiceId : undefined,
+        returnKind: isReturn ? returnKind : undefined,
+        classificationStatus: 'classified',
         status: 'approved',
         branchId: activeBranchId,
+        branchName: activeBranchName,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
         createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
       };
@@ -1228,25 +1258,38 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
   };
 
-  // Direct Print Invoice
+  // Direct Print Invoice (Mode A - Strictly Read-Only)
   const handlePrintCurrentInvoice = () => {
     const defaultPartyName = isSale
       ? custName.trim() || 'عميل نقدي'
       : custName.trim() || 'مورد عام';
+
+    const resolvedPartyCode = custCode.trim() || matchedParty?.code || matchedParty?.id || '-';
+    const activeBranchName =
+      appData.branches?.find((b) => b.id === activeBranchId)?.name || 'الفرع الرئيسي';
 
     const tempInvoice: any = {
       id: Number(invNum) || invoiceId,
       date: invDate,
       time: invTime,
       type: selectedInvoiceType,
+      salesType: isSale ? (activePricingTier === 'wholesale' ? 'wholesale' : 'cash') : undefined,
+      purchaseType: !isSale ? (activePricingTier === 'wholesale' ? 'wholesale' : 'cash') : undefined,
+      customerId: isSale ? matchedParty?.id : undefined,
+      customerCode: isSale ? resolvedPartyCode : undefined,
+      supplierId: !isSale ? matchedParty?.id : undefined,
+      supplierCode: !isSale ? resolvedPartyCode : undefined,
       customerName: defaultPartyName,
       supplierName: defaultPartyName,
       phone: custPhone,
       notes: jobSite,
+      originalInvoiceId: isReturn && originalInvoiceId ? originalInvoiceId : undefined,
+      returnKind: isReturn ? returnKind : undefined,
       items: currentInvoiceItems.map((i) => ({
         itemId: i.itemId || i.code,
         code: i.code,
         name: i.name,
+        unit: i.unit || 'قطعة',
         qty: i.qty,
         price: i.price,
         total: i.total,
@@ -1260,12 +1303,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       total: totals.net,
       paidAmount: totals.paid,
       remainingAmount: totals.remain,
-      paymentMethod: paymentRows[0]?.method || 'نقدي',
-      branchId: appData.activeBranchId || 'main',
+      paymentMethod: mapPaymentMethodToKey(paymentRows[0]?.method || 'نقدي'),
+      branchId: activeBranchId,
+      branchName: activeBranchName,
       createdBy: appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام',
     };
 
-    printInvoiceWindow(tempInvoice, isSale, appData.settings, showToast, 'A5');
+    printInvoiceWindow(tempInvoice, isSale, appData.settings, showToast, 'A5', appData);
   };
 
   return (
@@ -2027,38 +2071,149 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 🏷️ 3. نظام تسعير الفاتورة */}
+          {/* 🏷️ 3. نظام تسعير الفاتورة ونوع السداد */}
           <div className="pricing-tier-bar">
-            <span className="text-xs font-semibold text-slate-700 shrink-0">
-              نظام تسعير الفاتورة:
-            </span>
-            <div className="flex gap-1.5 flex-1 min-w-[210px] max-w-[340px]">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[230px]">
+              <span className="text-xs font-semibold text-slate-700 shrink-0">
+                التسعير:
+              </span>
+              <div className="flex gap-1.5 flex-1 max-w-[300px]">
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('cash')}
+                  className={`pricing-tier-btn ${activePricingTier === 'cash' ? 'active-cash' : ''}`}
+                  title="سعر البيع النقدي (القطاعي)"
+                >
+                  سعر نقدي
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('wholesale')}
+                  className={`pricing-tier-btn ${activePricingTier === 'wholesale' ? 'active-wholesale' : ''}`}
+                  title="سعر بيع الجملة"
+                >
+                  سعر جملة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('buy')}
+                  className={`pricing-tier-btn ${activePricingTier === 'buy' ? 'active-buy' : ''}`}
+                  title="سعر الشراء والتكلفة"
+                >
+                  سعر شراء
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs font-semibold text-slate-700">الدفع:</span>
               <button
                 type="button"
-                onClick={() => handleChangePricingTier('cash')}
-                className={`pricing-tier-btn ${activePricingTier === 'cash' ? 'active-cash' : ''}`}
-                title="سعر البيع النقدي (القطاعي)"
+                onClick={() => setSelectedInvoiceType(isReturn ? 'return_nagdi' : 'nagdi')}
+                className={`min-h-[36px] px-3 py-1 rounded-md text-xs font-semibold border cursor-pointer transition ${
+                  selectedInvoiceType === 'nagdi' || selectedInvoiceType === 'return_nagdi'
+                    ? 'bg-emerald-700 border-emerald-700 text-white'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
               >
-                سعر نقدي
+                {isReturn ? 'مرتجع نقدي' : 'كاش / نقدي'}
               </button>
               <button
                 type="button"
-                onClick={() => handleChangePricingTier('wholesale')}
-                className={`pricing-tier-btn ${activePricingTier === 'wholesale' ? 'active-wholesale' : ''}`}
-                title="سعر بيع الجملة"
+                onClick={() => setSelectedInvoiceType(isReturn ? 'return_ajel' : 'ajel')}
+                className={`min-h-[36px] px-3 py-1 rounded-md text-xs font-semibold border cursor-pointer transition ${
+                  selectedInvoiceType === 'ajel' || selectedInvoiceType === 'return_ajel'
+                    ? 'bg-amber-700 border-amber-700 text-white'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
               >
-                سعر جملة
-              </button>
-              <button
-                type="button"
-                onClick={() => handleChangePricingTier('buy')}
-                className={`pricing-tier-btn ${activePricingTier === 'buy' ? 'active-buy' : ''}`}
-                title="سعر الشراء والتكلفة"
-              >
-                سعر شراء
+                {isReturn ? 'مرتجع آجل' : 'آجل / ذمم'}
               </button>
             </div>
           </div>
+
+          {/* ↩ ربط المرتجع بالفاتورة الأصلية وتحديد نوع المرتجع */}
+          {isReturn && (
+            <div className="bg-rose-50/70 border border-rose-200 rounded-lg p-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2 items-end text-xs">
+              <div className="field-inline sm:col-span-2">
+                <label className="!text-rose-900">ربط بالفاتورة الأصلية (اختياري)</label>
+                <select
+                  value={originalInvoiceId || ''}
+                  onChange={(e) => {
+                    const idNum = Number(e.target.value) || undefined;
+                    setOriginalInvoiceId(idNum);
+                    if (idNum) {
+                      const origList = isSale ? appData.salesInvoices : appData.purchaseInvoices;
+                      const orig = origList?.find((x) => Number(x.id) === idNum);
+                      if (orig) {
+                        const pName = isSale ? (orig as SaleInvoice).customerName : (orig as PurchaseInvoice).supplierName;
+                        if (pName) setCustName(pName);
+                        if (orig.phone) setCustPhone(orig.phone);
+                        if (isSale && (orig as SaleInvoice).salesType === 'wholesale') {
+                          setActivePricingTier('wholesale');
+                        }
+                        if (currentInvoiceItems.length === 0 && orig.items && orig.items.length > 0) {
+                          setCurrentInvoiceItems(
+                            orig.items.map((it, idx) => ({
+                              rowId: `ret_${idx}_${Date.now()}`,
+                              code: it.code || '',
+                              name: it.name,
+                              unit: (it as any).unit || 'قطعة',
+                              spec: it.spec || it.notes || '',
+                              qty: Number(it.qty || (it as any).quantity || 1),
+                              price: Number(it.price || 0),
+                              total: Number(it.total || Number(it.qty || 1) * Number(it.price || 0)),
+                              itemId: it.itemId,
+                              costPrice: it.costPrice,
+                            }))
+                          );
+                          setReturnKind('full');
+                          showToast(`تم تحميل أصناف الفاتورة الأصلية #${idNum} للمرتجع`, 'info');
+                        }
+                      }
+                    }
+                  }}
+                >
+                  <option value="">-- بدون ربط / مرتجع حر --</option>
+                  {(isSale ? appData.salesInvoices || [] : appData.purchaseInvoices || [])
+                    .filter((x) => !x.type.startsWith('return_') && x.status !== 'cancelled')
+                    .slice(0, 100)
+                    .map((orig) => (
+                      <option key={orig.id} value={orig.id}>
+                        #{orig.id} · {orig.date} · {isSale ? (orig as SaleInvoice).customerName : (orig as PurchaseInvoice).supplierName} ({Number(orig.total || 0).toFixed(2)} ج.م)
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field-inline">
+                <label className="!text-rose-900">نوع المرتجع</label>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setReturnKind('full')}
+                    className={`flex-1 min-h-[36px] rounded-md font-semibold border cursor-pointer ${
+                      returnKind === 'full'
+                        ? 'bg-rose-700 border-rose-700 text-white'
+                        : 'bg-white border-rose-200 text-rose-900 hover:bg-rose-100'
+                    }`}
+                  >
+                    مرتجع كلي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReturnKind('partial')}
+                    className={`flex-1 min-h-[36px] rounded-md font-semibold border cursor-pointer ${
+                      returnKind === 'partial'
+                        ? 'bg-rose-700 border-rose-700 text-white'
+                        : 'bg-white border-rose-200 text-rose-900 hover:bg-rose-100'
+                    }`}
+                  >
+                    مرتجع جزئي
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 4. Top Action Buttons Grid */}
           <div className="top-actions-grid">

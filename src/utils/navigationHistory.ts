@@ -55,6 +55,7 @@ export const PAGE_PARENT_MAP: Record<string, string> = {
   'fixed_assets': 'daily_operations',
 
   // Sales & Commercial hierarchy
+  'invoice_registry': 'sales',
   'quotes_orders': 'sales',
   'price_management': 'sales',
   'company_prices': 'price_management',

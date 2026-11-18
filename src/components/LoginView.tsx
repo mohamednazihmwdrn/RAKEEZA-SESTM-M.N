@@ -1393,7 +1393,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 py-4 text-center text-xs text-slate-500 border-t border-slate-800/60">
-        <p>منظومة ركيزة المحاسبية RAKEEZA Cloud ERP © {new Date().getFullYear()} — جميع الحقوق محفوظة</p>
+        <p>جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615</p>
       </footer>
     </div>
   );

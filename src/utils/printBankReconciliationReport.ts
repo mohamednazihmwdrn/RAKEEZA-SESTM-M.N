@@ -339,7 +339,7 @@ export function generateBankReconciliationReportHtml(
                 * تطابق هذه المستندات الأرصدة والبيانات مع السجلات الرسمية بالنظام. | صفحة 1 من 1
             </div>
             <div class="copyright-tag">
-                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+                جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
             </div>
         </div>
 

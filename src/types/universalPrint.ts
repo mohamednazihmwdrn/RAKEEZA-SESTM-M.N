@@ -39,6 +39,7 @@ export type UniversalDocKind =
   | 'debt_aging'
   | 'bank_reconciliation'
   | 'audit_trail'
+  | 'batch_invoices'
   | 'generic_report';
 
 export interface PrintCompanyInfo {
@@ -76,6 +77,15 @@ export interface UniversalPrintSummaryItem {
   color?: string;
 }
 
+export interface UniversalBatchSummary {
+  title: string;
+  subtitle?: string;
+  kpis: Array<{ title: string; value: string }>;
+  columns?: string[];
+  rows?: (string | number | undefined | null)[][];
+  footerNotes?: string[];
+}
+
 export interface UniversalPrintPayload {
   kind: UniversalDocKind;
   title: string;
@@ -87,12 +97,14 @@ export interface UniversalPrintPayload {
   branch?: string;
   user?: string;
   statusBadge?: string;
+  pricingTierLabel?: string;
   partyName?: string;
   partyCode?: string;
   partyPhone?: string;
   partyAddress?: string;
   partyLabel?: string;
   partyCodeLabel?: string;
+  partyBalanceAfter?: number;
   paymentMethod?: string;
   paymentStatus?: string;
   treasuryOrBank?: string;
@@ -111,7 +123,10 @@ export interface UniversalPrintPayload {
   authorizedBy?: string;
   receivedBy?: string;
   linkedInvoiceNumber?: string | number;
+  originalInvoiceNumber?: string | number;
   isFullReturn?: boolean;
+  returnKindLabel?: string;
+  returnSettlementMode?: string;
   openingBalance?: number;
   closingBalance?: number;
   balanceStatus?: 'مدين' | 'دائن' | 'متزن';
@@ -126,5 +141,8 @@ export interface UniversalPrintPayload {
   footerTermsNote?: string;
   preferredPaperSize?: UniversalPaperSize;
   settings?: Settings;
+  documents?: UniversalPrintPayload[];
+  batchSummary?: UniversalBatchSummary;
+  includeSummarySheet?: boolean;
   onClose?: () => void;
 }

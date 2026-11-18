@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { HomeView } from './components/HomeView';
 import { SalesView } from './components/SalesView';
+import { InvoiceRegistryView } from './components/InvoiceRegistryView';
 import { PurchasesView } from './components/PurchasesView';
 import { CashView } from './components/CashView';
 import { AccountsView } from './components/AccountsView';
@@ -1185,6 +1186,7 @@ export default function App() {
       home: '🏠 لوحة القيادة والتحكم الرئيسية',
       pos: '⚡ نقطة البيع السريعة والكاشير (POS)',
       sales: '💰 إدارة المبيعات والفواتير',
+      invoice_registry: '🗂️ سجل الفواتير المصنف والطباعة المجمعة',
       price_management: '🏷️ إدارة وتسعير المنتجات المركزية (Price Management)',
       company_prices: '🏢 قائمة أسعار الشركات والتصنيفات (Company Prices & Catalog)',
       company_catalog: '🏢 قائمة أسعار الشركات والتصنيفات (Company Prices & Catalog)',
@@ -1275,7 +1277,9 @@ export default function App() {
       case 'pos':
         return <PosView appData={appData} onUpdateData={updateData} showToast={showToast} />;
       case 'sales':
-        return <SalesView appData={appData} onUpdateData={updateData} showToast={showToast} onInspectItem={handleInspectItem} />;
+        return <SalesView appData={appData} onUpdateData={updateData} showToast={showToast} onInspectItem={handleInspectItem} onNavigate={handleNavigate} />;
+      case 'invoice_registry':
+        return <InvoiceRegistryView appData={appData} showToast={showToast} onInspectItem={handleInspectItem} onNavigate={handleNavigate} />;
       case 'price_management':
         return <PriceManagementView appData={appData} onUpdateData={updateData} showToast={showToast} onNavigate={handleNavigate} />;
       case 'company_prices':
@@ -1336,7 +1340,7 @@ export default function App() {
           />
         );
       case 'purchases':
-        return <PurchasesView appData={appData} onUpdateData={updateData} showToast={showToast} onInspectItem={handleInspectItem} />;
+        return <PurchasesView appData={appData} onUpdateData={updateData} showToast={showToast} onInspectItem={handleInspectItem} onNavigate={handleNavigate} />;
       case 'cash':
         return <CashView appData={appData} onUpdateData={updateData} showToast={showToast} onInspectItem={handleInspectItem} initialTab="all" onNavigate={handleNavigate} />;
       case 'receipts':
@@ -1963,12 +1967,7 @@ export default function App() {
               منظومة ركيزة | RAKEEZA ERP
             </span>
             <span className="text-slate-300">|</span>
-            <span>جميع الحقوق محفوظة © {new Date().getFullYear()}</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 font-normal text-slate-600 text-center">
-            <span>تطوير: <strong className="font-medium text-slate-900">Mohamed Nazih</strong></span>
-            <span className="text-slate-300">|</span>
-            <span>للتواصل: <strong className="font-medium text-slate-900 financial-num" dir="ltr">01029190615</strong></span>
+            <span>جميع حقوق الملكية محفوظة لمطور النظام <strong className="font-medium text-slate-900">Mohamed Nazih</strong> ت <strong className="font-medium text-slate-900 financial-num" dir="ltr">01029190615</strong></span>
           </div>
         </div>
       </footer>

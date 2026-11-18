@@ -124,7 +124,8 @@ export function printInvoiceWindow(
   isSales: boolean,
   settings: Settings,
   _showToast?: (msg: string, type: 'warning' | 'error' | 'success' | 'info') => void,
-  preferredPaperSize?: 'A4' | 'A5' | 'thermal' | '80mm' | '58mm'
+  preferredPaperSize?: 'A4' | 'A5' | 'thermal' | '80mm' | '58mm',
+  appData?: import('../types').AppData
 ) {
   const normPaperSize: PaperSize =
     preferredPaperSize === '58mm'
@@ -147,6 +148,7 @@ export function printInvoiceWindow(
     invoice: inv,
     isSales,
     settings,
+    appData,
     preferredPaperSize: normPaperSize,
   });
 }

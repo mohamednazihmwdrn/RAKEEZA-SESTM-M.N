@@ -380,7 +380,7 @@ ${getPrintToolbarHtml('تقرير حركة العمليات اليومية - ' +
 </div>
 
 <div class="copyright-outside">
-  حقوق الملكية محفوظة Mohamed Nazih 01029190615
+  جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
 </div>
 
 ${getPrintToolbarScript()}

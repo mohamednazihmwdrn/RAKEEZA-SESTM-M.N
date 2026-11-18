@@ -6,6 +6,7 @@ import {
   UniversalPaperSize,
   UniversalPrintItem,
   UniversalPrintSummaryItem,
+  UniversalBatchSummary,
 } from '../types/universalPrint';
 import {
   subscribeToUniversalPrint,
@@ -14,7 +15,7 @@ import {
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
 import { tafqeetNumber } from '../utils/tafqeet';
-import { Printer, Download, X, Copy, Check, Eye, ShieldCheck, FileCheck } from 'lucide-react';
+import { Printer, Download, X, Copy, Check, Eye, ShieldCheck, FileCheck, Layers, FileText } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -36,6 +37,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const [activeTab, setActiveTab] = useState<'preview' | 'audit'>('preview');
   const [activePayload, setActivePayload] = useState<UniversalPrintPayload | null>(null);
   const [selectedSize, setSelectedSize] = useState<UniversalPaperSize>('a5-portrait');
+  const [includeBatchSummary, setIncludeBatchSummary] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const printSheetRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     const unsubUniversal = subscribeToUniversalPrint((payload) => {
       setActivePayload(payload);
       setSelectedSize(payload.preferredPaperSize || 'a5-portrait');
+      setIncludeBatchSummary(!!payload.includeSummarySheet);
       setActiveTab('preview');
       setIsOpen(true);
     });
@@ -105,9 +108,15 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         else if (p === '58mm') prefSize = 'thermal-58';
       }
 
+      const isWholesale = (inv as any).salesType === 'wholesale' || (inv as any).purchaseType === 'wholesale';
+
       const docTitle = isSale
         ? fin.isReturn
           ? 'سند مرتجع مبيعات'
+          : isWholesale
+          ? inv.type === 'ajel'
+            ? 'فاتورة مبيعات جملة آجلة'
+            : 'فاتورة مبيعات جملة نقدية'
           : inv.type === 'nagdi'
           ? 'فاتورة مبيعات نقدية'
           : 'فاتورة مبيعات آجلة'
@@ -135,8 +144,9 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         time: inv.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
         branch: (inv as any).branchName || '',
         user: (inv as any).createdBy || (inv as any).cashierName || '',
+        pricingTierLabel: isWholesale ? 'تسعيرة الجملة' : undefined,
         partyName,
-        partyCode: (inv as any).customerId || (inv as any).supplierId || '-',
+        partyCode: (inv as any).customerCode || (inv as any).supplierCode || (inv as any).customerId || (inv as any).supplierId || '-',
         partyPhone: inv.phone || (inv as any).customerPhone || (inv as any).supplierPhone || '-',
         partyAddress: (inv as any).address || (inv as any).customerAddress || (inv as any).supplierAddress || '',
         partyLabel: isSale ? 'اسم العميل' : 'اسم المورد',
@@ -155,6 +165,14 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         notes: inv.notes || '',
         authorizedBy: (inv as any).createdBy || (inv as any).cashierName || 'إدارة الحسابات',
         receivedBy: partyName,
+        originalInvoiceNumber: (inv as any).originalInvoiceId,
+        isFullReturn: (inv as any).returnKind === 'full',
+        returnKindLabel:
+          fin.isReturn && (inv as any).returnKind
+            ? (inv as any).returnKind === 'full'
+              ? 'مرتجع كلي'
+              : 'مرتجع جزئي'
+            : undefined,
         items,
         summaries,
         preferredPaperSize: prefSize,
@@ -164,6 +182,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
       setActivePayload(p);
       setSelectedSize(prefSize);
+      setIncludeBatchSummary(false);
       setActiveTab('preview');
       setIsOpen(true);
     });
@@ -247,7 +266,20 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           padding: 0 !important;
           background: #ffffff !important;
         }
-        #rakeeza-universal-print-sheet {
+        #rakeeza-universal-print-sheet,
+        #rakeeza-batch-print-container {
+          position: static !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+          background: #ffffff !important;
+          gap: 0 !important;
+        }
+        .rakeeza-print-doc-page {
           position: static !important;
           width: 100% !important;
           max-width: 100% !important;
@@ -258,16 +290,25 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           border: none !important;
           background: #ffffff !important;
         }
+        .rakeeza-batch-page-break:not(:last-child) {
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+        .rakeeza-print-doc-page table,
         #rakeeza-universal-print-sheet table {
           width: 100% !important;
           border-collapse: collapse !important;
         }
+        .rakeeza-print-doc-page thead,
         #rakeeza-universal-print-sheet thead {
           display: table-header-group !important;
         }
+        .rakeeza-print-doc-page tfoot,
         #rakeeza-universal-print-sheet tfoot {
           display: table-footer-group !important;
         }
+        .rakeeza-print-doc-page tr,
+        .rakeeza-print-doc-page .print-avoid-break,
         #rakeeza-universal-print-sheet tr,
         #rakeeza-universal-print-sheet .print-avoid-break {
           break-inside: avoid !important;
@@ -328,17 +369,29 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const handleCopySummary = () => {
     if (!activePayload) return;
     const curSymbol = (activePayload.settings || defaultSettings)?.currencySymbol || 'ج.م';
-    const lines = [
-      `المستند: ${activePayload.title} #${activePayload.docNumber || ''}`,
-      `التاريخ: ${activePayload.date || ''} ${activePayload.time || ''}`,
-      `${activePayload.partyLabel || 'الطرف'}: ${activePayload.partyName || '-'}`,
-      `الصافي: ${activePayload.amount !== undefined ? `${Number(activePayload.amount).toFixed(2)} ${curSymbol}` : '-'}`,
-      activePayload.paidAmount !== undefined ? `المدفوع: ${Number(activePayload.paidAmount).toFixed(2)} ${curSymbol}` : '',
-      activePayload.remainingAmount !== undefined ? `المتبقي: ${Number(activePayload.remainingAmount).toFixed(2)} ${curSymbol}` : '',
-      activePayload.amountInWords ? `المبلغ كتابة: ${activePayload.amountInWords}` : '',
-    ].filter(Boolean);
+    if (activePayload.kind === 'batch_invoices' && activePayload.documents) {
+      const lines = [
+        `السجل المجمع: ${activePayload.title}`,
+        `عدد المستندات: ${activePayload.documents.length}`,
+        `التاريخ: ${activePayload.date || ''}`,
+        `الصافي: ${activePayload.amount !== undefined ? `${Number(activePayload.amount).toFixed(2)} ${curSymbol}` : '-'}`,
+        activePayload.paidAmount !== undefined ? `المدفوع/المحصل: ${Number(activePayload.paidAmount).toFixed(2)} ${curSymbol}` : '',
+        activePayload.remainingAmount !== undefined ? `المتبقي: ${Number(activePayload.remainingAmount).toFixed(2)} ${curSymbol}` : '',
+      ].filter(Boolean);
+      navigator.clipboard.writeText(lines.join('\n'));
+    } else {
+      const lines = [
+        `المستند: ${activePayload.title} #${activePayload.docNumber || ''}`,
+        `التاريخ: ${activePayload.date || ''} ${activePayload.time || ''}`,
+        `${activePayload.partyLabel || 'الطرف'}: ${activePayload.partyName || '-'}`,
+        `الصافي: ${activePayload.amount !== undefined ? `${Number(activePayload.amount).toFixed(2)} ${curSymbol}` : '-'}`,
+        activePayload.paidAmount !== undefined ? `المدفوع: ${Number(activePayload.paidAmount).toFixed(2)} ${curSymbol}` : '',
+        activePayload.remainingAmount !== undefined ? `المتبقي: ${Number(activePayload.remainingAmount).toFixed(2)} ${curSymbol}` : '',
+        activePayload.amountInWords ? `المبلغ كتابة: ${activePayload.amountInWords}` : '',
+      ].filter(Boolean);
+      navigator.clipboard.writeText(lines.join('\n'));
+    }
 
-    navigator.clipboard.writeText(lines.join('\n'));
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -348,28 +401,16 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   }
 
   const settings: Settings = activePayload.settings || defaultSettings || ({} as Settings);
-  const companyName = settings.companyName || 'المنظومة المحاسبية';
-  const companyAddress = settings.address || '';
-  const companyTax = settings.taxNumber || '';
-  const companyReg = settings.commercialReg || '';
-  const companyLogo = settings.showLogoInPrint !== false ? (settings as any).logo || (settings as any).logoUrl || '' : '';
-  const branchName = activePayload.branch || '';
-  const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
-
-  const now = new Date();
-  const printDate = activePayload.date || now.toISOString().split('T')[0];
-  const printTime = activePayload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-  const docSerial = activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `${activePayload.docNumber}` : '1';
-
   const currencySymbol = settings.currencySymbol || 'ج.م';
   const currencyName = currencySymbol === 'ج.م' ? 'جنيه مصري' : currencySymbol;
 
-  const totalAmount = activePayload.amount !== undefined ? Number(activePayload.amount) : 0;
-  const tafqeetText =
-    activePayload.amountInWords || (totalAmount > 0 ? tafqeetNumber(totalAmount, currencyName, 'قرش') : '');
-
+  const isBatchMode = activePayload.kind === 'batch_invoices' && Array.isArray(activePayload.documents);
+  const batchDocs = activePayload.documents || [];
+  const docSerial =
+    activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `${activePayload.docNumber}` : '1';
   const isThermal = selectedSize === 'thermal-80' || selectedSize === 'thermal-58';
   const sheetWidthStyle = getSheetWidthStyle(selectedSize);
+  const totalAmount = activePayload.amount !== undefined ? Number(activePayload.amount) : 0;
 
   const modalContent = (
     <div
@@ -382,8 +423,15 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           {/* Title + Close */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
+              {isBatchMode ? (
+                <Layers className="w-5 h-5 text-blue-700 shrink-0" />
+              ) : (
+                <FileText className="w-5 h-5 text-slate-700 shrink-0" />
+              )}
               <h2 className="text-base sm:text-lg font-semibold text-slate-900 truncate">
-                {activePayload.title} ({docSerial})
+                {isBatchMode
+                  ? `${activePayload.title} (${batchDocs.length} مستند مستقل)`
+                  : `${activePayload.title} (${docSerial})`}
               </h2>
             </div>
 
@@ -410,7 +458,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               }`}
             >
               <Eye className="w-4 h-4" />
-              <span>معاينة المستند</span>
+              <span>{isBatchMode ? `معاينة المستندات (${batchDocs.length})` : 'معاينة المستند'}</span>
             </button>
 
             <button
@@ -425,6 +473,22 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>التدقيق</span>
             </button>
+
+            {isBatchMode && activePayload.batchSummary && (
+              <button
+                type="button"
+                onClick={() => setIncludeBatchSummary((prev) => !prev)}
+                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-1.5 transition cursor-pointer border ${
+                  includeBatchSummary
+                    ? 'bg-emerald-700 border-emerald-700 text-white'
+                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                }`}
+                title="إضافة ورقة ملخص مالي للسجل في نهاية المستندات المطبوعة"
+              >
+                <Layers className="w-4 h-4" />
+                <span>{includeBatchSummary ? 'الملخص مفعّل ✓' : 'تضمين ملخص السجل'}</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -470,101 +534,99 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         </div>
 
         {/* Paper Size Selector Row */}
-        <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <span className="text-xs font-medium text-slate-600 ml-1">حجم الورق:</span>
-          {PAPER_SIZE_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => setSelectedSize(opt.id)}
-              className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer border ${
-                selectedSize === opt.id
-                  ? 'bg-blue-700 border-blue-700 text-white'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-xs font-medium text-slate-600 ml-1">حجم الورق:</span>
+            {PAPER_SIZE_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSelectedSize(opt.id)}
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer border ${
+                  selectedSize === opt.id
+                    ? 'bg-blue-700 border-blue-700 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {isBatchMode && (
+            <div className="text-xs text-slate-600 font-medium tabular-nums">
+              وضع الطباعة المجمعة: كل فاتورة تطبع كمستند مستقل بفواصل صفحات تلقائية
+            </div>
+          )}
         </div>
       </div>
 
       {/* Scrollable Preview Sheet Area */}
       <div className="rakeeza-print-scroll-wrap flex-1 overflow-auto p-2 sm:p-6 flex justify-center items-start bg-slate-200/90">
         {activeTab === 'preview' ? (
-          <div
-            id="rakeeza-universal-print-sheet"
-            ref={printSheetRef}
-            style={sheetWidthStyle}
-            className={`bg-white text-slate-900 shadow-md border border-slate-300 flex flex-col justify-between ${
-              isThermal ? 'p-2.5 text-[11px]' : 'p-4 sm:p-6 text-xs sm:text-[13px]'
-            }`}
-          >
-            <div>
-              {/* 1. Dynamic Company Header */}
-              <div
-                className={`flex ${
-                  isThermal ? 'flex-col items-center text-center gap-1.5' : 'justify-between items-start gap-4'
-                } pb-3 border-b border-slate-300`}
-              >
-                <div className={`flex items-start gap-3 ${isThermal ? 'flex-col items-center' : ''}`}>
-                  {companyLogo && (
-                    <img
-                      src={companyLogo}
-                      alt={companyName}
-                      className={`${isThermal ? 'h-12' : 'h-14 w-auto max-w-[110px]'} object-contain shrink-0`}
+          isBatchMode ? (
+            <div
+              id="rakeeza-batch-print-container"
+              ref={printSheetRef}
+              className="w-full flex flex-col items-center gap-5"
+            >
+              {batchDocs.map((docPayload, idx) => {
+                const docSettings: Settings = docPayload.settings || settings;
+                const docCur = docSettings.currencySymbol || currencySymbol;
+                return (
+                  <div
+                    key={`${docPayload.docNumber || idx}-${idx}`}
+                    style={sheetWidthStyle}
+                    className={`rakeeza-print-doc-page rakeeza-batch-page-break bg-white text-slate-900 shadow-md border border-slate-300 flex flex-col justify-between ${
+                      isThermal ? 'p-2.5 text-[11px]' : 'p-4 sm:p-6 text-xs sm:text-[13px]'
+                    }`}
+                  >
+                    <InvoiceDocumentSheet
+                      payload={docPayload}
+                      settings={docSettings}
+                      currencySymbol={docCur}
+                      currencyName={docCur === 'ج.م' ? 'جنيه مصري' : docCur}
+                      isThermal={isThermal}
+                      batchPositionLabel={`مستند ${idx + 1} من ${batchDocs.length}`}
                     />
-                  )}
-                  <div className={isThermal ? 'text-center' : 'text-right'}>
-                    <h1 className={`${isThermal ? 'text-sm' : 'text-lg sm:text-xl'} font-semibold text-slate-900 leading-tight`}>
-                      {companyName}
-                    </h1>
-                    {branchName && (
-                      <p className="text-xs text-slate-600 mt-0.5">{branchName}</p>
-                    )}
-                    {companyAddress && (
-                      <p className="text-[11px] text-slate-600 mt-0.5">{companyAddress}</p>
-                    )}
-                    {(companyTax || companyReg) && (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-1">
-                        {companyTax && (
-                          <span>
-                            الرقم الضريبي: <span className="financial-num">{companyTax}</span>
-                          </span>
-                        )}
-                        {companyReg && (
-                          <span>
-                            السجل التجاري: <span className="financial-num">{companyReg}</span>
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
+                );
+              })}
+
+              {includeBatchSummary && activePayload.batchSummary && (
+                <div
+                  style={sheetWidthStyle}
+                  className={`rakeeza-print-doc-page rakeeza-batch-page-break bg-white text-slate-900 shadow-md border border-slate-300 flex flex-col justify-between ${
+                    isThermal ? 'p-2.5 text-[11px]' : 'p-4 sm:p-6 text-xs sm:text-[13px]'
+                  }`}
+                >
+                  <BatchSummaryDocumentSheet
+                    summary={activePayload.batchSummary}
+                    settings={settings}
+                    currencySymbol={currencySymbol}
+                    isThermal={isThermal}
+                  />
                 </div>
-
-                {/* Company Contact Phones */}
-                {phones.length > 0 && (
-                  <div className={`${isThermal ? 'text-center' : 'text-left'} text-[11px] sm:text-xs text-slate-700 shrink-0`}>
-                    {phones.map((ph, i) => (
-                      <div key={i} className="financial-num" dir="ltr">
-                        {phones.length > 1 ? `هاتف ${i + 1}: ` : 'هاتف: '}
-                        {ph}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Metadata Grid (Strict Customer vs Supplier & Doc Info) */}
-              {renderDocumentMetaBox(activePayload, docSerial, printDate, printTime, isThermal)}
-
-              {/* 3. Document Body */}
-              {renderDocumentBody(activePayload, currencySymbol, isThermal)}
-
-              {/* 4. Financial Summary, Payment Details, Signatures & Footer */}
-              {renderDocumentFooterSummary(activePayload, currencySymbol, tafqeetText, settings, isThermal)}
+              )}
             </div>
-          </div>
+          ) : (
+            <div
+              id="rakeeza-universal-print-sheet"
+              ref={printSheetRef}
+              style={sheetWidthStyle}
+              className={`rakeeza-print-doc-page bg-white text-slate-900 shadow-md border border-slate-300 flex flex-col justify-between ${
+                isThermal ? 'p-2.5 text-[11px]' : 'p-4 sm:p-6 text-xs sm:text-[13px]'
+              }`}
+            >
+              <InvoiceDocumentSheet
+                payload={activePayload}
+                settings={settings}
+                currencySymbol={currencySymbol}
+                currencyName={currencyName}
+                isThermal={isThermal}
+              />
+            </div>
+          )
         ) : (
           /* Tab 2: Audit & Accounting Verification Panel */
           <div className="bg-white text-slate-900 p-4 sm:p-6 rounded-xl shadow-md max-w-2xl w-full border border-slate-200">
@@ -572,10 +634,12 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
                 <h3 className="text-base sm:text-lg font-semibold text-slate-900">
-                  التدقيق والتوثيق المحاسبي للمستند ({docSerial})
+                  {isBatchMode
+                    ? `التدقيق والتوثيق المحاسبي للسجل (${batchDocs.length} مستند)`
+                    : `التدقيق والتوثيق المحاسبي للمستند (${docSerial})`}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  مراجعة بيانات المستند والأثر المالي وحالة السداد
+                  مراجعة القراءة المحاسبية دون أي تعديل على الأرصدة أو القيود المسجلة
                 </p>
               </div>
             </div>
@@ -584,38 +648,52 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-lg flex items-center gap-2">
                 <Check className="w-5 h-5 text-emerald-700 shrink-0" />
                 <div>
-                  <strong className="font-semibold">الحالة المحاسبية: </strong>
-                  <span>المستند موثق ومتوازن وفق قيود اليومية وسجلات الخزينة.</span>
+                  <strong className="font-semibold">وضع القراءة الآمن (Read-Only): </strong>
+                  <span>عملية المعاينة والطباعة لا تنشئ قيوداً مكررة ولا تؤثر على الخزينة أو المخزون.</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
                 <div>
-                  <span className="text-slate-500 text-xs block">نوع المستند:</span>
+                  <span className="text-slate-500 text-xs block">نوع المستند / السجل:</span>
                   <span className="font-medium text-slate-900">{activePayload.title}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 text-xs block">الرقم المرجعي:</span>
-                  <span className="font-medium text-slate-900 financial-num">#{docSerial}</span>
+                  <span className="text-slate-500 text-xs block">
+                    {isBatchMode ? 'عدد المستندات المستقلة:' : 'الرقم المرجعي:'}
+                  </span>
+                  <span className="font-medium text-slate-900 financial-num">
+                    {isBatchMode ? `${batchDocs.length} مستند` : `#${docSerial}`}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-500 text-xs block">التاريخ والوقت:</span>
-                  <span className="font-medium text-slate-900 financial-num">{printDate} — {printTime}</span>
+                  <span className="font-medium text-slate-900 financial-num">
+                    {activePayload.date || '-'} — {activePayload.time || '-'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 text-xs block">طريقة السداد:</span>
-                  <span className="font-medium text-slate-900">{activePayload.paymentMethod || 'كاش / نقدي'}</span>
+                  <span className="text-slate-500 text-xs block">
+                    {isBatchMode ? 'طريقة الإخراج:' : 'طريقة السداد:'}
+                  </span>
+                  <span className="font-medium text-slate-900">
+                    {isBatchMode ? 'مستندات متتالية بفواصل صفحات' : activePayload.paymentMethod || 'كاش / نقدي'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 text-xs block">الصافي المستحق:</span>
+                  <span className="text-slate-500 text-xs block">
+                    {isBatchMode ? 'صافي قيمة السجل:' : 'الصافي المستحق:'}
+                  </span>
                   <span className="font-semibold text-slate-900 financial-num">
                     {totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} {currencySymbol}
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-500 text-xs block">حالة السداد:</span>
-                  <span className="font-medium text-slate-900">{activePayload.paymentStatus || 'معتمد'}</span>
-                </div>
+                {!isBatchMode && (
+                  <div>
+                    <span className="text-slate-500 text-xs block">حالة السداد:</span>
+                    <span className="font-medium text-slate-900">{activePayload.paymentStatus || 'معتمد'}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border border-slate-200 rounded-lg p-3.5">
@@ -626,15 +704,15 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 <ul className="space-y-1.5 text-xs text-slate-700">
                   <li className="flex items-center gap-2">
                     <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>تطبيق قاعدة القيد المزدوج (Double-Entry Ledger).</span>
+                    <span>البيانات مستخرجة مباشرة من السجل المحاسبي دون تعديل.</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>منع تكرار السندات والخصم المزدوج من الخزينة.</span>
+                    <span>فصل بيانات العملاء عن الموردين ومنع تداخل الفئات المحاسبية.</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>مطابقة المدفوع والمتبقي مع حساب الطرف والخزينة.</span>
+                    <span>توثيق تسوية المرتجعات ومرجعية الفواتير الأصلية عند وجودها.</span>
                   </li>
                 </ul>
               </div>
@@ -656,6 +734,182 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   );
 
   return createPortal(modalContent, document.body);
+};
+
+interface InvoiceDocumentSheetProps {
+  payload: UniversalPrintPayload;
+  settings: Settings;
+  currencySymbol: string;
+  currencyName: string;
+  isThermal: boolean;
+  batchPositionLabel?: string;
+}
+
+const InvoiceDocumentSheet: React.FC<InvoiceDocumentSheetProps> = ({
+  payload,
+  settings,
+  currencySymbol,
+  currencyName,
+  isThermal,
+  batchPositionLabel,
+}) => {
+  const companyName = settings.companyName || 'المنظومة المحاسبية';
+  const companyAddress = settings.address || '';
+  const companyTax = settings.taxNumber || '';
+  const companyReg = settings.commercialReg || '';
+  const companyLogo =
+    settings.showLogoInPrint !== false ? (settings as any).logo || (settings as any).logoUrl || '' : '';
+  const branchName = payload.branch || '';
+  const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
+
+  const now = new Date();
+  const printDate = payload.date || now.toISOString().split('T')[0];
+  const printTime = payload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const docSerial = payload.docNumber !== undefined && payload.docNumber !== '' ? `${payload.docNumber}` : '1';
+  const totalAmount = payload.amount !== undefined ? Number(payload.amount) : 0;
+  const tafqeetText =
+    payload.amountInWords || (totalAmount > 0 ? tafqeetNumber(totalAmount, currencyName, 'قرش') : '');
+
+  return (
+    <div className="flex flex-col justify-between flex-1">
+      <div>
+        {/* 1. Dynamic Company Header */}
+        <div
+          className={`flex ${
+            isThermal ? 'flex-col items-center text-center gap-1.5' : 'justify-between items-start gap-4'
+          } pb-2.5 border-b-2 border-slate-800`}
+        >
+          <div className={`flex items-start gap-3 ${isThermal ? 'flex-col items-center' : ''}`}>
+            {companyLogo && (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                className={`${isThermal ? 'h-12' : 'h-14 w-auto max-w-[110px]'} object-contain shrink-0`}
+              />
+            )}
+            <div className={isThermal ? 'text-center' : 'text-right'}>
+              <h1 className={`${isThermal ? 'text-sm' : 'text-lg sm:text-xl'} font-semibold text-slate-900 leading-tight`}>
+                {companyName}
+              </h1>
+              {branchName && <p className="text-xs text-slate-600 mt-0.5">{branchName}</p>}
+              {companyAddress && <p className="text-[11px] text-slate-600 mt-0.5">{companyAddress}</p>}
+              {(companyTax || companyReg) && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-1">
+                  {companyTax && (
+                    <span>
+                      الرقم الضريبي: <span className="financial-num">{companyTax}</span>
+                    </span>
+                  )}
+                  {companyReg && (
+                    <span>
+                      السجل التجاري: <span className="financial-num">{companyReg}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Company Contact Phones & Batch Index */}
+          <div className={`${isThermal ? 'text-center' : 'text-left'} text-[11px] sm:text-xs text-slate-700 shrink-0`}>
+            {phones.map((ph, i) => (
+              <div key={i} className="financial-num" dir="ltr">
+                {phones.length > 1 ? `هاتف ${i + 1}: ` : 'هاتف: '}
+                {ph}
+              </div>
+            ))}
+            {batchPositionLabel && (
+              <div className="text-[10px] text-slate-500 mt-0.5 tabular-nums">{batchPositionLabel}</div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. Metadata Grid (Strict Customer vs Supplier & Doc Info) */}
+        {renderDocumentMetaBox(payload, docSerial, printDate, printTime, isThermal)}
+
+        {/* 3. Document Body */}
+        {renderDocumentBody(payload, currencySymbol, isThermal)}
+      </div>
+
+      {/* 4. Financial Summary, Payment Details, Signatures & Footer */}
+      {renderDocumentFooterSummary(payload, currencySymbol, tafqeetText, settings, isThermal)}
+    </div>
+  );
+};
+
+const BatchSummaryDocumentSheet: React.FC<{
+  summary: UniversalBatchSummary;
+  settings: Settings;
+  currencySymbol: string;
+  isThermal: boolean;
+}> = ({ summary, settings, isThermal }) => {
+  const companyName = settings.companyName || 'المنظومة المحاسبية';
+  return (
+    <div className="flex flex-col justify-between flex-1">
+      <div>
+        <div className="flex justify-between items-start gap-4 pb-2.5 border-b-2 border-slate-800">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">{companyName}</h1>
+            <p className="text-sm font-medium text-slate-700 mt-0.5">{summary.title}</p>
+            {summary.subtitle && <p className="text-xs text-slate-500 mt-0.5">{summary.subtitle}</p>}
+          </div>
+          <div className="text-left text-xs text-slate-600 tabular-nums">
+            <div>تاريخ الطباعة: {new Date().toISOString().split('T')[0]}</div>
+          </div>
+        </div>
+
+        <div className={`grid ${isThermal ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'} gap-2 my-3`}>
+          {summary.kpis.map((k, i) => (
+            <div key={i} className="border border-slate-300 rounded p-2 bg-slate-50 text-center">
+              <div className="text-[11px] text-slate-500">{k.title}</div>
+              <div className="text-xs sm:text-sm font-semibold text-slate-900 mt-0.5 financial-num">{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {summary.columns && summary.rows && (
+          <div className="overflow-x-auto my-2">
+            <table className="w-full border-collapse border border-slate-300 text-[11px]">
+              <thead>
+                <tr className="bg-slate-100">
+                  {summary.columns.map((c, idx) => (
+                    <th key={idx} className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center">
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {summary.rows.map((row, rIdx) => (
+                  <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
+                    {row.map((cell, cIdx) => (
+                      <td
+                        key={cIdx}
+                        className={`border border-slate-300 px-1.5 py-1 text-center ${
+                          typeof cell === 'number' || cIdx >= 5 ? 'financial-num font-medium' : ''
+                        }`}
+                      >
+                        {cell !== null && cell !== undefined ? cell : '-'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-dashed border-slate-300 mt-4 pt-2 text-center space-y-1">
+        {summary.footerNotes?.map((n, i) => (
+          <div key={i} className="text-[11px] text-slate-600">{n}</div>
+        ))}
+        <div className="text-[10px] text-slate-500">
+          منظومة ركيزة المحاسبية | RAKEEZA ERP — {settings.phone1 || '01029190615'}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 function getSheetWidthStyle(size: UniversalPaperSize): React.CSSProperties {
@@ -692,10 +946,10 @@ function renderDocumentMetaBox(
 
   return (
     <div
-      className={`border border-slate-300 rounded my-2.5 bg-slate-50/70 text-slate-900 print-avoid-break ${
+      className={`border border-slate-800 rounded-sm my-2.5 bg-slate-50/50 text-slate-900 print-avoid-break ${
         isThermal
           ? 'p-2 flex flex-col gap-1.5 text-[11px]'
-          : 'p-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2.5 divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-slate-300 text-xs'
+          : 'p-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2.5 divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-dashed divide-slate-400 text-xs'
       }`}
     >
       {/* Party Info (Customer vs Supplier strictly distinguished) */}
@@ -732,8 +986,17 @@ function renderDocumentMetaBox(
         <div className="font-semibold text-sm sm:text-base text-slate-900 mt-0.5 financial-num">
           رقم: {docSerial}
         </div>
-        {payload.paymentStatus && (
-          <div className="text-[11px] text-slate-600 mt-0.5">{payload.paymentStatus}</div>
+        {payload.pricingTierLabel && (
+          <div className="text-[11px] font-medium text-indigo-800 mt-0.5">{payload.pricingTierLabel}</div>
+        )}
+        {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
+          <div className="text-[11px] font-medium text-rose-800 mt-0.5 financial-num">
+            مرجع الفاتورة الأصلية: #{payload.originalInvoiceNumber}
+            {payload.returnKindLabel ? ` · ${payload.returnKindLabel}` : ''}
+          </div>
+        )}
+        {!payload.originalInvoiceNumber && payload.returnKindLabel && (
+          <div className="text-[11px] font-medium text-rose-800 mt-0.5">{payload.returnKindLabel}</div>
         )}
       </div>
 
@@ -751,6 +1014,12 @@ function renderDocumentMetaBox(
           <div>
             <span className="text-slate-500">المستخدم: </span>
             <span className="font-medium">{payload.user}</span>
+          </div>
+        )}
+        {payload.paymentStatus && (
+          <div>
+            <span className="text-slate-500">الحالة: </span>
+            <span className="font-medium">{payload.paymentStatus}</span>
           </div>
         )}
       </div>
@@ -865,43 +1134,42 @@ function renderDocumentBody(payload: UniversalPrintPayload, curSymbol: string, i
   }
 
   // 3. Invoice Items List: Strict 7 RTL Columns for A4/A5, compact 4 columns for thermal
-  // 1. رقم | 2. اسم الصنف | 3. البيان / الوصف | 4. الكمية | 5. الوحدة | 6. السعر | 7. الإجمالي
   const items = payload.items || [];
 
   if (isThermal) {
     return (
-      <table className="w-full border-collapse border border-slate-300 my-2 text-[10.5px]">
+      <table className="w-full border-collapse border border-slate-400 my-2 text-[10.5px]">
         <thead>
           <tr className="bg-slate-100">
-            <th className="border border-slate-300 p-1 font-semibold text-right">الصنف</th>
-            <th className="border border-slate-300 p-1 font-semibold text-center">ك</th>
-            <th className="border border-slate-300 p-1 font-semibold text-center">السعر</th>
-            <th className="border border-slate-300 p-1 font-semibold text-center">الإجمالي</th>
+            <th className="border border-slate-400 p-1 font-semibold text-right">الصنف</th>
+            <th className="border border-slate-400 p-1 font-semibold text-center">ك</th>
+            <th className="border border-slate-400 p-1 font-semibold text-center">السعر</th>
+            <th className="border border-slate-400 p-1 font-semibold text-center">الإجمالي</th>
           </tr>
         </thead>
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td colSpan={4} className="text-center text-slate-500 py-3 border border-slate-300">
+              <td colSpan={4} className="text-center text-slate-500 py-3 border border-slate-400">
                 لا توجد أصناف
               </td>
             </tr>
           ) : (
             items.map((it, idx) => (
               <tr key={idx}>
-                <td className="border border-slate-300 p-1 text-right font-medium text-slate-900">
+                <td className="border border-slate-400 p-1 text-right font-medium text-slate-900">
                   <div>{it.name}</div>
                   {it.notes && it.notes !== '-' && (
                     <div className="text-[9.5px] text-slate-500">{it.notes}</div>
                   )}
                 </td>
-                <td className="border border-slate-300 p-1 text-center financial-num">
+                <td className="border border-slate-400 p-1 text-center financial-num">
                   {it.qty}
                 </td>
-                <td className="border border-slate-300 p-1 text-center financial-num">
+                <td className="border border-slate-400 p-1 text-center financial-num">
                   {Number(it.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </td>
-                <td className="border border-slate-300 p-1 text-center font-semibold financial-num">
+                <td className="border border-slate-400 p-1 text-center font-semibold financial-num">
                   {Number(it.total).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -914,28 +1182,28 @@ function renderDocumentBody(payload: UniversalPrintPayload, curSymbol: string, i
 
   return (
     <div className="overflow-x-auto my-2.5">
-      <table className="w-full border-collapse border border-slate-300 text-xs">
+      <table className="w-full border-collapse border border-slate-700 text-xs">
         <thead>
           <tr className="bg-slate-100">
-            <th className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center w-[7%]">
+            <th className="border border-slate-700 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[7%]">
               رقم
             </th>
-            <th className="border border-slate-300 px-2 py-1.5 font-semibold text-slate-800 text-right w-[27%]">
+            <th className="border border-slate-700 px-2 py-1.5 font-semibold text-slate-900 text-right w-[27%]">
               اسم الصنف
             </th>
-            <th className="border border-slate-300 px-2 py-1.5 font-semibold text-slate-800 text-right w-[22%]">
+            <th className="border border-slate-700 px-2 py-1.5 font-semibold text-slate-900 text-right w-[22%]">
               البيان / الوصف
             </th>
-            <th className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center w-[10%]">
+            <th className="border border-slate-700 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[10%]">
               الكمية
             </th>
-            <th className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center w-[10%]">
+            <th className="border border-slate-700 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[10%]">
               الوحدة
             </th>
-            <th className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center w-[12%]">
+            <th className="border border-slate-700 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[12%]">
               السعر
             </th>
-            <th className="border border-slate-300 px-1.5 py-1.5 font-semibold text-slate-800 text-center w-[12%]">
+            <th className="border border-slate-700 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[12%]">
               الإجمالي
             </th>
           </tr>
@@ -943,33 +1211,33 @@ function renderDocumentBody(payload: UniversalPrintPayload, curSymbol: string, i
         <tbody>
           {items.length === 0 ? (
             <tr>
-              <td colSpan={7} className="text-center text-slate-500 py-4 border border-slate-300">
+              <td colSpan={7} className="text-center text-slate-500 py-4 border border-slate-700">
                 لا توجد أصناف في هذه الفاتورة
               </td>
             </tr>
           ) : (
             items.map((it, idx) => (
-              <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'}>
-                <td className="border border-slate-300 px-1.5 py-1.5 text-center text-slate-600 financial-num">
+              <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}>
+                <td className="border border-slate-700 px-1.5 py-1.5 text-center text-slate-600 financial-num">
                   {it.index ?? idx + 1}
                 </td>
-                <td className="border border-slate-300 px-2 py-1.5 text-right font-medium text-slate-900">
+                <td className="border border-slate-700 px-2 py-1.5 text-right font-medium text-slate-900">
                   {it.name}
                 </td>
-                <td className="border border-slate-300 px-2 py-1.5 text-right text-slate-600">
+                <td className="border border-slate-700 px-2 py-1.5 text-right text-slate-600">
                   {it.notes || '-'}
                 </td>
-                <td className="border border-slate-300 px-1.5 py-1.5 text-center font-medium text-slate-900 financial-num">
+                <td className="border border-slate-700 px-1.5 py-1.5 text-center font-medium text-slate-900 financial-num">
                   {it.qty}
                 </td>
-                <td className="border border-slate-300 px-1.5 py-1.5 text-center text-slate-700">
+                <td className="border border-slate-700 px-1.5 py-1.5 text-center text-slate-700">
                   {it.unit || 'قطعة'}
                 </td>
-                <td className="border border-slate-300 px-1.5 py-1.5 text-center text-slate-800 financial-num">
-                  {Number(it.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <td className="border border-slate-700 px-1.5 py-1.5 text-center text-slate-800 financial-num">
+                  {Number(it.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </td>
-                <td className="border border-slate-300 px-1.5 py-1.5 text-center font-semibold text-slate-900 financial-num">
-                  {Number(it.total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <td className="border border-slate-700 px-1.5 py-1.5 text-center font-semibold text-slate-900 financial-num">
+                  {Number(it.total).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             ))
@@ -1003,11 +1271,12 @@ function renderDocumentFooterSummary(
     payload.paymentStatus ||
     (remainingAmount <= 0.01 ? 'مدفوعة بالكامل' : paidAmount > 0 ? 'مدفوعة جزئياً' : 'آجل / مستحقة');
 
+  const isReturnDoc = payload.kind === 'sales_return' || payload.kind === 'purchase_return';
+  const isPurchaseDoc = payload.kind === 'purchase_invoice' || payload.kind === 'purchase_return';
   const isInvoiceDoc =
     payload.kind === 'sales_invoice' ||
     payload.kind === 'purchase_invoice' ||
-    payload.kind === 'sales_return' ||
-    payload.kind === 'purchase_return';
+    isReturnDoc;
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -1018,19 +1287,21 @@ function renderDocumentFooterSummary(
         <div
           className={`grid ${
             isThermal ? 'grid-cols-1 gap-2' : 'grid-cols-1 sm:grid-cols-2 gap-3'
-          } border border-slate-300 rounded p-2.5 bg-slate-50/60`}
+          } border-t-2 border-slate-800 pt-2.5`}
         >
           {/* Payment Metadata */}
           <div className="space-y-1 text-xs">
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">عدد البنود / الكميات:</span>
+              <span className="text-slate-500">إجمالي عدد الأصناف / الكميات:</span>
               <span className="font-medium financial-num">
                 {items.length} صنف / {totalQty} وحدة
               </span>
             </div>
-            <div className="flex justify-between gap-2">
+            <div className="flex justify-between gap-2 items-center">
               <span className="text-slate-500">طريقة الدفع:</span>
-              <span className="font-medium">{paymentMethod}</span>
+              <span className="font-medium border border-slate-700 rounded px-2 py-0.5 bg-slate-50">
+                {paymentMethod}
+              </span>
             </div>
             <div className="flex justify-between gap-2">
               <span className="text-slate-500">حالة الدفع:</span>
@@ -1040,6 +1311,31 @@ function renderDocumentFooterSummary(
               <div className="flex justify-between gap-2">
                 <span className="text-slate-500">الخزينة / الحساب:</span>
                 <span className="font-medium">{payload.treasuryOrBank}</span>
+              </div>
+            )}
+            {isReturnDoc && payload.returnSettlementMode && (
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">معالجة المرتجع:</span>
+                <span className="font-medium text-rose-800">{payload.returnSettlementMode}</span>
+              </div>
+            )}
+            {payload.partyBalanceAfter !== undefined && (
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">
+                  {isPurchaseDoc ? 'رصيد المورد الحالي:' : 'رصيد العميل الحالي:'}
+                </span>
+                <span className="font-semibold financial-num">
+                  {fmt(Math.abs(payload.partyBalanceAfter))} {curSymbol}{' '}
+                  {payload.partyBalanceAfter === 0
+                    ? '(متزن)'
+                    : isPurchaseDoc
+                    ? payload.partyBalanceAfter > 0
+                      ? '(له)'
+                      : '(عليه)'
+                    : payload.partyBalanceAfter > 0
+                    ? '(عليه)'
+                    : '(له)'}
+                </span>
               </div>
             )}
           </div>
@@ -1068,16 +1364,20 @@ function renderDocumentFooterSummary(
                 <span className="font-medium financial-num">+{fmt(extraCharges)} {curSymbol}</span>
               </div>
             )}
-            <div className="flex justify-between gap-2 pt-1 border-t border-slate-300 font-semibold text-sm">
-              <span>الصافي المستحق:</span>
+            <div className="flex justify-between gap-2 pt-1 border-t border-dashed border-slate-400 font-semibold text-sm">
+              <span>{isReturnDoc ? 'إجمالي قيمة المرتجع:' : 'إجمالي الفاتورة:'}</span>
               <span className="financial-num">{fmt(netTotal)} {curSymbol}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">المبلغ المدفوع:</span>
+              <span className="text-slate-500">
+                {isReturnDoc ? 'المردود نقداً:' : isPurchaseDoc ? 'المدفوع:' : 'المحصل:'}
+              </span>
               <span className="font-medium text-emerald-700 financial-num">{fmt(paidAmount)} {curSymbol}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">المتبقي المستحق:</span>
+              <span className="text-slate-500">
+                {isReturnDoc ? 'المخصوم من الحساب:' : 'المتبقي:'}
+              </span>
               <span className={`font-semibold financial-num ${remainingAmount > 0 ? 'text-rose-700' : 'text-slate-700'}`}>
                 {fmt(remainingAmount)} {curSymbol}
               </span>
@@ -1114,21 +1414,21 @@ function renderDocumentFooterSummary(
 
       {/* Signatures */}
       {!isThermal && (
-        <div className="grid grid-cols-3 gap-3 text-center text-[11px] text-slate-700 mt-5 pt-3 border-t border-slate-200">
+        <div className="grid grid-cols-3 gap-3 text-center text-[11px] text-slate-700 mt-4 pt-2.5 border-t border-slate-200">
           <div>
-            <div className="font-medium text-slate-600 mb-4">المسؤول / المحاسب</div>
+            <div className="font-medium text-slate-600 mb-3">المسؤول / المحاسب</div>
             <div className="border-t border-dashed border-slate-300 pt-1 text-slate-500">
               {payload.authorizedBy || 'التوقيع'}
             </div>
           </div>
           <div>
-            <div className="font-medium text-slate-600 mb-4">المستلم</div>
+            <div className="font-medium text-slate-600 mb-3">المستلم</div>
             <div className="border-t border-dashed border-slate-300 pt-1 text-slate-500">
               {payload.receivedBy || 'التوقيع'}
             </div>
           </div>
           <div>
-            <div className="font-medium text-slate-600 mb-4">ختم المنشأة</div>
+            <div className="font-medium text-slate-600 mb-3">ختم المنشأة</div>
             <div className="border-t border-dashed border-slate-300 pt-1 text-slate-400">
               الختم الرسمي
             </div>
@@ -1137,12 +1437,12 @@ function renderDocumentFooterSummary(
       )}
 
       {/* Footer Policy & Quiet Copyright */}
-      <div className="border-t border-dashed border-slate-300 mt-3 pt-2 text-center space-y-0.5">
+      <div className="border-t border-dashed border-slate-400 mt-3 pt-2 text-center space-y-0.5">
         <div className="text-[11px] font-medium text-slate-700">
-          {payload.footerTermsNote || settings.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل وفقاً لشروط الفاتورة وحالتها الأصلية'}
+          {payload.footerTermsNote || settings.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية'}
         </div>
         <div className="text-[10px] text-slate-500">
-          منظومة ركيزة المحاسبية | RAKEEZA ERP — {settings.phone1 || '01029190615'}
+          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
         </div>
       </div>
     </div>

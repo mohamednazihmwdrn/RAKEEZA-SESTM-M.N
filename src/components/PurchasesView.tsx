@@ -20,6 +20,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ShieldCheck,
+  Layers,
 } from 'lucide-react';
 import { AppData, PurchaseInvoice, InvoiceItem } from '../types';
 import { Modal } from './Modal';
@@ -41,9 +42,10 @@ interface PurchasesViewProps {
   onUpdateData: (newData: AppData, actionInfo?: { action?: string; module?: string; details?: string; deletedId?: string | number }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onInspectItem?: (type: string, data: any) => void;
+  onNavigate?: (page: string) => void;
 }
 
-export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateData, showToast }) => {
+export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateData, showToast, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
   const [selectedBranchId, setSelectedBranchId] = useState<string>(appData.activeBranchId || appData.branches?.[0]?.id || 'main');
@@ -648,7 +650,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
   };
 
   const handlePrintInvoice = (inv: PurchaseInvoice, preferredFormat: 'A5' | 'A4' | 'thermal' = 'A5') => {
-    printInvoiceWindow(inv, false, appData.settings, showToast, preferredFormat);
+    printInvoiceWindow(inv, false, appData.settings, showToast, preferredFormat, appData);
   };
 
   // Print Purchases List
@@ -877,6 +879,18 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             printTitle="طباعة سجل فواتير المشتريات"
             exportTitle="تصدير المشتريات إلى Excel"
           />
+
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('invoice_registry')}
+              className="min-h-[44px] sm:min-h-[40px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+              title="فتح سجل الفواتير المصنف والطباعة المجمعة (Mode B)"
+            >
+              <Layers className="w-4 h-4 shrink-0" />
+              <span>السجل المصنف والطباعة</span>
+            </button>
+          )}
         </div>
         <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
           {appData.branches && appData.branches.length > 1 && (

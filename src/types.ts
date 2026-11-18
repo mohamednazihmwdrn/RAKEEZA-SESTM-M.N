@@ -286,6 +286,7 @@ export interface InvoiceItem {
   taxValue?: number; // القيمة المدخلة للضريبة
   batchNumber?: string;
   serialNumber?: string;
+  unit?: string;
   priceType?: 'cash' | 'wholesale' | 'custom';
   priceSource?: 'price_management' | 'manual_override';
 }
@@ -293,6 +294,8 @@ export interface InvoiceItem {
 export interface SaleInvoice {
   id: number;
   clientSyncId?: string;
+  customerId?: string;
+  customerCode?: string;
   customerName: string;
   phone?: string;
   customerRepId?: string;
@@ -325,6 +328,9 @@ export interface SaleInvoice {
   salesType?: 'cash' | 'wholesale'; // نوع البيع: نقدي أو جملة لتحديد التسعيرة المطبقة
   paidAmount: number;
   remainingAmount: number;
+  originalInvoiceId?: number;
+  returnKind?: 'full' | 'partial';
+  classificationStatus?: 'classified' | 'needs_review';
   createdAt: string;
   createdBy: string;
   createdByUserId?: string;
@@ -335,6 +341,7 @@ export interface SaleInvoice {
   cancelledBy?: string;
   companyId?: string;
   branchId?: string;
+  branchName?: string;
   warehouseId?: string;
   costCenter?: string;
   status?: 'draft' | 'approved' | 'cancelled';
@@ -346,6 +353,8 @@ export interface SaleInvoice {
 export interface PurchaseInvoice {
   id: number;
   clientSyncId?: string;
+  supplierId?: string;
+  supplierCode?: string;
   supplierName: string;
   phone?: string;
   supplierRepId?: string;
@@ -372,8 +381,12 @@ export interface PurchaseInvoice {
   paymentMethod: 'drawer' | 'vodafone' | 'instapay' | 'bank' | 'split';
   paymentSplits?: { method: string; amount: number }[];
   type: 'nagdi' | 'ajel' | 'return_nagdi' | 'return_ajel';
+  purchaseType?: 'cash' | 'wholesale';
   paidAmount?: number;
   remainingAmount?: number;
+  originalInvoiceId?: number;
+  returnKind?: 'full' | 'partial';
+  classificationStatus?: 'classified' | 'needs_review';
   createdAt: string;
   createdBy: string;
   createdByUserId?: string;
@@ -384,6 +397,7 @@ export interface PurchaseInvoice {
   cancelledBy?: string;
   companyId?: string;
   branchId?: string;
+  branchName?: string;
   warehouseId?: string;
   costCenter?: string;
   status?: 'draft' | 'approved' | 'cancelled';

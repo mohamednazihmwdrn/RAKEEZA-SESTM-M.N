@@ -510,7 +510,7 @@ export function generateCashVoucherPrintHtml(
                 <p>${isReceive ? 'يعتبر هذا السند إشعاراً رسمياً بالتحصيل ولا يحتاج لختم إضافي إلا في الحالات الخاصة' : 'تم صرف المبلغ بناءً على الدورة المستندية والاعتمادات المالية المقررة'}</p>
             </div>
             <div class="copyright-inside-frame" style="text-align: center; font-size: 8.5px; font-weight: 700; color: #1e293b; padding-top: 3px; direction: rtl;">
-                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+                جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
             </div>
         </div>
     </div>

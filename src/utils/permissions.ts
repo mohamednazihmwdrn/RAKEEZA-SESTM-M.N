@@ -261,6 +261,7 @@ export const PAGE_PERMISSION_MAP: Record<string, string[]> = {
   home: ['dashboard'],
   pos: ['pos_access', 'sales_create'],
   sales: ['sales_view', 'sales_create', 'sales_edit'],
+  invoice_registry: ['sales_view', 'purchases_view', 'reports_view'],
   price_management: ['price_management'],
   quotes_orders: ['quotes_orders', 'sales_view'],
   web_orders: ['website_catalog', 'sales_view'],

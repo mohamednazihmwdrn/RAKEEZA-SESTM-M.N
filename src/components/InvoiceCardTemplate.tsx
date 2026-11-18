@@ -565,10 +565,10 @@ export const InvoiceCardTemplate: React.FC<InvoiceCardTemplateProps> = ({
             fontWeight: 'bold',
             color: '#444',
             padding: '5px 0',
-            direction: 'ltr',
+            direction: 'rtl',
           }}
         >
-          حقوق الملكية محفوظة Mohamed Nazih 01029190615
+          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
   ChevronsRight,
   Activity,
   Sparkles,
+  Layers,
 } from 'lucide-react';
 import { AppData, SaleInvoice, InvoiceItem } from '../types';
 import { Modal } from './Modal';
@@ -48,9 +49,10 @@ interface SalesViewProps {
   onUpdateData: (newData: AppData, actionInfo?: { action?: string; module?: string; details?: string; deletedId?: string | number }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onInspectItem?: (type: string, data: any) => void;
+  onNavigate?: (page: string) => void;
 }
 
-export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, showToast, onInspectItem }) => {
+export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, showToast, onInspectItem, onNavigate }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
   const [selectedBranchId, setSelectedBranchId] = useState<string>(appData.activeBranchId || appData.branches?.[0]?.id || 'main');
@@ -774,7 +776,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
   };
 
   const handlePrintInvoice = (inv: SaleInvoice, preferredFormat: 'A5' | 'A4' | 'thermal' = 'A5') => {
-    printInvoiceWindow(inv, true, appData.settings, showToast, preferredFormat);
+    printInvoiceWindow(inv, true, appData.settings, showToast, preferredFormat, appData);
   };
 
   const handleWhatsAppShare = (inv: SaleInvoice) => {
@@ -954,14 +956,24 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             <span>بيع نقدي</span>
           </button>
 
-          {/* 2. بيع جملة */}
+          {/* 2. بيع جملة نقدي */}
           <button
             onClick={() => openCreateModal('nagdi', 'wholesale')}
             className="min-h-[44px] sm:min-h-[40px] bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة بيع بأسعار الجملة المعتمدة"
+            title="فاتورة بيع جملة بسداد نقدي فوري"
           >
             <Tag className="w-4 h-4 shrink-0" />
-            <span>بيع جملة</span>
+            <span>جملة نقدي</span>
+          </button>
+
+          {/* 2b. بيع جملة آجل */}
+          <button
+            onClick={() => openCreateModal('ajel', 'wholesale')}
+            className="min-h-[44px] sm:min-h-[40px] bg-violet-700 hover:bg-violet-800 active:bg-violet-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+            title="فاتورة بيع جملة آجل على حساب العميل"
+          >
+            <Tag className="w-4 h-4 shrink-0" />
+            <span>جملة آجل</span>
           </button>
 
           {/* 3. بيع أجل */}
@@ -1010,6 +1022,18 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             printTitle="طباعة سجل فواتير المبيعات"
             exportTitle="تصدير المبيعات إلى Excel"
           />
+
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('invoice_registry')}
+              className="min-h-[44px] sm:min-h-[40px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+              title="فتح سجل الفواتير المصنف والطباعة المجمعة (Mode B)"
+            >
+              <Layers className="w-4 h-4 shrink-0" />
+              <span>السجل المصنف والطباعة</span>
+            </button>
+          )}
 
           {/* ⚡ زر فحص النزاهة وصحة البيانات الضخمة (10M+) */}
           <button

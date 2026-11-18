@@ -88,7 +88,7 @@ export function generateUniversalPrintHtml(
 
   // Permanent Official Footer
   const footerNote = payload.footerTermsNote || '* تطابق هذه المستندات الأرصدة والبيانات مع السجلات الرسمية بالنظام | صفحة 1 من 1';
-  const copyrightNotice = 'حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت 01029190615';
+  const copyrightNotice = 'جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615';
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">

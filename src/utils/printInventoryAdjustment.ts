@@ -322,7 +322,7 @@ ${getPrintToolbarHtml('محضر الجرد الفعلي #' + (session.sessionNum
 </div>
 
 <div class="copyright-outside">
-  حقوق الملكية محفوظة Mohamed Nazih 01029190615
+  جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
 </div>
 
 ${getPrintToolbarScript()}
@@ -624,7 +624,7 @@ ${getPrintToolbarHtml('سند تسوية مخزنية #' + voucher.voucherNumber
 </div>
 
 <div class="copyright-outside">
-  حقوق الملكية محفوظة Mohamed Nazih 01029190615
+  جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
 </div>
 
 ${getPrintToolbarScript()}
@@ -887,7 +887,7 @@ ${getPrintToolbarHtml('محضر الإقفال السنوي - سنة ' + closing
 </div>
 
 <div class="copyright-outside">
-  حقوق الملكية محفوظة Mohamed Nazih 01029190615
+  جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
 </div>
 
 ${getPrintToolbarScript()}

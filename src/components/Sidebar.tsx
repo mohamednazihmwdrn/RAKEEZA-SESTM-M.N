@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Zap,
   ShoppingCart,
+  Layers,
   Tag,
   FileText,
   Target,
@@ -223,6 +224,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <ShoppingCart className="w-4 h-4 shrink-0 text-slate-500" />
             <span className="text-[13.5px]">إدارة المبيعات والفواتير</span>
+          </div>
+        )}
+
+        {/* سجل الفواتير المصنف والطباعة المجمعة */}
+        {canAccessPage(currentUser, 'invoice_registry') && (
+          <div
+            onClick={() => handleNav('invoice_registry')}
+            className={`min-h-[44px] px-4 py-2.5 cursor-pointer border-b border-slate-100 transition flex items-center gap-2.5 ${navItemClass('invoice_registry')}`}
+          >
+            <Layers className="w-4 h-4 shrink-0 text-slate-500" />
+            <span className="text-[13.5px]">سجل الفواتير المصنف والطباعة</span>
           </div>
         )}
 

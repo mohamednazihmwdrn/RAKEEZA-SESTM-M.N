@@ -695,7 +695,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-all"
+                className="text-xs flex items-center gap-1 text-slate-700 hover:text-slate-950 px-2.5 py-1 rounded bg-slate-200/80 hover:bg-slate-300 border border-slate-300 transition-all cursor-pointer"
               >
                 {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 {showApiKey ? 'إخفاء' : 'إظهار'}
@@ -704,7 +704,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
                 type="button"
                 onClick={handleRegenerateApiKey}
                 disabled={isRegenerating}
-                className="text-xs flex items-center gap-1 text-amber-400 hover:text-amber-300 px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 transition-all disabled:opacity-50"
+                className="text-xs flex items-center gap-1 text-amber-800 hover:text-amber-950 px-2.5 py-1 rounded bg-amber-100 hover:bg-amber-200 border border-amber-200 transition-all disabled:opacity-50 cursor-pointer"
                 title="توليد مفتاح جديد"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
@@ -718,35 +718,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
               type={showApiKey ? 'text' : 'password'}
               readOnly
               value={apiKeyInfo?.apiKey || 'rkz_live_672842_a9d3f8e12b7405c6'}
-              className="w-full bg-slate-900/90 border border-white/10 rounded-lg p-2.5 font-mono text-sm text-emerald-400 tracking-wider focus:outline-none"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-sm text-emerald-400 tracking-wider focus:outline-none"
               dir="ltr"
             />
             <button
               type="button"
               onClick={handleCopyApiKey}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shrink-0 transition-all shadow-md active:scale-95"
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shrink-0 transition-all shadow-sm active:scale-95 cursor-pointer"
             >
-              {copiedKey ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {copiedKey ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
               {copiedKey ? 'تم النسخ!' : 'نسخ المفتاح'}
             </button>
           </div>
         </div>
 
         {/* Integration Instructions & Sample */}
-        <div className="bg-white/5 border border-white/10 p-4 rounded-xl space-y-2.5 text-xs text-slate-300 leading-relaxed">
-          <div className="flex items-center gap-2 text-indigo-300 font-bold">
+        <div className="bg-slate-100 border border-slate-300 p-4 rounded-xl space-y-2.5 text-xs text-slate-700 leading-relaxed">
+          <div className="flex items-center gap-2 text-indigo-700 font-bold">
             <Terminal className="w-4 h-4" />
             طريقة الربط من السيرفر الخارجي أو تطبيق APK:
           </div>
           <p>
-            أرسل المفتاح في ترويسة الطلب <code className="bg-indigo-900/60 px-2 py-0.5 rounded text-amber-300 font-mono">x-api-key</code> أو كمعامل في الرابط <code className="bg-indigo-900/60 px-2 py-0.5 rounded text-amber-300 font-mono">?apiKey=...</code>:
+            أرسل المفتاح في ترويسة الطلب <code className="bg-indigo-100 px-2 py-0.5 rounded text-indigo-900 font-mono border border-indigo-200">x-api-key</code> أو كمعامل في الرابط <code className="bg-indigo-100 px-2 py-0.5 rounded text-indigo-900 font-mono border border-indigo-200">?apiKey=...</code>:
           </p>
-          <div className="bg-black/60 p-3 rounded-lg font-mono text-[11px] text-emerald-300 break-all whitespace-pre-wrap max-w-full text-left overflow-x-hidden" dir="ltr">
+          <div className="bg-slate-900 p-3 rounded-lg font-mono text-[11px] text-emerald-300 break-all whitespace-pre-wrap max-w-full text-left overflow-x-hidden" dir="ltr">
             curl -X GET "{typeof window !== 'undefined' ? window.location.origin : 'https://your-domain'}/api/tenant/data" \<br />
             &nbsp;&nbsp;-H "x-api-key: {apiKeyInfo?.apiKey || 'rkz_live_672842_a9d3f8e12b7405c6'}"
           </div>
-          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1">
-            <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="text-[11px] text-slate-600 flex items-center gap-1.5 pt-1">
+            <Smartphone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span>يدعم التطبيق الربط التلقائي بمزامنة لحظية ثنائية الاتجاه دون الحاجة لتسجيل دخول يدوي متكرر.</span>
           </div>
         </div>
@@ -928,8 +928,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
             رقم الهاتف والتواصل المباشر: <strong className="font-mono text-emerald-700 text-base" dir="ltr">01029190615</strong>
           </p>
         </div>
-        <p className="text-xs text-slate-500 pt-2 border-t border-slate-200">
-          جميع حقوق الملكية والتأليف محفوظة للمطور. يتم طباعة هذا التذييل تلقائياً على جميع الفواتير، التقارير الشاملة، كشوفات الحسابات وسندات الخزينة.
+        <p className="text-xs text-slate-600 font-medium pt-2 border-t border-slate-200">
+          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615 — يتم طباعة هذا التذييل تلقائياً على جميع الفواتير، التقارير الشاملة، كشوفات الحسابات وسندات الخزينة.
         </p>
       </div>
 

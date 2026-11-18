@@ -998,7 +998,8 @@ _تم الإرسال عبر الكتالوج الإلكتروني - منظومة
         </div>
 
         <div class="footer">
-          شكراً لتسوقكم معنا! للتواصل: ${contactPhone} | ${appData.settings.address || ''}
+          <div>شكراً لتسوقكم معنا! للتواصل: ${contactPhone} | ${appData.settings.address || ''}</div>
+          <div style="margin-top: 6px; font-size: 10px; color: #64748b;">جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615</div>
         </div>
 
         <script>

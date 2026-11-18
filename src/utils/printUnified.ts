@@ -14,6 +14,8 @@ export interface UnifiedReportConfig {
     address?: string;
     logo?: string;
     phones?: string[];
+    taxNumber?: string;
+    commercialReg?: string;
   };
   partyCode?: string;
   partyName?: string;
@@ -86,7 +88,7 @@ export interface PrintDocumentConfig {
  * - Dynamic Table: Black 1.5px borders, #e6e6e6 header, word-wrap, no overflow
  * - Structured Totals Section with payment method badges
  * - Internal Footer: terms/signatures
- * - Permanent Copyright: حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+ * - Permanent Copyright: جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
  * - Strict Single-Page Printing Guarantee
  */
 export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
@@ -545,7 +547,7 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
                 ${footerNoteText}
             </div>
             <div class="copyright-tag">
-                حقوق الملكية الفكرية محفوظة لمطور النظام Mohamed Nazih ت01029190615
+                جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
             </div>
         </div>
 
