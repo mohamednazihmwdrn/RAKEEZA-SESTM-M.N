@@ -5,7 +5,6 @@ import { printWebOrderReceipt } from '../utils/printOrderReceipt';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { exportToExcel } from '../utils/excelExport';
 import { playOrderAlertChime } from '../utils/audioChime';
-import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 import { TableActionButtons } from './TableActionButtons';
 import { processSaleInvoice } from '../utils/accountingEngine';
 
@@ -38,7 +37,7 @@ export const WebOrdersInboxView: React.FC<WebOrdersInboxViewProps> = ({
   isOwner: propIsOwner,
 }) => {
   const companies: TenantCompany[] = useMemo(() => {
-    return appData.companies && appData.companies.length > 0 ? appData.companies : DEFAULT_COMPANIES;
+    return appData.companies && appData.companies.length > 0 ? appData.companies : [];
   }, [appData.companies]);
 
   const currentUser = useMemo(() => {
@@ -596,7 +595,7 @@ ${itemsSummary}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Status Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setActiveTab('all')}

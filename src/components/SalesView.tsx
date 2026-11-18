@@ -1045,7 +1045,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             <span className="hidden xl:inline">صحة البيانات</span>
           </button>
         </div>
-        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
+        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0">
           {availableInvoiceYears.length > 0 && (
             <select
               value={selectedYearFilter}

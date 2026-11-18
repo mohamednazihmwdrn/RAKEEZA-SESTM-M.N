@@ -550,7 +550,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
 
           {/* Search, View Mode & Barcode Bar */}
           <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
-            <div className="relative flex-1 min-w-[220px]">
+            <div className="relative w-full sm:flex-1 min-w-0">
               <input
                 type="text"
                 value={searchTerm}
@@ -616,7 +616,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
               </span>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+            <div className="flex flex-wrap gap-2 pb-1.5 pt-0.5">
               {categories.map((cat, idx) => {
                 const isSelected = selectedCategory === cat;
                 const icon = getCategoryIcon(cat);

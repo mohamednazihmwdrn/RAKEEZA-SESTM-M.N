@@ -28,6 +28,7 @@ import {
   fetchCompanyPublicDetailsApi,
   registerNewCompanyDeviceApi,
   loginToCloud,
+  loginWithGoogle,
   verifyOwnerSecretApi,
   normalizeArabicNumerals,
   BoundDeviceData,
@@ -35,7 +36,6 @@ import {
 import { TenantCompany, User as AppUser } from '../types';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
-import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 
 interface LoginViewProps {
   onLoginSuccess: (session: {
@@ -50,7 +50,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
   onOpenOwnerPanelDirectly,
 }) => {
-  // 💻 Device Binding State (Locked permanently to مؤسسة الموان)
+  // 💻 Device Binding State
   const [boundDevice, setBoundDevice] = useState<BoundDeviceData | null>(null);
   const [isCheckingDevice, setIsCheckingDevice] = useState<boolean>(true);
   const [showUnbindConfirmModal, setShowUnbindConfirmModal] = useState<boolean>(false);
@@ -62,6 +62,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   // Form 1: Register New Company State
   const [regCompanyName, setRegCompanyName] = useState<string>('');
   const [regAdminEmail, setRegAdminEmail] = useState<string>('');
+  const [regAdminName, setRegAdminName] = useState<string>('');
   const [regAdminUsername, setRegAdminUsername] = useState<string>('admin');
   const [regAdminPassword, setRegAdminPassword] = useState<string>('');
   const [regBranchName, setRegBranchName] = useState<string>('الفرع الرئيسي');
@@ -103,18 +104,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
   /**
-   * 1️⃣ On Mount: Check and Auto-Bind to مؤسسة الموان للتجارة
+   * 1️⃣ On Mount: Check Saved Device Binding
    */
   useEffect(() => {
     const checkDeviceBinding = async () => {
       setIsCheckingDevice(true);
       let stored = getStoredBoundDevice();
 
-      // Clear any legacy mock demo bound devices
+      // Clear any legacy demo bound devices if found
       if (
         stored &&
         (stored.companyId === 'COMP-000001' ||
-          stored.companyCode === '101' ||
           stored.companyCode === '818' ||
           stored.companyCode === '190' ||
           stored.companyName?.includes('مؤسسة الموان') ||
@@ -131,8 +131,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         // Check if a user was previously assigned/remembered on this device
         const installedUser =
           typeof window !== 'undefined'
-            ? localStorage.getItem(`rakeeza_installed_user_${stored.companyId}`) ||
-              localStorage.getItem('mowan_installed_user')
+            ? localStorage.getItem(`rakeeza_installed_user_${stored.companyId}`)
             : null;
         if (installedUser) {
           setSelectedUsername(installedUser);
@@ -220,6 +219,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     const cleanName = regCompanyName.trim();
     const cleanEmail = regAdminEmail.trim().toLowerCase();
+    const cleanAdminName = regAdminName.trim();
     const cleanUsername = regAdminUsername.trim() || 'admin';
     const cleanPassword = regAdminPassword.trim();
     const cleanBranch = regBranchName.trim() || 'الفرع الرئيسي';
@@ -229,7 +229,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('يرجى إدخال بريد إلكتروني صالح للمدير (Gmail أو بريد العمل للتحقق من الهوية).');
+      setErrorMessage('يرجى إدخال بريد إلكتروني صالح للمدير للتحقق من الهوية.');
       return;
     }
     if (!cleanPassword) {
@@ -242,6 +242,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const res = await registerNewCompanyDeviceApi({
         companyName: cleanName,
         adminEmail: cleanEmail,
+        adminName: cleanAdminName || undefined,
         adminUsername: cleanUsername,
         adminPassword: cleanPassword,
         branchName: cleanBranch,
@@ -287,7 +288,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const rawCode = codeToLookup !== undefined ? codeToLookup : existingCompanyCode;
     const cleanCode = normalizeArabicNumerals(rawCode || '').trim().toUpperCase();
     if (!cleanCode) {
-      setErrorMessage('يرجى إدخال كود المنشأة (مثل: 101 أو 108 أو معرّف الشركة).');
+      setErrorMessage('يرجى إدخال كود المنشأة أو معرّف الشركة.');
       return false;
     }
 
@@ -382,12 +383,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const res = await loginToCloud(boundDevice.companyId, userToLogin, loginPassword);
 
       if (res.success && res.user && res.company) {
-        // Save installed user on device if checkbox selected
         if (isRememberUserOnDevice) {
           try {
-            localStorage.setItem('mowan_installed_user', userToLogin);
+            localStorage.setItem(`rakeeza_installed_user_${boundDevice.companyId}`, userToLogin);
             if (selectedBranchId) {
-              localStorage.setItem('mowan_installed_branch', selectedBranchId);
+              localStorage.setItem(`rakeeza_installed_branch_${boundDevice.companyId}`, selectedBranchId);
             }
           } catch {}
         }
@@ -417,7 +417,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   /**
-   * 🌐 Google / Gmail Sign-In linked to مؤسسة الموان
+   * 🌐 Google / Gmail Sign-In linked strictly to existing cloud company or prompts clean registration
    */
   const handleGoogleLogin = async () => {
     setIsLoading(true);
@@ -427,63 +427,41 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const googleUser = result.user;
-      const email = googleUser.email || '';
-      const displayName = googleUser.displayName || 'مستخدم مؤسسة الموان';
+      const email = (googleUser.email || '').trim().toLowerCase();
+      const displayName = googleUser.displayName || '';
 
-      // Find user in مؤسسة الموان or map to current user
-      let matchedUser = boundDevice?.users?.find(
-        (u: any) =>
-          (u.email && u.email.toLowerCase() === email.toLowerCase()) ||
-          (u.username && email.toLowerCase().includes(u.username.toLowerCase()))
-      );
-
-      if (!matchedUser) {
-        matchedUser =
-          boundDevice?.users?.find((u: any) => u.username === selectedUsername || u.name === selectedUsername) ||
-          boundDevice?.users?.[0] || {
-            id: `u-mowan-${googleUser.uid.substring(0, 8)}`,
-            code: 1,
-            name: displayName,
-            username: email.split('@')[0],
-            role: 'company_admin',
-          };
+      if (!email) {
+        setErrorMessage('تعذر الحصول على البريد الإلكتروني من حساب Google.');
+        return;
       }
 
-      if (isRememberUserOnDevice) {
-        try {
-          localStorage.setItem('mowan_installed_user', matchedUser.username || matchedUser.name);
-          if (selectedBranchId) localStorage.setItem('mowan_installed_branch', selectedBranchId);
-        } catch {}
+      const cloudRes = await loginWithGoogle(email, undefined, undefined, displayName || undefined);
+      if (cloudRes.success && cloudRes.user && cloudRes.company) {
+        if (isRememberUserOnDevice) {
+          try {
+            localStorage.setItem(
+              `rakeeza_installed_user_${cloudRes.company.id}`,
+              cloudRes.user.username || cloudRes.user.name
+            );
+          } catch {}
+        }
+        setSuccessMessage(`مرحباً بك! تم تسجيل الدخول بنجاح: ${cloudRes.user.name}`);
+        setTimeout(() => {
+          onLoginSuccess({
+            user: cloudRes.user!,
+            company: cloudRes.company!,
+            subscription: cloudRes.subscription,
+          });
+        }, 500);
+      } else if (cloudRes.needsRegistration) {
+        setBoundDevice(null);
+        setSetupTab('register_new');
+        setRegAdminEmail(email);
+        if (displayName) setRegAdminName(displayName);
+        setErrorMessage('هذا البريد غير مسجل لمنشأة حالية. يرجى استكمال تسجيل منشأتك الجديدة الآن لإنشاء حساب المدير تلقائياً.');
+      } else {
+        setErrorMessage(cloudRes.error || 'تعذر تسجيل الدخول عبر حساب Google.');
       }
-
-      setSuccessMessage(`مرحباً بك! تم تسجيل الدخول بنجاح عبر حساب Google: ${displayName}`);
-      setTimeout(() => {
-        onLoginSuccess({
-          user: {
-            ...matchedUser,
-            name: displayName || matchedUser.name,
-            email: email,
-            branchId: selectedBranchId || matchedUser.branchId || 'br-main',
-          } as any,
-          company: {
-            id: boundDevice?.companyId || 'COMP-000001',
-            code: boundDevice?.companyCode || '101',
-            name: 'مؤسسة الموان للتجارة',
-            tradeName: 'الموان',
-            email: 'admin@mowan.com',
-            adminName: 'مؤسسة الموان',
-            adminUsername: 'admin',
-            status: 'active',
-            planName: 'Enterprise Plan',
-          } as any,
-          subscription: {
-            status: 'active',
-            planName: 'Enterprise Plan',
-            daysRemaining: 365,
-            isExpired: false,
-          },
-        });
-      }, 600);
     } catch (err: any) {
       if (err?.code !== 'auth/popup-closed-by-user') {
         setErrorMessage(err?.message || 'تعذر تسجيل الدخول بحساب Google. يمكنك تسجيل الدخول باسم المستخدم وكلمة المرور.');
@@ -1129,29 +1107,54 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Field 2: Admin Gmail */}
-                    <div>
-                      <label
-                        htmlFor="reg-admin-email"
-                        className="block text-xs sm:text-sm font-medium text-slate-200 mb-1 text-right"
-                      >
-                        البريد الإلكتروني <span className="text-rose-400">*</span>
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
-                          <Mail className="w-4 h-4" />
+                    {/* Field 2: Admin Gmail & Full Name */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="reg-admin-email"
+                          className="block text-xs sm:text-sm font-medium text-slate-200 mb-1 text-right"
+                        >
+                          البريد الإلكتروني للمدير <span className="text-rose-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                            <Mail className="w-4 h-4" />
+                          </div>
+                          <input
+                            id="reg-admin-email"
+                            type="email"
+                            value={regAdminEmail}
+                            onChange={(e) => setRegAdminEmail(e.target.value)}
+                            placeholder="name@example.com"
+                            dir="ltr"
+                            className="w-full min-h-[44px] pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left font-mono"
+                            disabled={isLoading}
+                            required
+                          />
                         </div>
-                        <input
-                          id="reg-admin-email"
-                          type="email"
-                          value={regAdminEmail}
-                          onChange={(e) => setRegAdminEmail(e.target.value)}
-                          placeholder="name@example.com"
-                          dir="ltr"
-                          className="w-full min-h-[44px] pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-left font-mono"
-                          disabled={isLoading}
-                          required
-                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="reg-admin-name"
+                          className="block text-xs sm:text-sm font-medium text-slate-200 mb-1 text-right"
+                        >
+                          اسم مدير الشركة (اختياري)
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                            <User className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <input
+                            id="reg-admin-name"
+                            type="text"
+                            value={regAdminName}
+                            onChange={(e) => setRegAdminName(e.target.value)}
+                            placeholder="المدير العام"
+                            className="w-full min-h-[44px] pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-right"
+                            disabled={isLoading}
+                          />
+                        </div>
                       </div>
                     </div>
 

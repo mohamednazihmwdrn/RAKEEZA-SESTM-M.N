@@ -327,7 +327,7 @@ export const InvoiceRegistryView: React.FC<InvoiceRegistryViewProps> = ({
 
       {/* 8 Independent Categorized Register Tabs */}
       <div className="bg-white border border-slate-200 rounded-xl p-2">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {INVOICE_CATEGORIES.map((cat) => {
             const count = categoryCounts[cat.key] || 0;
             const isActive = activeTab === cat.key;
@@ -340,7 +340,7 @@ export const InvoiceRegistryView: React.FC<InvoiceRegistryViewProps> = ({
                   setActiveTab(cat.key);
                   setSelectedUids([]);
                 }}
-                className={`min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-medium transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
                   isActive
                     ? isReviewAlert
                       ? 'bg-amber-600 text-white'
@@ -370,14 +370,14 @@ export const InvoiceRegistryView: React.FC<InvoiceRegistryViewProps> = ({
 
         {/* Active Register Subtitle + Sub-filters for Wholesale / Returns */}
         <div className="mt-2 pt-2.5 px-2 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-          <div className="text-xs text-slate-600 flex items-center gap-2">
+          <div className="text-xs text-slate-600 flex flex-wrap items-center gap-1.5">
             <span className="font-semibold text-slate-900">{activeCategoryMeta.label}</span>
             <span aria-hidden="true" className="text-slate-300">·</span>
             <span>{activeCategoryMeta.description}</span>
           </div>
 
           {isWholesaleTab && (
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start md:self-auto">
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start md:self-auto">
               {[
                 { id: 'all', label: 'كل الجملة' },
                 { id: 'cash', label: 'جملة كاش' },
@@ -401,7 +401,7 @@ export const InvoiceRegistryView: React.FC<InvoiceRegistryViewProps> = ({
           )}
 
           {isReturnTab && (
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start md:self-auto">
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start md:self-auto">
               {[
                 { id: 'all', label: 'كل المرتجعات' },
                 { id: 'full', label: 'مرتجع كلي' },

@@ -1445,10 +1445,33 @@ export default function App() {
             onUpdateData={updateData}
             showToast={showToast}
             onShareCatalog={() => setIsShareCatalogOpen(true)}
+            activeUser={session?.user || currentUser}
+            onAccountUpdated={(updatedUser) => {
+              if (session?.user) {
+                setSession({
+                  ...session,
+                  user: { ...session.user, ...updatedUser },
+                });
+              }
+            }}
           />
         );
       case 'users':
-        return <UsersView appData={appData} onUpdateData={updateData} showToast={showToast} />;
+        return (
+          <UsersView
+            appData={appData}
+            onUpdateData={updateData}
+            showToast={showToast}
+            onAccountUpdated={(updatedUser) => {
+              if (session?.user && session.user.id === updatedUser.id) {
+                setSession({
+                  ...session,
+                  user: { ...session.user, ...updatedUser },
+                });
+              }
+            }}
+          />
+        );
       case 'backup':
         return <BackupView appData={appData} onUpdateData={updateData} showToast={showToast} />;
       case 'owner_panel':

@@ -313,7 +313,7 @@ export const CrmPipelineView: React.FC<CrmPipelineViewProps> = ({
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 flex flex-wrap justify-between items-center gap-3">
-        <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setStageFilter('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${

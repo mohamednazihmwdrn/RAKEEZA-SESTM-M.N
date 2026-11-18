@@ -337,8 +337,76 @@ export const SerialWarrantyTrackingView: React.FC<SerialWarrantyTrackingViewProp
         </div>
       </div>
 
-      {/* Table of Serials */}
-      <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 overflow-x-auto">
+      {/* Mobile Serial Cards (< md) */}
+      <div className="block md:hidden space-y-2.5">
+        {filteredRecords.length === 0 ? (
+          <div className="bg-white rounded-2xl p-8 text-center text-slate-400 text-sm border border-slate-200">
+            لا توجد أجهزة مسجلة تطابق معايير البحث
+          </div>
+        ) : (
+          filteredRecords.map((rec) => (
+            <div
+              key={rec.id}
+              className="bg-white rounded-2xl p-4 shadow-xs border border-slate-200 space-y-2.5 text-xs"
+            >
+              <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                <div className="min-w-0">
+                  <div className="font-mono font-bold text-indigo-900 text-sm break-all">{rec.serialNumber}</div>
+                  <div className="font-bold text-slate-800 mt-0.5">{rec.itemName}</div>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${
+                    rec.status === 'in_warranty'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : rec.status === 'warranty_expired'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {rec.status === 'in_warranty'
+                    ? '✅ ساري الضمان'
+                    : rec.status === 'warranty_expired'
+                    ? '❌ منتهي'
+                    : '⚙️ صيانة'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-[10px] text-slate-400 block">العميل</span>
+                  <span className="font-semibold text-slate-800">{rec.customerName || 'عميل نقدي'}</span>
+                  {rec.customerPhone && (
+                    <span className="block text-[10px] text-slate-500 font-mono" dir="ltr">{rec.customerPhone}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">مدة الضمان</span>
+                  <span className="font-bold text-slate-800">{rec.warrantyMonths} شهر</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">تاريخ البيع</span>
+                  <span className="font-mono text-slate-700">{rec.saleDate || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block">ينتهي الضمان</span>
+                  <span className="font-mono text-slate-700">{rec.warrantyExpiryDate}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => handlePrintWarrantyCert(rec)}
+                className="w-full min-h-[42px] px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>🖨️</span>
+                <span>طباعة شهادة الضمان</span>
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table of Serials (>= md) */}
+      <div className="hidden md:block bg-white rounded-2xl p-4 shadow-xs border border-slate-200 overflow-x-auto">
         <table className="w-full text-right text-xs md:text-sm border-collapse">
           <thead>
             <tr className="bg-[#1a237e] text-white">

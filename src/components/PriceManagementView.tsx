@@ -623,10 +623,10 @@ export const PriceManagementView: React.FC<PriceManagementViewProps> = ({
       </div>
 
       {/* 3. Navigation Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto text-xs sm:text-sm font-bold bg-white p-2 rounded-xl shadow-sm">
+      <div className="flex flex-wrap border-b border-slate-200 gap-2 text-xs sm:text-sm font-bold bg-white p-2 rounded-xl shadow-sm">
         <button
           onClick={() => setActiveTab('list')}
-          className={`px-4 py-2.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+          className={`px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'list'
               ? 'bg-[#1a237e] text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'

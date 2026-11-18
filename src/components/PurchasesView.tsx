@@ -892,7 +892,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
             </button>
           )}
         </div>
-        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-[220px]">
+        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0">
           {appData.branches && appData.branches.length > 1 && (
             <select
               value={selectedBranchFilter}

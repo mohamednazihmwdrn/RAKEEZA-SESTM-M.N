@@ -624,7 +624,7 @@ export const SuppliersManagerClassic: React.FC<SuppliersManagerClassicProps> = (
       {/* 🔍 Search & Filters Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 min-w-0 w-full sm:w-auto sm:min-w-[220px]">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -696,9 +696,116 @@ export const SuppliersManagerClassic: React.FC<SuppliersManagerClassicProps> = (
         </div>
       </div>
 
-      {/* 📋 Suppliers Data Table (Windows Classic Grid) */}
+      {/* 📋 Suppliers Data (Mobile Cards + Desktop Table) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* 📱 Mobile Cards (< md) */}
+        <div className="block md:hidden p-3 space-y-2.5">
+          {filteredSuppliers.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 space-y-1">
+              <Building2 className="w-8 h-8 text-slate-300 stroke-1 mx-auto" />
+              <div className="font-semibold text-xs">لا يوجد موردون يطابقون شروط البحث الحالية</div>
+            </div>
+          ) : (
+            filteredSuppliers.map((s) => {
+              const bal = s.calculatedBalance;
+              const isCreditor = bal > 0.005;
+              const isDebtor = bal < -0.005;
+              const isEditingThis = editingId === s.id;
+              return (
+                <div
+                  key={s.id}
+                  className={`rounded-xl p-3 border space-y-2.5 ${
+                    isEditingThis ? 'bg-amber-50 border-amber-300' : 'bg-slate-50/70 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[11px] font-bold text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          {s.code || s.id}
+                        </span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                            isCreditor
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : isDebtor
+                              ? 'bg-rose-100 text-rose-800 border-rose-200'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
+                        >
+                          {isCreditor ? 'دائن (مستحق له)' : isDebtor ? 'مدين (لنا عنده)' : 'متزن'}
+                        </span>
+                      </div>
+                      <div className="font-bold text-slate-900 text-sm mt-1 truncate">{s.name}</div>
+                      {s.phone && (
+                        <div className="text-[11px] text-slate-500 font-mono" dir="ltr">
+                          {s.phone}
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className={`font-mono font-black text-sm shrink-0 ${
+                        isCreditor ? 'text-blue-700' : isDebtor ? 'text-rose-700' : 'text-emerald-700'
+                      }`}
+                      dir="ltr"
+                    >
+                      {bal.toFixed(2)} ج.م
+                    </div>
+                  </div>
+
+                  {s.address && <div className="text-[11px] text-slate-500 truncate">{s.address}</div>}
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatementSupplier(s);
+                        setStatementFromDate('');
+                        setStatementToDate(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="min-h-[40px] bg-white hover:bg-slate-100 text-slate-800 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-slate-300 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-700" />
+                      <span>كشف حساب</span>
+                    </button>
+
+                    {onOpenPaymentForSupplier && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenPaymentForSupplier(s.name, isCreditor ? bal : undefined)}
+                        className="min-h-[40px] bg-amber-50 hover:bg-amber-100 text-amber-900 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-amber-300 cursor-pointer"
+                      >
+                        <DollarSign className="w-3.5 h-3.5 text-amber-700" />
+                        <span>سند صرف</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(s)}
+                      className="min-h-[40px] bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-amber-200 cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>تعديل</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSupplier(s.id, s.name)}
+                      className="min-h-[40px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 border border-rose-200 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* 💻 Desktop Table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-right border-collapse text-xs">
             <thead>
               <tr className="bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-800 font-bold border-b border-slate-300 select-none">
@@ -978,8 +1085,36 @@ export const SuppliersManagerClassic: React.FC<SuppliersManagerClassicProps> = (
                       </div>
                     </div>
 
-                    {/* Transactions Table */}
-                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    {/* Transactions: Mobile Cards (< md) + Desktop Table (>= md) */}
+                    <div className="block md:hidden space-y-2">
+                      {rows.length === 0 ? (
+                        <div className="py-6 text-center text-slate-400 text-xs border border-slate-200 rounded-lg">
+                          لا توجد حركات مسجلة للمورد خلال هذه الفترة
+                        </div>
+                      ) : (
+                        rows.map((row, rIdx) => (
+                          <div key={rIdx} className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[11px] text-slate-500">{row.date}</span>
+                              <span className="font-mono font-bold text-slate-900" dir="ltr">
+                                الرصيد: {row.runningBalance.toFixed(2)} ج.م
+                              </span>
+                            </div>
+                            <div className="font-medium text-slate-800">{row.description}</div>
+                            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200">
+                              <span className="font-mono font-bold text-emerald-700">
+                                سداد لنا: {row.debit > 0 ? row.debit.toFixed(2) : '0.00'}
+                              </span>
+                              <span className="font-mono font-bold text-blue-700">
+                                توريد له: {row.credit > 0 ? row.credit.toFixed(2) : '0.00'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="hidden md:block border border-slate-200 rounded-lg overflow-x-auto">
                       <table className="w-full text-right border-collapse text-xs">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">

@@ -639,7 +639,7 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
       {/* 🔍 Search & Filters Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 min-w-0 w-full sm:w-auto sm:min-w-[220px]">
           <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -728,9 +728,99 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
         </button>
       </div>
 
-      {/* 📋 Receipt Vouchers Data Table */}
+      {/* 📋 Receipt Vouchers Data */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* 📱 Mobile Cards (< md) */}
+        <div className="block md:hidden p-3 space-y-2.5">
+          {filteredReceipts.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 space-y-1">
+              <Receipt className="w-8 h-8 text-slate-300 stroke-1 mx-auto" />
+              <div className="font-semibold text-xs">لا توجد سندات قبض مسجلة حالياً</div>
+              <div className="text-[11px]">يمكنك تسجيل سند قبض جديد من النموذج بالأعلى</div>
+            </div>
+          ) : (
+            filteredReceipts.map((t) => {
+              const isEditingThis = editingId === t.id;
+              return (
+                <div
+                  key={t.id}
+                  className={`rounded-xl p-3 border space-y-2 ${
+                    isEditingThis ? 'bg-amber-50 border-amber-300' : 'bg-slate-50/70 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono font-bold text-xs text-emerald-800">
+                          {t.voucherNo || `REC-${t.id}`}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-500">{t.date}</span>
+                      </div>
+                      <div className="font-bold text-slate-900 text-sm mt-0.5 truncate">
+                        {t.customerName || t.payerName || 'عميل نقدي'}
+                      </div>
+                    </div>
+                    <div className="font-mono font-black text-sm text-emerald-700 shrink-0" dir="ltr">
+                      {t.amount.toFixed(2)} ج.م
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200 font-bold">
+                      {t.method === 'drawer'
+                        ? '💵 درج نقدية'
+                        : t.method === 'vodafone'
+                        ? '📱 فودافون كاش'
+                        : t.method === 'instapay'
+                        ? '⚡ إنستاباي'
+                        : '🏦 بنك'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-white border border-slate-200">
+                      المحرر: {t.createdBy || 'مدير النظام'}
+                    </span>
+                    {t.invoiceId && (
+                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-mono">
+                        فاتورة #{t.invoiceId}
+                      </span>
+                    )}
+                  </div>
+
+                  {t.note && <div className="text-xs text-slate-600 break-words">{t.note}</div>}
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => printCashVoucherWindow(t, appData.settings, showToast)}
+                      className="flex-1 min-h-[40px] rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>طباعة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(t)}
+                      className="flex-1 min-h-[40px] rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>تعديل</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReceipt(t)}
+                      className="min-h-[40px] px-3 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* 💻 Desktop Table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-right border-collapse text-xs">
             <thead>
               <tr className="bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-800 font-bold border-b border-slate-300 select-none">

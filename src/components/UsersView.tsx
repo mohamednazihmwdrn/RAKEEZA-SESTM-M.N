@@ -37,21 +37,22 @@ interface UsersViewProps {
   appData: AppData;
   onUpdateData: (newData: AppData, actionInfo?: { action?: string; module?: string; details?: string; deletedId?: string | number }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+  onAccountUpdated?: (updatedUser: User) => void;
 }
 
-export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, showToast }) => {
+export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, showToast, onAccountUpdated }) => {
   const currentCompanyId = appData.companyId || 'COMP-000001';
   const currentUser = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
   const mainBranchId = getMainBranchId(appData.branches);
 
-  // 🏢 Selected branch for isolation filter (defaulting to the active branch)
+  // 🏢 Selected branch for isolation filter ('all' or specific branchId)
   const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
-    return appData.activeBranchId || mainBranchId || 'br-main';
+    return appData.activeBranchId || mainBranchId || 'all';
   });
 
   // Keep in sync with appData.activeBranchId if external change occurs
   React.useEffect(() => {
-    if (appData.activeBranchId) {
+    if (appData.activeBranchId && selectedBranchId !== 'all') {
       setSelectedBranchId(appData.activeBranchId);
     }
   }, [appData.activeBranchId]);
@@ -119,8 +120,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
 
   // All company users vs isolated branch users
   const companyUsers = appData.users || [];
-  const displayedUsers = getBranchUsers(companyUsers, selectedBranchId, mainBranchId, false);
-  const activeBranchObj = appData.branches?.find((b) => b.id === selectedBranchId) || appData.branches?.[0];
+  const displayedUsers = getBranchUsers(companyUsers, selectedBranchId, mainBranchId, true);
+  const activeBranchObj =
+    selectedBranchId === 'all'
+      ? { id: 'all', name: 'كافة الفروع' }
+      : appData.branches?.find((b) => b.id === selectedBranchId) || appData.branches?.[0];
 
   // Reset Form
   const handleOpenNewUserModal = () => {
@@ -131,7 +135,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
     setPassword('');
     setPhone('');
     setRole('user');
-    setAssignedBranchId(selectedBranchId);
+    setAssignedBranchId(selectedBranchId === 'all' ? mainBranchId : selectedBranchId);
     setUserStatus('active');
 
     // Default basic permissions
@@ -332,6 +336,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         auditLogs: [auditLog, ...(appData.auditLogs || [])],
       });
 
+      const editedUser = updatedUsers.find((u) => u.id === editingUserId);
+      if (editedUser && editedUser.id === currentUser?.id) {
+        onAccountUpdated?.(editedUser);
+      }
+
       showToast(`تم تعديل بيانات وصلاحيات المستخدم "${name}" بنجاح`, 'success');
     } else {
       // Creating new user with sequential user code
@@ -353,8 +362,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         password: password.trim(),
         phone: phone.trim(),
         role,
-        branchId: assignedBranchId ? assignedBranchId : selectedBranchId,
-        allowedBranches: assignedBranchId ? [assignedBranchId] : [selectedBranchId],
+        branchId: assignedBranchId ? assignedBranchId : (selectedBranchId === 'all' ? mainBranchId : selectedBranchId),
+        allowedBranches: assignedBranchId
+          ? [assignedBranchId]
+          : [selectedBranchId === 'all' ? mainBranchId : selectedBranchId],
         status: userStatus,
         permissions: permissionPayload,
         createdAt: new Date().toISOString().split('T')[0],
@@ -598,10 +609,28 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
         </div>
       </div>
 
-      {/* 🏢 Dedicated Branch Tabs - فرع الاخوة / فرع الموان */}
+      {/* 🏢 Branch Filter Tabs */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-600 ml-1">تحديد الفرع:</span>
+          <span className="text-xs font-bold text-slate-600 ml-1">تحديد العرض:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedBranchId('all')}
+            className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center gap-2 ${
+              selectedBranchId === 'all'
+                ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+            }`}
+          >
+            <span>🌐 الكل</span>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                selectedBranchId === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {companyUsers.length} مستخدم
+            </span>
+          </button>
           {appData.branches?.map((b) => {
             const isSelected = selectedBranchId === b.id;
             const branchUserCount = getBranchUsers(companyUsers, b.id, mainBranchId, false).length;
@@ -615,7 +644,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
                     onUpdateData({ ...appData, activeBranchId: b.id });
                   }
                 }}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center gap-2 ${
+                className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center gap-2 ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
@@ -627,17 +656,20 @@ export const UsersView: React.FC<UsersViewProps> = ({ appData, onUpdateData, sho
                     isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
-                  {branchUserCount} مستخدم
+                  {branchUserCount}
                 </span>
-                {isSelected && <span className="text-emerald-300 text-xs">● معروض</span>}
               </button>
             );
           })}
         </div>
 
         <div className="text-xs font-bold flex items-center gap-2 bg-emerald-50 text-emerald-900 px-3 py-1.5 rounded-xl border border-emerald-200">
-          <span>🔒 عزل فروع مستقل:</span>
-          <span>حسابات <strong>{activeBranchObj?.name || 'الفرع'}</strong> معزولة تماماً عن باقي الفروع</span>
+          <span>🔒 عزل الفروع:</span>
+          <span>
+            {selectedBranchId === 'all'
+              ? 'عرض جميع مستخدمي المنشأة'
+              : <>حسابات <strong>{activeBranchObj?.name || 'الفرع'}</strong> معزولة</>}
+          </span>
         </div>
       </div>
 

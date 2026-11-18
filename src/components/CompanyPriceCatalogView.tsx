@@ -797,8 +797,84 @@ export const CompanyPriceCatalogView: React.FC<CompanyPriceCatalogViewProps> = (
           </span>
         </div>
 
-        {/* جدول الأصناف التفاعلي */}
-        <div className="w-full overflow-x-auto rounded-lg border border-slate-200">
+        {/* كروت الأصناف للموبايل (< md) */}
+        <div className="block md:hidden print:hidden space-y-2.5">
+          {filteredItems.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              لا توجد أصناف مسجلة تحت هذا الفلتر. اضغط على زر (+ صنف جديد) لإدراج صنف فورياً.
+            </div>
+          ) : (
+            filteredItems.map((item, index) => {
+              const buy = Number(item.costPrice ?? item.purchasePrice ?? 0);
+              const sell = Number(item.salePrice ?? item.price ?? 0);
+              const profit = sell - buy;
+              const pct = buy > 0 ? ((profit / buy) * 100).toFixed(0) : '0';
+              const spec = (item as any).description || (item as any).spec || '';
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => handleOpenEditItem(item)}
+                  className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-2xs cursor-pointer active:bg-blue-50/40"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500">
+                        <span className="font-bold text-slate-700">#{index + 1}</span>
+                        <span>·</span>
+                        <span>{item.code || 'بدون كود'}</span>
+                      </div>
+                      <div className="font-black text-slate-900 text-sm mt-0.5 break-words">{item.name}</div>
+                      {spec && <div className="text-[11px] text-slate-500 truncate mt-0.5">{spec}</div>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditItem(item)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg cursor-pointer transition"
+                        title="تعديل الصنف"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(item)}
+                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition"
+                        title="حذف الصنف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-100 font-mono">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-sans">الرصيد:</span>
+                      <strong className="text-indigo-800">{item.quantity ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-sans">هامش الربح:</span>
+                      <strong className={profit >= 0 ? 'text-blue-700' : 'text-rose-600'}>
+                        {profit.toFixed(1)} ({pct}%)
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-sans">سعر الشراء:</span>
+                      <strong className="text-slate-800">{buy.toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-sans">سعر البيع:</span>
+                      <strong className="text-emerald-700">{sell.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* جدول الأصناف التفاعلي (>= md و للطباعة) */}
+        <div className="hidden md:block print:block w-full overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full border-collapse text-xs text-center">
             <thead className="bg-slate-100 text-slate-800 font-bold sticky top-0 z-10 border-b border-slate-300">
               <tr>

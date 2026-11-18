@@ -190,7 +190,7 @@ export function filterCashTransactionsByBranch(
 
 /**
  * Filters users by branch.
- * Ensures users of "فرع الاخوة" and "فرع الموان" are completely isolated.
+ * Ensures users of different branches remain isolated when filtered by branch.
  */
 export function getBranchUsers(
   users?: User[],

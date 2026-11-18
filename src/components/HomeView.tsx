@@ -1130,9 +1130,77 @@ export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
                   </div>
                 </div>
 
-                {/* Comparative Financial Table */}
-                <div className="border border-slate-200 rounded-xl overflow-x-auto">
-                  <table className="w-full text-xs text-right min-w-[460px]">
+                {/* Mobile Comparative Cards (< md) */}
+                <div className="block md:hidden space-y-2.5">
+                  {[
+                    {
+                      label: 'صافي المبيعات',
+                      val1: periodAnalysis.netSales.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      val2: compPeriodAnalysis.netSales.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      diffText: `${comparisonMetrics.salesGrowthRate >= 0 ? '+' : ''}${comparisonMetrics.salesGrowthRate.toFixed(1)}%`,
+                      diffTone: comparisonMetrics.salesGrowthRate >= 0 ? 'text-emerald-600' : 'text-rose-600',
+                      highlight: false,
+                    },
+                    {
+                      label: 'تكلفة البضاعة (COGS)',
+                      val1: periodAnalysis.cogs.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      val2: compPeriodAnalysis.cogs.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      diffText: `${periodAnalysis.cogs >= compPeriodAnalysis.cogs ? '+' : ''}${(periodAnalysis.cogs - compPeriodAnalysis.cogs).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      diffTone: 'text-slate-600',
+                      highlight: false,
+                    },
+                    {
+                      label: 'مجمل الربح (Gross Profit)',
+                      val1: `${periodAnalysis.grossProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${periodAnalysis.grossProfitMargin.toFixed(1)}%)`,
+                      val2: `${compPeriodAnalysis.grossProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${compPeriodAnalysis.grossProfitMargin.toFixed(1)}%)`,
+                      diffText: `${comparisonMetrics.diffGross >= 0 ? '+' : ''}${comparisonMetrics.diffGross.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      diffTone: comparisonMetrics.diffGross >= 0 ? 'text-emerald-600' : 'text-rose-600',
+                      highlight: false,
+                    },
+                    {
+                      label: 'المصروفات التشغيلية',
+                      val1: periodAnalysis.periodExpenses.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      val2: compPeriodAnalysis.periodExpenses.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+                      diffText: `${comparisonMetrics.diffExpenses >= 0 ? '+' : ''}${comparisonMetrics.diffExpenses.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      diffTone: 'text-slate-600',
+                      highlight: false,
+                    },
+                    {
+                      label: 'صافي الربح التشغيلي النهائي',
+                      val1: `${periodAnalysis.netOperatingProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currencySymbol}`,
+                      val2: `${compPeriodAnalysis.netOperatingProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currencySymbol}`,
+                      diffText: `${comparisonMetrics.profitGrowthRate >= 0 ? '▲ +' : '▼ '}${comparisonMetrics.profitGrowthRate.toFixed(1)}%`,
+                      diffTone: comparisonMetrics.profitGrowthRate >= 0 ? 'text-emerald-700' : 'text-rose-700',
+                      highlight: true,
+                    },
+                  ].map((row) => (
+                    <div
+                      key={row.label}
+                      className={`rounded-xl border p-3 space-y-2 text-xs ${
+                        row.highlight ? 'bg-emerald-50/70 border-emerald-200' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900">{row.label}</span>
+                        <span className={`font-mono font-bold tabular-nums ${row.diffTone}`}>{row.diffText}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-slate-200/70">
+                        <div>
+                          <span className="text-slate-500 block">الفترة الحالية (1)</span>
+                          <span className="font-mono font-semibold text-blue-700 tabular-nums">{row.val1}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 block">الفترة المقارنة (2)</span>
+                          <span className="font-mono font-semibold text-slate-700 tabular-nums">{row.val2}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Comparative Financial Table (>= md) */}
+                <div className="hidden md:block border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs text-right">
                     <thead>
                       <tr className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                         <th className="p-2.5">البند المالي</th>

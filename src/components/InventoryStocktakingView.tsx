@@ -2636,7 +2636,24 @@ export const InventoryStocktakingView: React.FC<InventoryStocktakingViewProps> =
               </p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile cards (< sm, hidden in print) */}
+            <div className="block sm:hidden print:hidden space-y-2">
+              {currentSession.items.map((it, idx) => (
+                <div key={it.itemId} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 space-y-1 text-xs">
+                  <div className="flex items-center justify-between gap-2 font-bold text-slate-900">
+                    <span>{idx + 1}. {it.itemName}</span>
+                    <span className="font-mono text-indigo-800">{it.varianceQty !== 0 ? it.varianceQty : 'مطابق'}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-600 font-mono">
+                    <span>دفتري: {it.bookQty}</span>
+                    <span>فعلي: {it.countedQty}</span>
+                  </div>
+                  {it.notes && <div className="text-[11px] text-slate-500">{it.notes}</div>}
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden sm:block print:block overflow-x-auto">
               <table className="w-full text-right text-xs border border-slate-300">
               <thead className="bg-slate-100 border-b border-slate-300">
                 <tr>
@@ -3251,7 +3268,7 @@ export const InventoryStocktakingView: React.FC<InventoryStocktakingViewProps> =
                   دائن: حساب مخزون البضاعة بالمستودعات (1106)
                 </p>
                 <span className="text-[11px] text-purple-600 font-bold block pt-1">
-                  المعتمد: {selectedIssueVoucher.approvedBy || 'أ. محمد نزيه'}
+                  المعتمد: {selectedIssueVoucher.approvedBy || 'مسؤول الاعتماد'}
                 </span>
               </div>
             </div>

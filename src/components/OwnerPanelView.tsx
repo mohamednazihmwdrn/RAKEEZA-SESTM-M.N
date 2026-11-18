@@ -10,9 +10,7 @@ import {
   CompanyStatus,
 } from '../types';
 import {
-  DEFAULT_COMPANIES,
   DEFAULT_SUBSCRIPTION_PLANS,
-  DEFAULT_TRIAL_REGISTRY,
   createNewTenantCompany,
   generateLicenseActivationCode,
   validateTrialEligibility,
@@ -985,7 +983,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
           <div className="space-y-4">
             {/* Search & Filter Bar */}
             <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 flex flex-wrap gap-3 items-center justify-between shadow-xs text-slate-900">
-              <div className="flex-1 min-w-[240px]">
+              <div className="w-full sm:flex-1 min-w-0 sm:min-w-[240px]">
                 <input
                   type="text"
                   value={searchQuery}
@@ -1114,19 +1112,19 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
                   <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-[11px] text-slate-800">
                     <div>
                       <span className="text-slate-500 block text-[10px]">الخطة:</span>
-                      <span className="font-bold text-slate-200">{c.planName}</span>
+                      <span className="font-bold text-slate-900">{c.planName}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 block text-[10px]">الانتهاء:</span>
-                      <span className="font-mono text-slate-300">{c.trialExpiresAt || c.subscriptionExpiresAt || 'دائم'}</span>
+                      <span className="font-mono text-slate-700">{c.trialExpiresAt || c.subscriptionExpiresAt || 'دائم'}</span>
                     </div>
                     <div>
                       <span className="text-slate-500 block text-[10px]">المدير:</span>
-                      <span className="text-slate-200 font-medium">{c.adminName} ({c.phone})</span>
+                      <span className="text-slate-900 font-medium">{c.adminName} ({c.phone})</span>
                     </div>
                     <div>
                       <span className="text-slate-500 block text-[10px]">المستخدمين:</span>
-                      <span className="font-mono text-slate-300">{c.usersCount || 1} / {c.limits?.maxUsers ?? 10}</span>
+                      <span className="font-mono text-slate-700">{c.usersCount || 1} / {c.limits?.maxUsers ?? 10}</span>
                     </div>
                   </div>
 
@@ -1241,22 +1239,22 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
                         </td>
 
                         <td className="p-3.5">
-                          <div className="font-semibold text-slate-200">{c.adminName}</div>
-                          <div className="text-slate-400 font-mono text-[11px] mt-0.5">{c.phone}</div>
+                          <div className="font-semibold text-slate-900">{c.adminName}</div>
+                          <div className="text-slate-600 font-mono text-[11px] mt-0.5">{c.phone}</div>
                           <div className="text-slate-500 text-[10px]">{c.email}</div>
                         </td>
 
                         <td className="p-3.5">
-                          <div className="text-slate-300 font-mono">
+                          <div className="text-slate-800 font-mono font-semibold">
                             {c.usersCount || 1} مستخدم / {c.limits?.maxUsers ?? 10} متاح
                           </div>
-                          <div className="text-slate-400 text-[11px] mt-0.5">
+                          <div className="text-slate-500 text-[11px] mt-0.5">
                             {c.branchesCount || 1} فروع • {c.operationsCount || 0} حركة
                           </div>
                         </td>
 
                         <td className="p-3.5">
-                          <div className="font-mono text-slate-300 text-xs">
+                          <div className="font-mono text-slate-800 text-xs">
                             {c.trialExpiresAt || c.subscriptionExpiresAt || 'دائم'}
                           </div>
                           <div className="text-[10px] text-slate-500 mt-0.5">

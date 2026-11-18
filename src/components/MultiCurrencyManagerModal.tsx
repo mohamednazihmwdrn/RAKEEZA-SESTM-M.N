@@ -86,10 +86,53 @@ export const MultiCurrencyManagerModal: React.FC<MultiCurrencyManagerModalProps>
           </button>
         </div>
 
-        {/* Currency Rates Table */}
+        {/* Currency Rates Cards (< sm) & Table (>= sm) */}
         <div className="space-y-3">
           <h4 className="text-xs font-bold text-slate-700">جدول أسعار الصرف الحالية (معتمدة في الفواتير والخزائن):</h4>
-          <div className="border border-slate-200 rounded-2xl overflow-hidden">
+
+          {/* Mobile Currency Cards (< sm) */}
+          <div className="block sm:hidden space-y-2">
+            {currencies.map((c) => (
+              <div key={c.code} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-indigo-900">{c.code}</span>
+                    <span className="font-bold text-slate-800">{c.name}</span>
+                    <span className="text-slate-500">({c.symbol})</span>
+                  </div>
+                  {c.isBaseCurrency ? (
+                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                      الأساس
+                    </span>
+                  ) : (
+                    <span className="bg-white text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[10px] font-bold">
+                      أجنبي
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/70">
+                  <span className="text-[11px] text-slate-500">سعر الصرف (مقابل 1 ج.م):</span>
+                  {c.isBaseCurrency ? (
+                    <span className="font-mono font-bold text-emerald-700">1.000</span>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.001"
+                        value={c.exchangeRate}
+                        onChange={(e) => handleRateChange(c.code, parseFloat(e.target.value) || 0)}
+                        className="w-24 p-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-mono font-bold text-indigo-900 text-center focus:outline-none"
+                      />
+                      <span className="text-[11px] text-slate-500">ج.م</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden">
             <table className="w-full text-right text-xs">
               <thead className="bg-[#1a237e] text-white">
                 <tr>

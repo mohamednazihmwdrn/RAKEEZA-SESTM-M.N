@@ -28,6 +28,7 @@ import {
   getCompanyByApiKey,
   regenerateCompanyApiKey,
   updateCompanyProfileCloud,
+  updateOwnCredentialsCloud,
   findCompanyByAnyIdentifier,
   sanitizeCompanyForClient,
   sanitizeAppDataForClient,
@@ -367,11 +368,12 @@ async function startServer() {
 
   // 📱 Register Device & New Company (First-time binding)
   app.post('/api/company/register-device', (req, res) => {
-    const { companyName, adminEmail, adminUsername, adminPassword, branchName, registrationLink } = req.body;
+    const { companyName, adminEmail, adminName, adminUsername, adminPassword, branchName, registrationLink } = req.body;
     const devCtx = extractDeviceContext(req);
     const result = registerDeviceAndCompany({
       companyName,
       adminEmail,
+      adminName,
       adminUsername,
       adminPassword,
       branchName,
@@ -385,6 +387,55 @@ async function startServer() {
     if (!result.success) {
       return res.status(400).json(result);
     }
+
+    res.json(result);
+  });
+
+  // 👤 Update own account profile / username / password (Company Admin or logged-in user)
+  app.post('/api/auth/update-profile', requireAuth, (req, res) => {
+    const auth = (req as any).auth;
+    const targetCompanyId = auth.session.companyId;
+    const targetUserId = auth.session.userId;
+    const { name, username, newPassword, phone } = req.body || {};
+
+    const result = updateOwnCredentialsCloud(targetCompanyId, targetUserId, {
+      name,
+      username,
+      newPassword,
+      phone,
+    });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    const updatedTenant = sanitizeAppDataForClient(getTenantDataStrict(targetCompanyId));
+    const nextVer = getPersistedCompanyVersion(targetCompanyId);
+    const actorUser = {
+      id: targetUserId,
+      name: result.user?.name || auth.session.userName,
+      code: auth.session.userCode || 1,
+      role: auth.session.role,
+    };
+    const actionInfo = {
+      action: 'update_profile',
+      module: 'إعدادات الحساب والأمان',
+      details: `قام ${actorUser.name} بتحديث بيانات دخوله`,
+    };
+    setCompanyVersion(targetCompanyId, nextVer, {
+      version: nextVer,
+      timestamp: new Date().toISOString(),
+      actorUser,
+      actionInfo,
+    });
+    broadcastSyncUpdate(targetCompanyId, {
+      type: 'REALTIME_SYNC',
+      companyId: targetCompanyId,
+      version: nextVer,
+      actorUser,
+      actionInfo,
+      data: updatedTenant,
+      timestamp: new Date().toISOString(),
+    });
 
     res.json(result);
   });

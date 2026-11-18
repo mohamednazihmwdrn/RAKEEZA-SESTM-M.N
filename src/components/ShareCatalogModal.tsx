@@ -3,7 +3,6 @@ import { AppData, CatalogConfig } from '../types';
 import { generateQrDataUrl, printQrPoster } from '../utils/qrHelper';
 import { generateBarcodeDataUrl } from '../utils/barcodeHelper';
 import { addAuditLog } from '../utils/storage';
-import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 
 interface ShareCatalogModalProps {
   isOpen: boolean;
@@ -31,7 +30,7 @@ export const ShareCatalogModal: React.FC<ShareCatalogModalProps> = ({
   const [barcodeDataUrl, setBarcodeDataUrl] = useState<string>('');
 
   const companies = useMemo(() => {
-    return appData.companies && appData.companies.length > 0 ? appData.companies : DEFAULT_COMPANIES;
+    return appData.companies && appData.companies.length > 0 ? appData.companies : [];
   }, [appData.companies]);
 
   const currentUser = useMemo(() => {

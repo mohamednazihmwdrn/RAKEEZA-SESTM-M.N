@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppData, Item, TenantCompany } from '../types';
 import { addAuditLog } from '../utils/storage';
-import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 
 interface CatalogManagerViewProps {
   appData: AppData;
@@ -20,7 +19,7 @@ export const CatalogManagerView: React.FC<CatalogManagerViewProps> = ({
 }) => {
   // Companies list
   const companies: TenantCompany[] = useMemo(() => {
-    return appData.companies && appData.companies.length > 0 ? appData.companies : DEFAULT_COMPANIES;
+    return appData.companies && appData.companies.length > 0 ? appData.companies : [];
   }, [appData.companies]);
 
   const currentUser = useMemo(() => {
@@ -37,8 +36,15 @@ export const CatalogManagerView: React.FC<CatalogManagerViewProps> = ({
   });
 
   const activeCompany = useMemo(() => {
-    return companies.find((c) => c.id === selectedCompanyId) || companies[0];
-  }, [companies, selectedCompanyId]);
+    return (
+      companies.find((c) => c.id === selectedCompanyId) ||
+      companies[0] || ({
+        id: selectedCompanyId,
+        code: selectedCompanyId,
+        name: appData.settings.companyName || 'الشركة الحالية',
+      } as TenantCompany)
+    );
+  }, [companies, selectedCompanyId, appData.settings.companyName]);
 
   // Search and Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -384,7 +390,7 @@ export const CatalogManagerView: React.FC<CatalogManagerViewProps> = ({
           </div>
 
           {/* Company Selector Box */}
-          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-300 flex flex-col gap-2 min-w-[280px]">
+          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-300 flex flex-col gap-2 w-full lg:w-auto min-w-0 sm:min-w-[280px]">
             <div className="flex items-center justify-between text-xs text-slate-700 font-bold">
               <span>🏢 الشركة الحالية المدارة:</span>
               <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] border border-emerald-300 font-mono">
@@ -392,14 +398,14 @@ export const CatalogManagerView: React.FC<CatalogManagerViewProps> = ({
               </span>
             </div>
 
-            <div className="bg-white text-slate-900 font-black text-sm p-3 rounded-xl border border-slate-300 flex items-center justify-between">
-              <span>{activeCompany.name}</span>
-              <span className="text-[11px] text-emerald-700 font-bold">🔒 بياناتك معزولة ومحمية</span>
+            <div className="bg-white text-slate-900 font-black text-sm p-3 rounded-xl border border-slate-300 flex items-center justify-between gap-2">
+              <span className="truncate">{activeCompany.name}</span>
+              <span className="text-[11px] text-emerald-700 font-bold shrink-0">🔒 بياناتك معزولة ومحمية</span>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-slate-300">
+            <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-slate-600">
               <span>رابط متجر هذه الشركة:</span>
-              <span className="font-mono text-amber-300 font-bold">?company={activeCompany.code || activeCompany.id}</span>
+              <span className="font-mono text-indigo-700 font-bold truncate" dir="ltr">?company={activeCompany.code || activeCompany.id}</span>
             </div>
           </div>
         </div>

@@ -11,9 +11,7 @@ import {
   DeviceSessionInfo,
 } from '../src/types';
 import {
-  DEFAULT_COMPANIES,
   DEFAULT_SUBSCRIPTION_PLANS,
-  DEFAULT_TRIAL_REGISTRY,
   createNewTenantCompany,
   generateLicenseActivationCode,
 } from '../src/utils/multiTenantService';
@@ -438,205 +436,20 @@ export function initCloudDatabase(): CloudDatabaseSchema {
     }
   }
 
-  // Build Initial Seed (preserve legacy clean state cleanly)
-  const baseDefaultData = getDefaultData('COMP-000001');
-
-  // Company 1 Seed Data (RAKEEZA HQ)
-  const comp1Data: AppData = {
-    ...baseDefaultData,
-    companyId: 'COMP-000001',
-    settings: {
-      ...baseDefaultData.settings,
-      companyName: 'مؤسسة الموان للتجارة',
-      phone1: '01029190615',
-      taxNumber: '',
-      commercialReg: 'CR-98765',
-      activityCode: '4651 - تجارة عامة وتوزيع',
-    },
-    users: [
-      {
-        id: 'u-admin-1',
-        code: 1,
-        companyId: 'COMP-000001',
-        name: 'Mohamed Nazih (المدير العام)',
-        username: 'admin',
-        password: '123',
-        role: 'company_admin',
-        phone: '01029190615',
-        status: 'active',
-        permissions: { all: true },
-      },
-      {
-        id: 'u-cashier-1',
-        code: 2,
-        companyId: 'COMP-000001',
-        name: 'أحمد محمود (كاشير الفرع الرئيسي)',
-        username: 'cashier',
-        password: '123',
-        role: 'cashier',
-        status: 'active',
-        permissions: { sales: true, pos: true, quotes_orders: true },
-      },
-      {
-        id: 'u-warehouse-1',
-        code: 3,
-        companyId: 'COMP-000001',
-        name: 'سامح إبراهيم (أمين المخزن المركزي)',
-        username: 'warehouse',
-        password: '123',
-        role: 'warehouse_keeper',
-        status: 'active',
-        permissions: { inventory: true, purchases: true },
-      },
-    ],
-    items: baseDefaultData.items.filter((i) => i.companyId === 'COMP-000001' || !i.companyId),
-  };
-
-  // Company 2 Seed Data (مؤسسة الأمل للتوريدات)
-  const comp2Data: AppData = {
-    ...baseDefaultData,
-    companyId: 'COMP-000002',
-    settings: {
-      companyName: 'مؤسسة الأمل للتوريدات العمومية',
-      address: 'شارع السودان، المهندسين، الجيزة',
-      phone1: '01011223344',
-      phone2: '01122334455',
-      phone3: '',
-      taxNumber: '987-654-321',
-      commercialReg: 'CR-11223',
-      activityCode: '4791 - تجارة التجزئة والتوريدات',
-      notes: 'مؤسسة الأمل - رواد توريد مستلزمات الطباعة والكاشير',
-      defaultTaxRate: 14,
-      withholdingTaxRate: 1,
-      currencySymbol: 'ج.م',
-      fiscalYear: '2026',
-    },
-    users: [
-      {
-        id: 'u-amal-admin',
-        companyId: 'COMP-000002',
-        name: 'أحمد محمود القاضي (مدير الأمل)',
-        username: 'alamal_admin',
-        password: '123',
-        role: 'company_admin',
-        status: 'active',
-        phone: '01011223344',
-        permissions: { all: true },
-      },
-      {
-        id: 'u-amal-cashier',
-        companyId: 'COMP-000002',
-        name: 'علي مصطفى (كاشير الأمل)',
-        username: 'amal_cashier',
-        password: '123',
-        role: 'cashier',
-        status: 'active',
-        permissions: { sales: true, pos: true },
-      },
-    ],
-    customers: [
-      {
-        id: 'c-amal-1',
-        name: 'سلسلة مطاعم البركة',
-        phone: '01099887766',
-        balance: 0,
-        address: 'الدقي، الجيزة',
-        priceTier: 'wholesale',
-      },
-      {
-        id: 'c-amal-2',
-        name: 'هايبر ماركت التوحيد',
-        phone: '01233445566',
-        balance: 0,
-        address: 'الهرم، الجيزة',
-        priceTier: 'retail',
-      },
-    ],
-    suppliers: [
-      {
-        id: 's-amal-1',
-        name: 'مصنع الأهرام للبكر الحراري',
-        phone: '01188776655',
-        balance: 0,
-        address: 'مدينة 6 أكتوبر',
-      },
-    ],
-    items: baseDefaultData.items.filter((i) => i.companyId === 'COMP-000002'),
-    salesInvoices: [],
-    purchaseInvoices: [],
-    cashTransactions: [],
-    branches: [
-      {
-        id: 'br-amal-main',
-        code: 'AMAL-01',
-        name: 'مقر ومخزن المهندسين',
-        location: 'المهندسين، الجيزة',
-        phone: '01011223344',
-        isMain: true,
-        manager: 'أحمد محمود القاضي',
-      },
-    ],
-    activeBranchId: 'br-amal-main',
-  };
-
-  // Company 3 Seed Data (مجموعة السلام الهندسية)
-  const comp3Data: AppData = {
-    ...baseDefaultData,
-    companyId: 'COMP-000003',
-    settings: {
-      companyName: 'مجموعة السلام الهندسية والمقاولات',
-      address: 'سموحة، الإسكندرية',
-      phone1: '01299887766',
-      phone2: '',
-      phone3: '',
-      taxNumber: '445-556-667',
-      commercialReg: 'CR-77889',
-      activityCode: '4321 - التركيبات والتجهيزات الهندسية',
-      notes: 'السلام إنجينيرينج - حلول وتجهيزات هندسية متكاملة',
-      defaultTaxRate: 14,
-      currencySymbol: 'ج.م',
-      fiscalYear: '2026',
-    },
-    users: [
-      {
-        id: 'u-salam-admin',
-        companyId: 'COMP-000003',
-        name: 'م. حسام علي إبراهيم (مدير السلام)',
-        username: 'elsalam_admin',
-        password: '123',
-        role: 'company_admin',
-        status: 'active',
-        phone: '01299887766',
-        permissions: { all: true },
-      },
-    ],
-    items: [],
-    salesInvoices: [],
-    purchaseInvoices: [],
-    branches: [
-      {
-        id: 'br-salam-main',
-        code: 'SLM-01',
-        name: 'مقر سموحة الإسكندرية',
-        location: 'سموحة، الإسكندرية',
-        phone: '01299887766',
-        isMain: true,
-        manager: 'م. حسام علي إبراهيم',
-      },
-    ],
-  };
-
   const initialSchema: CloudDatabaseSchema = {
     version: 1,
-    companies: DEFAULT_COMPANIES,
+    companies: [],
     plans: DEFAULT_SUBSCRIPTION_PLANS,
-    trialRegistry: DEFAULT_TRIAL_REGISTRY,
+    trialRegistry: [],
     licenses: [],
     sessions: {},
     tenantsData: {},
     devices: {},
     companyVersions: {},
     processedOperations: {},
+    usedRegistrationLinks: [],
+    pendingVerifications: {},
+    verifiedEmails: {},
     globalUsers: [
       {
         id: 'owner-mohamed-nazih',
@@ -2026,7 +1839,8 @@ export function saveTenantDataStrict(
   const isExplicitDelete =
     actionInfo?.action === 'delete' ||
     actionInfo?.action === 'delete_invoice' ||
-    actionInfo?.action === 'delete_item';
+    actionInfo?.action === 'delete_item' ||
+    actionInfo?.action === 'delete_user';
 
   // Hash incoming new passwords while preserving existing passwordHash values when client sends sanitized users
   const sanitizedIncoming: Partial<AppData> = { ...updatedData };
@@ -2054,18 +1868,41 @@ export function saveTenantDataStrict(
 
   db.tenantsData[companyId] = merged;
 
-  // Update operation count and user count in company meta
+  // Update operation count, user list & primary admin credentials in company meta
   const companyIdx = db.companies.findIndex((c) => c.id === companyId);
   if (companyIdx !== -1) {
     db.companies[companyIdx].operationsCount =
       (merged.salesInvoices?.length || 0) +
       (merged.purchaseInvoices?.length || 0) +
       (merged.cashTransactions?.length || 0);
-    db.companies[companyIdx].usersCount = merged.users?.length || 1;
-    if (merged.users && merged.users.length > 0) {
-      db.companies[companyIdx].users = merged.users;
+    db.companies[companyIdx].usersCount = merged.users?.length || 0;
+    db.companies[companyIdx].users = merged.users || [];
+
+    const primaryAdmin = (merged.users || []).find(
+      (u) => u.role === 'company_admin' || u.role === 'admin' || u.code === 1
+    );
+    if (primaryAdmin) {
+      db.companies[companyIdx].adminName = primaryAdmin.name || db.companies[companyIdx].adminName;
+      db.companies[companyIdx].adminUsername = primaryAdmin.username || db.companies[companyIdx].adminUsername;
+      if (primaryAdmin.passwordHash) {
+        (db.companies[companyIdx] as any).adminPasswordHash = primaryAdmin.passwordHash;
+      }
     }
     db.companies[companyIdx].lastActivityAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+  }
+
+  // Invalidate sessions of deleted or disabled users; refresh active user names
+  if (db.sessions && Array.isArray(merged.users)) {
+    const usersById = new Map<string, User>(merged.users.map((u) => [u.id, u]));
+    for (const [tok, sess] of Object.entries(db.sessions)) {
+      if (sess.companyId !== companyId) continue;
+      const uRec = usersById.get(sess.userId);
+      if (!uRec || uRec.status === 'disabled') {
+        delete db.sessions[tok];
+      } else {
+        sess.userName = uRec.name;
+      }
+    }
   }
 
   saveCloudDatabase(db);
@@ -2098,34 +1935,45 @@ export function createNewCompanyCloud(
   db.companyVersions = db.companyVersions || {};
   db.companyVersions[res.company.id] = 1;
 
-  // Initialize fresh isolated data for the new company
+  // Initialize fresh isolated data for the new company with a primary Admin user
   const base = getDefaultData(res.company.id);
+  const mainBranchId = `br-${res.company.id}-main`;
+  const adminUserId = `u-${res.company.id}-admin`;
+  const adminUserRecord: User = {
+    id: adminUserId,
+    uid: `UID_${res.company.id}_USR_1`,
+    code: 1,
+    userCode: 1,
+    companyId: res.company.id,
+    companyCode: String(res.company.code || '101'),
+    name: res.company.adminName || 'المدير العام',
+    username: res.company.adminUsername || 'admin',
+    ...(adminPasswordHash ? { passwordHash: adminPasswordHash, hasPassword: true } : { hasPassword: false }),
+    role: 'company_admin',
+    branchId: mainBranchId,
+    allowedBranches: [mainBranchId],
+    status: 'active',
+    permissions: { all: true },
+  };
+
+  res.company.users = [adminUserRecord];
+  res.company.usersCount = 1;
+
   db.tenantsData[res.company.id] = {
     ...base,
     companyId: res.company.id,
     version: 1,
+    currentUser: adminUserId,
     settings: {
       ...base.settings,
       companyName: res.company.name,
-      address: res.company.address || 'جمهورية مصر العربية',
+      address: res.company.address || 'المقر الرئيسي',
       phone1: res.company.phone || '',
       taxNumber: res.company.taxNumber || '',
       commercialReg: res.company.commercialReg || '',
       activityCode: res.company.activity || '',
     },
-    users: [
-      {
-        id: `u-${res.company.id}-admin`,
-        code: 1,
-        companyId: res.company.id,
-        name: res.company.adminName || 'المدير العام',
-        username: res.company.adminUsername || 'admin',
-        ...(adminPasswordHash ? { passwordHash: adminPasswordHash, hasPassword: true } : { hasPassword: false }),
-        role: 'company_admin',
-        status: 'active',
-        permissions: { all: true },
-      },
-    ],
+    users: [adminUserRecord],
     items: [],
     salesInvoices: [],
     purchaseInvoices: [],
@@ -2134,16 +1982,16 @@ export function createNewCompanyCloud(
     cashTransactions: [],
     branches: [
       {
-        id: `br-${res.company.id}-main`,
+        id: mainBranchId,
         code: 'HQ-01',
-        name: 'المقر الرئيسي',
+        name: res.company.address || 'الفرع الرئيسي',
         location: res.company.address || 'المقر الرئيسي',
         phone: res.company.phone || '',
         isMain: true,
         manager: res.company.adminName || 'المدير العام',
       },
     ],
-    activeBranchId: `br-${res.company.id}-main`,
+    activeBranchId: mainBranchId,
   };
 
   saveCloudDatabase(db);
@@ -2487,6 +2335,7 @@ export function activateLicenseCloud(
 export function registerDeviceAndCompany(params: {
   companyName: string;
   adminEmail: string;
+  adminName?: string;
   adminUsername?: string;
   adminPassword?: string;
   branchName?: string;
@@ -2508,6 +2357,7 @@ export function registerDeviceAndCompany(params: {
   const cleanName = (params.companyName || '').trim();
   const cleanEmail = (params.adminEmail || '').trim().toLowerCase();
   const cleanUsername = (params.adminUsername || 'admin').trim().toLowerCase();
+  const cleanAdminDisplayName = (params.adminName || '').trim() || (cleanUsername === 'admin' ? 'المدير العام' : cleanUsername);
   const cleanPassword = (params.adminPassword || '').trim();
   const cleanBranchName = (params.branchName || 'الفرع الرئيسي').trim();
   const cleanLink = (params.registrationLink || '').trim().toLowerCase();
@@ -2547,7 +2397,7 @@ export function registerDeviceAndCompany(params: {
     tradeName: cleanName,
     email: cleanEmail,
     adminEmail: cleanEmail,
-    adminName: cleanUsername === 'admin' ? 'المدير العام' : cleanUsername,
+    adminName: cleanAdminDisplayName,
     adminUsername: cleanUsername,
     adminPassword: cleanPassword,
     phone: '',
@@ -2565,62 +2415,50 @@ export function registerDeviceAndCompany(params: {
 
   // Ensure tenant data exists
   const tenantData = getTenantDataStrict(targetCompany.id) || getDefaultData(targetCompany.id);
+  const mainBranchId = `br-${targetCompany.id}-main`;
 
   // Ensure main branch
   if (!tenantData.branches || tenantData.branches.length === 0) {
     tenantData.branches = [
       {
-        id: `br-${targetCompany.id}-main`,
-        code: 'BR-01',
+        id: mainBranchId,
+        code: 'HQ-01',
         name: cleanBranchName,
         location: cleanBranchName,
         phone: '',
         isMain: true,
-        manager: targetCompany.adminName || 'المدير العام',
-      },
-    ];
-  }
-
-  const hashedAdminPass = hashPassword(cleanPassword);
-
-  // Ensure admin user
-  if (!tenantData.users || tenantData.users.length === 0) {
-    tenantData.users = [
-      {
-        id: `u-${targetCompany.id}-admin`,
-        code: 1,
-        companyId: targetCompany.id,
-        name: targetCompany.adminName || 'المدير العام',
-        username: cleanUsername,
-        passwordHash: hashedAdminPass,
-        hasPassword: true,
-        role: 'company_admin',
-        status: 'active',
-        permissions: { all: true },
+        manager: cleanAdminDisplayName,
       },
     ];
   } else {
-    const adminU = tenantData.users.find((u) => u.username?.toLowerCase() === cleanUsername || u.role === 'company_admin');
-    if (adminU) {
-      adminU.passwordHash = hashedAdminPass;
-      adminU.hasPassword = true;
-      delete adminU.password;
-      adminU.username = cleanUsername;
-    } else {
-      tenantData.users.unshift({
-        id: `u-${targetCompany.id}-${cleanUsername}`,
-        code: tenantData.users.length + 1,
-        companyId: targetCompany.id,
-        name: 'المدير العام',
-        username: cleanUsername,
-        passwordHash: hashedAdminPass,
-        hasPassword: true,
-        role: 'company_admin',
-        status: 'active',
-        permissions: { all: true },
-      });
-    }
+    tenantData.branches[0].name = cleanBranchName;
+    tenantData.branches[0].manager = cleanAdminDisplayName;
   }
+  tenantData.activeBranchId = tenantData.branches[0].id;
+
+  const hashedAdminPass = hashPassword(cleanPassword);
+
+  // Ensure single primary Admin / Manager user
+  const adminUserObj: User = {
+    id: `u-${targetCompany.id}-admin`,
+    uid: `UID_${targetCompany.id}_USR_1`,
+    code: 1,
+    userCode: 1,
+    companyId: targetCompany.id,
+    companyCode: String(targetCompany.code || '101'),
+    name: cleanAdminDisplayName,
+    username: cleanUsername,
+    email: cleanEmail,
+    passwordHash: hashedAdminPass,
+    hasPassword: true,
+    role: 'company_admin',
+    branchId: tenantData.branches[0].id,
+    allowedBranches: [tenantData.branches[0].id],
+    status: 'active',
+    permissions: { all: true },
+  };
+  tenantData.users = [adminUserObj];
+  tenantData.currentUser = adminUserObj.id;
 
   saveTenantDataStrict(targetCompany.id, tenantData);
 
@@ -2706,10 +2544,10 @@ export function normalizeArabicNumerals(input: string): string {
 /**
  * 🏢 Helper: Normalize and extract Company ID and User Info from flexible inputs
  * Handles inputs like:
- * - "U-COMP-672842-ADMIN" -> companyId: "COMP-672842", username: "admin"
- * - "COMP-672842" -> companyId: "COMP-672842"
- * - "108" / "١٠٨" -> code: "108"
- * - "nazihm338@gmail.com" -> email
+ * - "U-COMP-100001-ADMIN" -> companyId: "COMP-100001", username: "admin"
+ * - "COMP-100001" -> companyId: "COMP-100001"
+ * - "101" / "١٠١" -> code: "101"
+ * - "user@company.com" -> email
  */
 function parseFlexibleCompanyQuery(query: string) {
   const normalized = normalizeArabicNumerals(query || '').trim();
@@ -2803,28 +2641,6 @@ export function findCompanyByAnyIdentifier(
           return { company: c, matchedUser: u };
         }
       }
-    }
-  }
-
-  // 3. Fallback to DEFAULT_COMPANIES if not yet in db.companies
-  for (const c of DEFAULT_COMPANIES) {
-    const cIdUpper = (c.id || '').toUpperCase();
-    const cCodeUpper = (c.code || (c as any).companyCode || '').toString().toUpperCase();
-    const cCodeNum = cCodeUpper.replace(/[^0-9]/g, '');
-
-    if (
-      cIdUpper === upper ||
-      cCodeUpper === upper ||
-      (cleanNumOnly && cCodeNum === cleanNumOnly) ||
-      cIdUpper === `COMP-${upper}` ||
-      (extractedCompanyId && cIdUpper === extractedCompanyId)
-    ) {
-      if (!db.companies.some((existing) => existing.id === c.id)) {
-        db.companies.push(c);
-        getTenantDataStrict(c.id);
-        saveCloudDatabase(db);
-      }
-      return { company: c };
     }
   }
 
@@ -2992,5 +2808,97 @@ export function updateCompanyProfileCloud(
 
   saveCloudDatabase(db);
   return { success: true, company: comp };
+}
+
+/**
+ * 👤 Update logged-in company admin or user's own account profile & password
+ */
+export function updateOwnCredentialsCloud(
+  companyId: string,
+  userId: string,
+  payload: { name?: string; username?: string; newPassword?: string; phone?: string }
+): { success: boolean; user?: User; company?: TenantCompany; error?: string } {
+  const db = getCloudDatabase();
+  const compIdx = db.companies.findIndex((c) => c.id === companyId || c.code === companyId);
+  if (compIdx === -1) {
+    return { success: false, error: 'المنشأة غير موجودة في السحابة.' };
+  }
+  const comp = db.companies[compIdx];
+  const tenantData = getTenantDataStrict(comp.id);
+  if (!tenantData) {
+    return { success: false, error: 'تعذر تحميل بيانات الشركة.' };
+  }
+
+  const users = tenantData.users || [];
+  let targetIdx = users.findIndex((u) => u.id === userId);
+  if (targetIdx === -1 && users.length > 0) {
+    targetIdx = users.findIndex((u) => u.role === 'company_admin' || u.role === 'admin' || u.code === 1);
+  }
+  if (targetIdx === -1) {
+    return { success: false, error: 'لم يتم العثور على حساب المستخدم.' };
+  }
+
+  const cleanUsername = payload.username?.trim();
+  if (cleanUsername) {
+    const duplicate = users.find(
+      (u, idx) => idx !== targetIdx && u.username?.trim().toLowerCase() === cleanUsername.toLowerCase()
+    );
+    if (duplicate) {
+      return { success: false, error: 'اسم المستخدم هذا مستخدم بالفعل لحساب آخر داخل الشركة.' };
+    }
+  }
+
+  const targetUser = { ...users[targetIdx] };
+  if (payload.name && payload.name.trim()) {
+    targetUser.name = payload.name.trim();
+  }
+  if (cleanUsername) {
+    targetUser.username = cleanUsername;
+  }
+  if (payload.phone !== undefined) {
+    targetUser.phone = payload.phone.trim();
+  }
+  if (payload.newPassword && payload.newPassword.trim()) {
+    const cleanPass = payload.newPassword.trim();
+    if (cleanPass.length < 3) {
+      return { success: false, error: 'كلمة المرور الجديدة يجب أن تكون 3 أحرف على الأقل.' };
+    }
+    targetUser.passwordHash = hashPassword(cleanPass);
+    targetUser.hasPassword = true;
+    delete targetUser.password;
+  }
+
+  users[targetIdx] = targetUser;
+  tenantData.users = users;
+  db.tenantsData[comp.id] = tenantData;
+
+  const isPrimaryAdmin =
+    targetUser.role === 'company_admin' || targetUser.role === 'admin' || targetUser.code === 1;
+  if (isPrimaryAdmin) {
+    comp.adminName = targetUser.name;
+    comp.adminUsername = targetUser.username;
+    if (targetUser.passwordHash) {
+      (comp as any).adminPasswordHash = targetUser.passwordHash;
+    }
+  }
+  comp.users = users;
+  comp.usersCount = users.length;
+  db.companies[compIdx] = comp;
+
+  // Refresh active session userName
+  if (db.sessions) {
+    Object.values(db.sessions).forEach((sess) => {
+      if (sess.companyId === comp.id && sess.userId === targetUser.id) {
+        sess.userName = targetUser.name;
+      }
+    });
+  }
+
+  saveCloudDatabase(db);
+  return {
+    success: true,
+    user: sanitizeUserForClient(targetUser),
+    company: sanitizeCompanyForClient(comp),
+  };
 }
 

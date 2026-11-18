@@ -457,7 +457,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ appData, onUpdateData, s
                   <option value={60}>كل 1 ساعة</option>
                   <option value={120}>كل ساعتين</option>
                   <option value={360}>كل 6 ساعات</option>
-                  <option value={720}>كل 12 ساعة (المحدد لمؤسسة الموان للتجارة)</option>
+                  <option value={720}>كل 12 ساعة (الافتراضي الموصى به)</option>
                   <option value={1440}>مرة واحدة يومياً (Daily Backup)</option>
                 </select>
                 <p className="text-[11px] text-slate-500">
@@ -540,7 +540,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ appData, onUpdateData, s
 
           {/* Quick Snapshot Trigger Card */}
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
-            <div className="flex-1 min-w-[280px]">
+            <div className="w-full sm:flex-1 min-w-0">
               <h4 className="text-sm font-bold text-slate-900">⚡ حفظ لقطة استعادة يدوية فورية مع تسمية مخصصة:</h4>
               <p className="text-xs text-slate-500">
                 يمكنك كتابة وصف مخصص (مثال: قبل إقفال الشهر، قبل جرد المخزن، بعد اعتماد الرواتب).
@@ -553,7 +553,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ appData, onUpdateData, s
                 value={snapshotLabel}
                 onChange={(e) => setSnapshotLabel(e.target.value)}
                 placeholder="اسم اللقطة (اختياري)..."
-                className="p-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50 font-bold focus:border-[#1a237e] focus:outline-none min-w-[220px]"
+                className="p-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50 font-bold focus:border-[#1a237e] focus:outline-none min-w-0 w-full sm:w-auto sm:min-w-[220px]"
               />
               <button
                 onClick={() => handleCreateSnapshot()}

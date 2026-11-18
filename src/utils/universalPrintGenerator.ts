@@ -38,18 +38,18 @@ export function generateUniversalPrintHtml(
   activeSize: UniversalPaperSize = payload.preferredPaperSize || 'a5-portrait'
 ): string {
   const settings = payload.settings || ({} as any);
-  const companyName = settings.companyName || 'مؤسسة الموان للتجارة';
-  const branchName = payload.branch || settings.branchName || 'المقر الرئيسي - مؤسسة الموان';
+  const companyName = settings.companyName || 'اسم المنشأة';
+  const branchName = payload.branch || settings.branchName || 'الفرع الرئيسي';
   const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
-  const finalPhones = phones.length > 0 ? phones : ['01029190615'];
-  const companyCode = settings.code || finalPhones[0] || '01029190615';
+  const finalPhones = phones;
+  const companyCode = settings.code || finalPhones[0] || '';
   const logoUrl = settings.logo || settings.logoUrl || '';
 
   const now = new Date();
   const printDate = payload.date || now.toLocaleDateString('ar-EG');
   const printTime = payload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const docSerial = payload.docNumber !== undefined && payload.docNumber !== '' ? `#${payload.docNumber}` : '#1';
-  const approver = payload.user || 'Mohamed Nazih';
+  const approver = payload.user || 'مدير النظام';
 
   const currencySymbol = settings.currencySymbol || 'ج.م';
   const currencyName = currencySymbol === 'ج.م' ? 'جنيه مصري' : currencySymbol;

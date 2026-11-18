@@ -5,7 +5,6 @@ import { postSaleInvoice, postPurchaseInvoice, mapPaymentMethodToKey } from '../
 import { printInvoiceWindow } from '../utils/printInvoice';
 import { registerModalBackHandler } from '../utils/navigationHistory';
 import { getBranchItems, getMainBranchId } from '../utils/branchIsolation';
-import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
 
 export interface RakeezaInvoiceWorkspaceProps {
   isOpen: boolean;
@@ -306,14 +305,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     });
   };
 
-  // Multi-company isolation: only legacy default company (COMP-000001) falls back to legacy catalog if missing
-  const isDefaultLegacyCompany = !appData.companyId || appData.companyId === 'COMP-000001';
-
   const rawAvailableItems = useMemo(() => {
     if (scopedBranchItems && scopedBranchItems.length > 0) return scopedBranchItems;
     if (appData.items && appData.items.length > 0) return appData.items;
-    return isDefaultLegacyCompany ? PDF_CATALOG_ITEMS_1001 : [];
-  }, [scopedBranchItems, appData.items, isDefaultLegacyCompany]);
+    return [];
+  }, [scopedBranchItems, appData.items]);
 
   // ⚡ Stable items database state synced with memoized rawAvailableItems
   const [localItemsDatabase, setLocalItemsDatabase] = useState(() => mapRawItemsToDb(rawAvailableItems));
@@ -321,23 +317,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   useEffect(() => {
     setLocalItemsDatabase(mapRawItemsToDb(rawAvailableItems));
   }, [rawAvailableItems]);
-
-  // Auto-healing guard: run ONLY for legacy default company (never inject sample items into new companies)
-  const hasRestoredItemsRef = useRef(false);
-  useEffect(() => {
-    if (isDefaultLegacyCompany && (!appData.items || appData.items.length === 0) && !hasRestoredItemsRef.current) {
-      hasRestoredItemsRef.current = true;
-      const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
-        ...it,
-        companyId: appData.companyId || 'COMP-000001',
-        branchId: activeBranchId,
-      }));
-      onUpdateData(
-        { ...appData, items: restored },
-        { action: 'restore_items', module: 'الأصناف', details: 'استعادة الأصناف التلقائية (1001 صنف)' }
-      );
-    }
-  }, [appData.items, activeBranchId, isDefaultLegacyCompany]);
 
   // 🔍 Quick Search Bar on-screen state
   const [workspaceItemSearch, setWorkspaceItemSearch] = useState('');
@@ -2073,7 +2052,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
           {/* 🏷️ 3. نظام تسعير الفاتورة ونوع السداد */}
           <div className="pricing-tier-bar">
-            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[230px]">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
               <span className="text-xs font-semibold text-slate-700 shrink-0">
                 التسعير:
               </span>
@@ -2322,8 +2301,86 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             )}
           </div>
 
-          {/* 5. Items Table */}
-          <div className="table-responsive">
+          {/* 5. Items Mobile Cards (< md) */}
+          <div className="block md:hidden space-y-2.5">
+            {currentInvoiceItems.length === 0 ? (
+              <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg py-8 px-4 text-center text-xs text-slate-500">
+                لم يتم إدراج أصناف بعد
+              </div>
+            ) : (
+              currentInvoiceItems.map((item, index) => (
+                <div
+                  key={item.rowId}
+                  className="bg-white border border-slate-200 rounded-xl p-3 space-y-2.5 shadow-2xs"
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-mono font-bold text-slate-500">#{index + 1}</span>
+                        <span className="font-semibold text-sm text-slate-900 break-words">{item.name}</span>
+                      </div>
+                      {item.spec && <div className="text-[11px] text-slate-500 mt-0.5">{item.spec}</div>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openModifyInvoiceItem(index)}
+                        className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        title="تعديل"
+                      >
+                        <i className="fa-solid fa-pen-to-square"></i>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 cursor-pointer"
+                        title="حذف"
+                      >
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">العدد</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={item.qty}
+                        onChange={(e) => updateTableRowQty(index, e.target.value)}
+                        className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">السعر</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={item.price}
+                        onChange={(e) => updateTableRowPrice(index, e.target.value)}
+                        className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-emerald-700 font-semibold mb-1">الإجمالي</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={item.total}
+                        onChange={(e) => updateTableRowTotal(index, e.target.value)}
+                        className="w-full h-9 text-center text-sm font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 5. Desktop Items Table (>= md) */}
+          <div className="hidden md:block table-responsive">
             <table>
               <thead>
                 <tr>
@@ -2825,7 +2882,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   }
                 }}
                 placeholder="بحث سريع بالاسم أو الكود في أي وقت..."
-                className="flex-1 min-w-[200px] min-h-[38px] px-3 py-1.5 text-base md:text-xs border border-slate-300 rounded-md focus:outline-none focus:border-blue-600"
+                className="w-full sm:flex-1 min-w-0 sm:min-w-[200px] min-h-[38px] px-3 py-1.5 text-base md:text-xs border border-slate-300 rounded-md focus:outline-none focus:border-blue-600"
               />
               <button
                 type="button"

@@ -991,7 +991,7 @@ export async function fetchCompanyPublicDetailsApi(query: string): Promise<{
 
   return {
     success: false,
-    error: `لم يتم العثور على منشأة بالكود أو المعرف "${query}". يرجى التأكد من كتابة كود المنشأة (مثل 108 أو 101) أو معرّف الشركة (COMP-672842) أو كود المستخدم.`,
+    error: `لم يتم العثور على منشأة بالكود أو المعرف "${query}". يرجى التأكد من كتابة كود المنشأة أو معرّف الشركة أو كود المستخدم بشكل صحيح.`,
   };
 }
 
@@ -1001,6 +1001,7 @@ export async function fetchCompanyPublicDetailsApi(query: string): Promise<{
 export async function registerNewCompanyDeviceApi(params: {
   companyName: string;
   adminEmail: string;
+  adminName?: string;
   adminUsername: string;
   adminPassword: string;
   branchName?: string;
@@ -1082,7 +1083,7 @@ export async function registerNewCompanyDeviceApi(params: {
       trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       maxUsers: 15,
       activeUsersCount: 1,
-      adminName: params.adminUsername || 'المدير العام',
+      adminName: params.adminName?.trim() || params.adminUsername || 'المدير العام',
       adminUsername: params.adminUsername,
       adminPassword: params.adminPassword,
     };
@@ -1090,7 +1091,7 @@ export async function registerNewCompanyDeviceApi(params: {
     const newUser: User = {
       id: `u-${newCompId}-admin`,
       code: 1,
-      name: params.adminUsername || 'المدير العام',
+      name: params.adminName?.trim() || params.adminUsername || 'المدير العام',
       username: params.adminUsername,
       password: params.adminPassword,
       role: 'company_admin',
@@ -1272,8 +1273,6 @@ export async function verifyUserIdentityInFirebase(
       cleanUserCode === 'manager' ||
       cleanUserCode === companyDoc.adminUsername?.toLowerCase() ||
       cleanUserCode === companyDoc.adminName?.toLowerCase() ||
-      cleanUserCode === 'nazihm338' ||
-      cleanUserCode === 'mohamed nazih' ||
       cleanUserCode === 'المدير العام')
   ) {
     foundUser = {
@@ -1336,7 +1335,6 @@ export async function verifyUserIdentityInFirebase(
     email: foundUser.email || companyDoc.email,
     phone: foundUser.phone || companyDoc.phone,
     status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=faces',
   };
 
   const verifiedCompany: TenantCompany = {
@@ -1652,7 +1650,6 @@ export async function loginToCloud(
     role: matchedUser.role || 'company_admin',
     email: matchedUser.email || companyDoc.email,
     phone: matchedUser.phone || companyDoc.phone,
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=faces',
   };
 
   const verifiedCompany: TenantCompany = {
@@ -1758,7 +1755,6 @@ export async function loginWithGoogle(
     role: 'admin',
     email: cleanEmail,
     phone: comp.phone,
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
   };
 
   const subscription = {
@@ -1888,7 +1884,7 @@ export async function verifyEmailOtpApi(
     id: newCompId,
     name: companyName?.trim() || `شركة ${cleanEmail.split('@')[0]} للتجارة`,
     email: cleanEmail,
-    phone: phone?.trim() || '01029190615',
+    phone: phone?.trim() || '',
     address: 'المقر الرئيسي',
     createdAt: new Date().toISOString().split('T')[0],
     plan: 'enterprise',
@@ -1905,10 +1901,9 @@ export async function verifyEmailOtpApi(
     id: `u_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
     username: cleanEmail.split('@')[0],
     name: adminName?.trim() || 'المدير العام',
-    role: 'admin',
+    role: 'company_admin',
     email: cleanEmail,
     phone: comp.phone,
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=faces',
   };
 
   const subscription = {
@@ -2808,6 +2803,52 @@ export async function updateCompanyProfile(profileData: {
     return await res.json();
   } catch (err: any) {
     return { success: false, error: err.message || 'فشل الاتصال بالخادم' };
+  }
+}
+
+/**
+ * 👤 Update Own Account Credentials (Name, Username, Password, Phone)
+ */
+export async function updateMyAccountCredentialsApi(payload: {
+  name?: string;
+  username?: string;
+  newPassword?: string;
+  phone?: string;
+}): Promise<{ success: boolean; user?: User; company?: TenantCompany; error?: string }> {
+  const token = getStoredToken();
+  try {
+    const res = await fetch('/api/auth/update-profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : '',
+        ...getClientDeviceHeaders(),
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data?.success && data.user) {
+      const localSess = getStoredLocalSession();
+      if (localSess?.valid) {
+        saveStoredLocalSession({
+          ...localSess,
+          user: { ...localSess.user, ...data.user },
+          company: data.company ? { ...localSess.company, ...data.company } : localSess.company,
+        });
+      }
+      const bound = getStoredBoundDevice();
+      if (bound) {
+        const nextBoundUsers = (bound.users || []).map((bu) =>
+          bu.id === data.user.id || (bu.code && bu.code === data.user.code)
+            ? { ...bu, name: data.user.name, username: data.user.username, role: data.user.role }
+            : bu
+        );
+        setStoredBoundDevice({ ...bound, users: nextBoundUsers });
+      }
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err.message || 'فشل الاتصال بالخادم لتحديث بيانات الحساب' };
   }
 }
 

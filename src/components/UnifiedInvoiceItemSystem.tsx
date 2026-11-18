@@ -1615,7 +1615,7 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   </div>
 
                   {/* Fast click chips */}
-                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
                     <button
                       type="button"
                       onClick={() => handlePriceTierChange('cash')}

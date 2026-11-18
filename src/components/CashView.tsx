@@ -371,18 +371,18 @@ export const CashView: React.FC<CashViewProps> = ({
           {/* Consolidated Journal Search & Table */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
             <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="relative flex-1 min-w-[200px]">
+              <div className="relative flex-1 min-w-0 w-full sm:w-auto sm:min-w-[200px]">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={cashbookSearch}
                   onChange={(e) => setCashbookSearch(e.target.value)}
                   placeholder="بحث في الحركات الموحدة..."
-                  className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1 text-xs"
+                  className="w-full bg-white border border-slate-300 rounded-lg pr-8 pl-3 py-1.5 text-xs"
                 />
               </div>
 
-              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+              <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setCashbookTypeFilter('all')}
@@ -413,7 +413,72 @@ export const CashView: React.FC<CashViewProps> = ({
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* 📱 Mobile Cards (< md) */}
+            <div className="block md:hidden p-3 space-y-2.5">
+              {filteredTransactions.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs">لا توجد حركات مسجلة</div>
+              ) : (
+                filteredTransactions.map((t) => {
+                  const isReceive = t.type === 'receive' || t.type === 'deposit';
+                  return (
+                    <div
+                      key={t.id}
+                      className="bg-slate-50/70 rounded-xl p-3 border border-slate-200 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-slate-700">
+                              {t.voucherNo || (isReceive ? `REC-${t.id}` : `PAY-${t.id}`)}
+                            </span>
+                            {isReceive ? (
+                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded font-bold">
+                                قبض وارد
+                              </span>
+                            ) : (
+                              <span className="bg-rose-50 text-rose-800 border border-rose-200 text-[10px] px-2 py-0.5 rounded font-bold">
+                                صرف منصرف
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-bold text-slate-900 text-xs mt-1 truncate">
+                            {t.customerName || t.supplierName || t.recipientName || 'حساب عام'}
+                          </div>
+                        </div>
+                        <div
+                          className={`font-mono font-black text-sm shrink-0 ${
+                            isReceive ? 'text-emerald-700' : 'text-rose-700'
+                          }`}
+                          dir="ltr"
+                        >
+                          {isReceive ? `+${t.amount.toFixed(2)}` : `-${t.amount.toFixed(2)}`} ج.م
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1.5 border-t border-slate-200">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono">{t.date}</span>
+                          <span>•</span>
+                          <span className="font-semibold text-slate-700">{getMethodLabel(t.method)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => printCashVoucherWindow(t, appData.settings, showToast)}
+                          className="min-h-[36px] px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-slate-700 hover:text-slate-900 flex items-center gap-1 font-bold cursor-pointer"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>طباعة</span>
+                        </button>
+                      </div>
+                      {t.note && <div className="text-[11px] text-slate-500 break-words">{t.note}</div>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* 💻 Desktop Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-right border-collapse text-xs">
                 <thead>
                   <tr className="bg-gradient-to-b from-slate-100 to-slate-200/90 text-slate-800 font-bold border-b border-slate-300 select-none">

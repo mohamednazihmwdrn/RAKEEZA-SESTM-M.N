@@ -2431,7 +2431,7 @@ export const QuotesOrdersView: React.FC<QuotesOrdersViewProps> = ({
                 </div>
               </div>
 
-              <div className="text-left font-mono space-y-1 min-w-[220px]">
+              <div className="text-left font-mono space-y-1 w-full sm:w-auto min-w-0 sm:min-w-[220px]">
                 <div className="flex justify-between">
                   <span className="text-slate-500">المجموع الفرعي:</span>
                   <strong>{selectedQuote.subtotal?.toFixed(2)} {currencySymbol}</strong>

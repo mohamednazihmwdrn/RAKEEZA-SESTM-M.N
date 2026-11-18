@@ -1,8 +1,6 @@
 import { AppData, AccountNode } from '../types';
 import { ensureProductPricesSynced } from './priceService';
-import { DEFAULT_COMPANIES } from './multiTenantService';
 import { saveToIndexedDB } from './indexedDbStorage';
-import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
 import { syncMissingBranchItems, getMainBranchId } from './branchIsolation';
 import { reconcileTreasuryCashBox } from './accountingEngine';
 
@@ -186,201 +184,7 @@ export function getCleanCompanyData(
 
 export function getDefaultData(companyId?: string): AppData {
   const targetCompanyId = (companyId || 'COMP-000001').trim().toUpperCase();
-  // 🛡️ Strict Isolation: Only legacy COMP-000001 gets legacy default branches/demo items; ALL other companies start 100% clean!
-  if (targetCompanyId !== 'COMP-000001') {
-    return getCleanCompanyData(targetCompanyId);
-  }
-  return {
-    companyId: targetCompanyId,
-    settings: {
-      companyName: 'مؤسسة الموان للتجارة',
-      address: 'المقر الرئيسي - مؤسسة الموان',
-      phone1: '01029190615',
-      phone2: '01100000000',
-      phone3: '01200000000',
-      taxNumber: '',
-      commercialReg: '',
-      activityCode: '4651 - تجارة عامة وتوزيع',
-      notes: 'شكراً لتعاملكم مع مؤسسة الموان للتجارة',
-      defaultTaxRate: 0,
-      withholdingTaxRate: 0,
-      currencySymbol: 'ج.م',
-      fiscalYear: '2026',
-    },
-    users: [
-      // 🏢 فرع الاخوة (br-main)
-      {
-        id: 'user1',
-        code: 1,
-        name: 'Mohamed Nazih (المدير العام)',
-        username: 'admin',
-        password: '123',
-        role: 'admin',
-        branchId: 'br-main',
-        permissions: { all: true },
-      },
-      {
-        id: 'user2',
-        code: 2,
-        name: 'أحمد محمود (كاشير ومبيعات)',
-        username: 'cashier',
-        password: '123',
-        role: 'cashier',
-        branchId: 'br-main',
-        permissions: { sales: true, pos: true, quotes: true },
-      },
-      {
-        id: 'user3',
-        code: 3,
-        name: 'سامح إبراهيم (مسؤول مخزن)',
-        username: 'warehouse',
-        password: '123',
-        role: 'warehouse_keeper',
-        branchId: 'br-main',
-        permissions: { inventory: true, items: true },
-      },
-      // 🏢 فرع الموان (br-mowan)
-      {
-        id: 'user4',
-        code: 4,
-        name: 'محمود سعيد (مدير فرع الموان)',
-        username: 'mowan_admin',
-        password: '123',
-        role: 'accountant',
-        branchId: 'br-mowan',
-        permissions: { dashboard: true, accounts: true, sales: true },
-      },
-      {
-        id: 'user5',
-        code: 5,
-        name: 'خالد عبد الرحمن (كاشير مبيعات الموان)',
-        username: 'mowan_cashier',
-        password: '123',
-        role: 'cashier',
-        branchId: 'br-mowan',
-        permissions: { sales: true, pos: true },
-      },
-      {
-        id: 'user6',
-        code: 6,
-        name: 'ياسر فوزي (أمين مخزن الموان)',
-        username: 'mowan_warehouse',
-        password: '123',
-        role: 'warehouse_keeper',
-        branchId: 'br-mowan',
-        permissions: { inventory: true, items: true },
-      },
-    ],
-    currentUser: 'user1',
-    customers: [],
-    suppliers: [],
-    items: PDF_CATALOG_ITEMS_1001.map((i) => ({ ...i, companyId: 'COMP-000001' })),
-    salesInvoices: [],
-    purchaseInvoices: [],
-    cashTransactions: [],
-    backups: [],
-    nextInvoiceNumber: 1,
-    nextPurchaseNumber: 1,
-    nextCashId: 1,
-    cashBox: { drawer: 0, vodafone: 0, instapay: 0, bank: 0 },
-    salesReps: [],
-    bankAccounts: [
-      { id: 'b1', name: 'البنك الأهلي المصري', accountNumber: '', balance: 0 },
-      { id: 'b2', name: 'بنك مصر', accountNumber: '', balance: 0 },
-    ],
-    physicalInventories: [],
-    inventoryAdjustments: [],
-    goodsIssueVouchers: [],
-    fiscalClosings: [],
-    nextStocktakeId: 2,
-    nextAdjustmentId: 1,
-    nextGoodsIssueId: 89,
-    nextClosingId: 1,
-    advancedSettings: {
-      categories: ['أجهزة كمبيوتر', 'طابعات ومعدات', 'شاشات', 'إكسسوارات', 'شبكات وكاميرات'],
-      itemGroups: ['إلكترونيات', 'مكتبية', 'أجهزة ذكية'],
-      units: ['جهاز', 'قطعة', 'طقم', 'علبة', 'كرتونة', 'متر'],
-    },
-
-    // Enterprise Modules Initial Data:
-    accounts: defaultAccountsTree,
-    journalEntries: [],
-    nextJournalId: 1,
-    costCenters: [
-      { id: 'cc-1', code: 'CC-01', name: 'المركز العام الرئيسي', manager: 'المدير المالي' },
-      { id: 'cc-2', code: 'CC-02', name: 'مشروع مبيعات التوزيع', manager: 'مدير المبيعات' },
-      { id: 'cc-3', code: 'CC-03', name: 'فرع الجيزة والمعارض', manager: 'مدير الفرع' },
-    ],
-    branches: [
-      { id: 'br-main', code: 'HQ-01', name: 'فرع الاخوة', location: 'المقر الرئيسي', phone: '01029190615', isMain: true, manager: 'Mohamed Nazih' },
-      { id: 'br-mowan', code: 'BR-02', name: 'فرع الموان', location: 'فرع الموان', phone: '01100000000', isMain: false, manager: 'محمود سعيد' },
-    ],
-    activeBranchId: 'br-main',
-    stockTransfers: [],
-    quotations: [],
-    nextQuoteId: 1,
-    auditLogs: [
-      {
-        id: 'log-init',
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        userName: 'Mohamed Nazih (المدير)',
-        action: 'login',
-        module: 'النظام العام',
-        details: 'تم تشغيل وتهيئة منظومة ركيزة RAKEEZA ERP الاحترافية بجميع وحدات المحاسبة والربط الضريبي بنجاح.',
-      },
-    ],
-    eInvoiceConfig: {
-      taxRegNumber: '',
-      commercialRegNumber: '',
-      branchCode: '0',
-      activityCode: '4651',
-      posSerial: '',
-      isEtaConnected: false,
-      autoGenerateQr: true,
-    },
-
-    // 1. HR & Payroll Initial Data
-    employees: [],
-    payrollSlips: [],
-    nextPayrollId: 1,
-    employeeAdvances: [],
-
-    // 2. Fixed Assets & Depreciation
-    fixedAssets: [],
-    depreciationLogs: [],
-
-    // 3. Cheques & Notes
-    cheques: [],
-    nextChequeId: 1,
-    commissions: [],
-
-    // 4. Manufacturing & BOM
-    boms: [],
-    productionOrders: [],
-    nextProductionId: 1,
-
-    // 5. Bank Statements & Reconciliation
-    bankStatements: [],
-
-    // 6. Approval Requests
-    approvalRequests: [],
-
-    // 7. Auto Backup & Protection (كل 12 ساعة تلقائياً + سحب يدوي)
-    autoBackupConfig: {
-      enabled: true,
-      intervalMinutes: 720, // كل 12 ساعة (720 دقيقة)
-      autoDownloadFile: false,
-      maxSnapshotsToKeep: 15,
-      lastBackupTimestamp: new Date().toISOString(),
-      backupLocation: 'browser_storage',
-      notifyOnBackup: true,
-    },
-
-    // 8. Multi-Tenant Enterprise Architecture
-    companies: [],
-    companyCatalogConfigs: {},
-    deletedRecords: {},
-  };
+  return getCleanCompanyData(targetCompanyId);
 }
 
 export function loadAppData(companyId?: string): AppData {
@@ -518,82 +322,29 @@ export function loadAppData(companyId?: string): AppData {
       }
 
       const resolvedCompId = (loaded.companyId || cleanCompId || 'COMP-000001').trim().toUpperCase();
-      const isLegacyComp1 = resolvedCompId === 'COMP-000001';
 
-      if (isLegacyComp1) {
-        // 🏢 Legacy COMP-000001 branch & user & PDF catalog restoration (never touches other companies!)
-        if (!loaded.branches || loaded.branches.length === 0) {
-          loaded.branches = defaults.branches;
-        } else {
-          let hasMowan = false;
-          loaded.branches = loaded.branches.map((b, idx) => {
-            if (b.id === 'br-main' || b.isMain || idx === 0) {
-              return { ...b, id: 'br-main', isMain: true, name: b.name || 'فرع الاخوة' };
-            }
-            if (b.id === 'br-branch2' || b.id === 'br-mowan' || idx === 1 || b.name.includes('الموان') || b.name.includes('الجيزة')) {
-              hasMowan = true;
-              return { ...b, id: 'br-mowan', isMain: false, name: b.name || 'فرع الموان' };
-            }
-            return b;
-          });
-          if (!hasMowan) {
-            loaded.branches.push({
-              id: 'br-mowan',
-              code: 'BR-02',
-              name: 'فرع الموان',
-              location: 'فرع الموان',
-              phone: '01100000000',
-              isMain: false,
-              manager: 'محمود سعيد',
-            });
-          }
-        }
-
-        if (loaded.activeBranchId === 'br-branch2') {
-          loaded.activeBranchId = 'br-mowan';
-        } else if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
-          loaded.activeBranchId = loaded.branches[0]?.id || 'br-main';
-        }
-
-        if (loaded.users && Array.isArray(loaded.users)) {
-          loaded.users = loaded.users.map((u) => {
-            let targetBranch = u.branchId;
-            if (targetBranch === 'br-branch2') targetBranch = 'br-mowan';
-            if (!targetBranch) targetBranch = loaded.branches[0]?.id || 'br-main';
-            return { ...u, branchId: targetBranch };
-          });
-        } else {
-          loaded.users = defaults.users;
-        }
-
-        if (!loaded.deletedRecords?.['items_all_cleared'] && (!loaded.items || loaded.items.length === 0)) {
-          loaded.items = PDF_CATALOG_ITEMS_1001.map((it) => ({
-            ...it,
-            companyId: 'COMP-000001',
-            branchId: loaded.activeBranchId || 'br-main',
-          }));
-        }
-      } else {
-        // 🛡️ Strict Multi-Tenant Company Isolation: ZERO demo leakage onto non-COMP-000001 tenants
-        if (!loaded.branches || loaded.branches.length === 0) {
-          loaded.branches = [
-            {
-              id: `br-${resolvedCompId}-main`,
-              code: 'HQ-01',
-              name: loaded.settings?.companyName ? `الفرع الرئيسي - ${loaded.settings.companyName}` : 'الفرع الرئيسي',
-              location: loaded.settings?.address || 'المقر الرئيسي',
-              phone: loaded.settings?.phone1 || '',
-              isMain: true,
-              manager: 'المدير العام',
-            },
-          ];
-        }
-        if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
-          loaded.activeBranchId = loaded.branches[0].id;
-        }
-        if (!Array.isArray(loaded.items)) {
-          loaded.items = [];
-        }
+      // Ensure at least the company main branch exists cleanly without any hardcoded demo branches or items
+      if (!loaded.branches || loaded.branches.length === 0) {
+        loaded.branches = [
+          {
+            id: `br-${resolvedCompId}-main`,
+            code: 'HQ-01',
+            name: 'الفرع الرئيسي',
+            location: loaded.settings?.address || 'المقر الرئيسي',
+            phone: loaded.settings?.phone1 || '',
+            isMain: true,
+            manager: 'المدير العام',
+          },
+        ];
+      }
+      if (!loaded.activeBranchId || !loaded.branches.some((b) => b.id === loaded.activeBranchId)) {
+        loaded.activeBranchId = loaded.branches[0].id;
+      }
+      if (!Array.isArray(loaded.items)) {
+        loaded.items = [];
+      }
+      if (!Array.isArray(loaded.users)) {
+        loaded.users = [];
       }
 
       // Ensure all items have a valid companyId and branchId
@@ -789,6 +540,18 @@ export function isDeleteAction(action?: string, details?: string): boolean {
  * 🔍 Maps an action or details string to its target AppData collection name
  */
 export function getTargetCollectionForAction(action?: string, details?: string): string | null {
+  const act = (action || '').toLowerCase();
+  if (act === 'delete_user' || act.includes('user')) return 'users';
+  if (act === 'delete_item' || act.includes('item')) return 'items';
+  if (act === 'delete_purchase' || act.includes('purchase')) return 'purchaseInvoices';
+  if (act === 'delete_invoice' || act.includes('sale') || act.includes('invoice')) return 'salesInvoices';
+  if (act.includes('customer')) return 'customers';
+  if (act.includes('supplier')) return 'suppliers';
+  if (act.includes('cash') || act.includes('voucher')) return 'cashTransactions';
+  if (act.includes('branch')) return 'branches';
+  if (act.includes('quotation')) return 'quotations';
+  if (act.includes('cheque')) return 'cheques';
+
   const combined = `${action || ''} ${details || ''}`.toLowerCase();
   if (combined.includes('purchase') || combined.includes('مشتريات') || combined.includes('شراء')) {
     return 'purchaseInvoices';
@@ -1036,9 +799,12 @@ export function mergeAppDataMonotonically(
 
   if (typeof isExplicitDeletion === 'string' && isExplicitDeletion !== 'true') {
     targetCollection = isExplicitDeletion;
+    isGlobalDelete = false;
   } else if (actionInfo && isDeleteAction(actionInfo.action, actionInfo.details)) {
     targetCollection = getTargetCollectionForAction(actionInfo.action, actionInfo.details);
-    if (!targetCollection) {
+    if (targetCollection) {
+      isGlobalDelete = false;
+    } else {
       isGlobalDelete = true;
     }
   }

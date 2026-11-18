@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, Item } from '../types';
 import { Modal } from './Modal';
 import { exportToExcel } from '../utils/excelExport';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { TableActionButtons } from './TableActionButtons';
-import { PDF_CATALOG_ITEMS_1001 } from '../data/pdfMasterItems';
 import { Trash2, DownloadCloud, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Layers, GitBranch, RefreshCw } from 'lucide-react';
 import {
   getBranchItems,
@@ -161,27 +160,6 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setCurrentPage(1);
   }, [searchTerm, pageSize, categoryFilter, purchaseStatusFilter, activeBranchId]);
 
-  // 🛡️ Auto-recovery: Only restore legacy 1,001 PDF catalog items for the legacy COMP-000001 tenant if never cleared
-  const hasRestoredPdfItemsRef = useRef(false);
-  useEffect(() => {
-    const isLegacyComp1 = !appData.companyId || appData.companyId.trim().toUpperCase() === 'COMP-000001';
-    const isCleared = Boolean(appData.deletedRecords?.['items_all_cleared']);
-    if (isLegacyComp1 && !isCleared && (!appData.items || appData.items.length === 0) && !hasRestoredPdfItemsRef.current) {
-      hasRestoredPdfItemsRef.current = true;
-      const restored = PDF_CATALOG_ITEMS_1001.map((it) => ({
-        ...it,
-        companyId: 'COMP-000001',
-        branchId: activeBranchId,
-      }));
-      const updatedData = { ...appData, items: restored };
-      onUpdateData(updatedData, {
-        action: 'auto_restore_pdf_items',
-        module: 'الأصناف والمخزون',
-        details: 'استعادة تلقائية لأصناف الكتالوج المبدئية للشركة الأولى',
-      });
-    }
-  }, [appData.items, appData.companyId, activeBranchId]);
-
   // Unique categories for the active branch items
   const uniqueCategories = useMemo(() => {
     const set = new Set<string>();
@@ -250,7 +228,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
       return;
     }
 
-    const confirmMsg = `⚠️ تحذير:\nهل أنت متأكد من رغبتك في حذف جميع الأصناف المسجلة (${appData.items.length} صنف) دفعة واحدة يدوياً؟\n\nيمكنك إعادة إدراج أصناف الـ PDF الـ 1,001 في أي وقت لاحقاً بضغطة زر.`;
+    const confirmMsg = `⚠️ تحذير:\nهل أنت متأكد من رغبتك في حذف جميع الأصناف المسجلة (${appData.items.length} صنف) دفعة واحدة يدوياً؟`;
     if (!confirm(confirmMsg)) return;
 
     const updatedData = { ...appData };
@@ -266,40 +244,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
       module: 'الأصناف والمخزون',
       details: 'حذف وتفريغ جميع الأصناف يدوياً دفعة واحدة',
     });
-    showToast('تم حذف وتفريغ جميع الأصناف بنجاح. يمكنك إعادة إدراجها في أي وقت.', 'info');
-  };
-
-  // 📥 دمج أو استعادة أصناف ملف الـ PDF الـ 1001
-  const handleRestorePdfItems = () => {
-    const confirmMsg = `هل ترغب في إدراج ودمج أصناف ملف PDF المعتمدة (${PDF_CATALOG_ITEMS_1001.length} صنف) بدون أعداد وبدون أسعار وبدون تصنيفات الآن؟`;
-    if (!confirm(confirmMsg)) return;
-
-    const updatedData = { ...appData };
-    if (updatedData.deletedRecords) {
-      delete updatedData.deletedRecords['items_all_cleared'];
-      Object.keys(updatedData.deletedRecords).forEach((key) => {
-        if (key.startsWith('items_')) delete updatedData.deletedRecords[key];
-      });
-    }
-    const existingNames = new Set((updatedData.items || []).map((i) => i.name.trim().toLowerCase()));
-    const missing = PDF_CATALOG_ITEMS_1001.filter((p) => !existingNames.has(p.name.trim().toLowerCase())).map((it) => ({
-      ...it,
-      companyId: updatedData.companyId || 'COMP-000001',
-      branchId: activeBranchId,
-    }));
-
-    if (missing.length === 0) {
-      showToast('جميع أصناف ملف الـ PDF الـ 1,001 مدمجة بالفعل في قائمة الأصناف!', 'info');
-      return;
-    }
-
-    updatedData.items = [...(updatedData.items || []), ...missing];
-    onUpdateData(updatedData, {
-      action: 'seed_pdf_items',
-      module: 'الأصناف والمخزون',
-      details: `إدراج ${missing.length} صنف من ملف PDF`,
-    });
-    showToast(`تم إدراج ودمج (${missing.length}) صنف بنجاح في قسم الأصناف!`, 'success');
+    showToast('تم حذف وتفريغ جميع الأصناف بنجاح للبدء من الصفر.', 'info');
   };
 
   // Print Inventory / Items
@@ -698,22 +643,12 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                     <span>مشاركة الكتالوج والـ QR</span>
                   </button>
                 )}
-                {/* زر دمج أصناف ملف PDF */}
-                <button
-                  type="button"
-                  onClick={handleRestorePdfItems}
-                  className="min-h-[42px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-                  title="إدراج ودمج كافة أصناف ملف PDF (1,001 صنف) بدون أعداد وبدون أسعار وبدون تصنيفات"
-                >
-                  <span>📥</span>
-                  <span>دمج / استعادة أصناف PDF (1,001)</span>
-                </button>
                 {/* زر حذف جميع الأصناف دفعة واحدة */}
                 <button
                   type="button"
                   onClick={handleDeleteAllItems}
-                  className="min-h-[42px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-                  title="حذف وتفريغ جميع الأصناف يدوياً دفعة واحدة في أي وقت"
+                  className="min-h-[44px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                  title="حذف وتفريغ جميع الأصناف يدوياً دفعة واحدة"
                 >
                   <span>🗑️</span>
                   <span>حذف جميع الأصناف</span>
@@ -721,7 +656,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
               </>
             )}
           </div>
-          <div className="w-full sm:w-auto min-w-[240px]">
+          <div className="w-full sm:w-auto min-w-0 sm:min-w-[240px]">
             <input
               type="text"
               placeholder="🔍 بحث باسم الصنف، الكود، التصنيف..."

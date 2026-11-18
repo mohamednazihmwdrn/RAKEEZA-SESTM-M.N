@@ -3,7 +3,6 @@ import { AppData, Item, Quotation, InvoiceItem, TenantCompany } from '../types';
 import { addAuditLog } from '../utils/storage';
 import { printWebOrderReceipt } from '../utils/printOrderReceipt';
 import { playOrderAlertChime } from '../utils/audioChime';
-import { DEFAULT_COMPANIES } from '../utils/multiTenantService';
 
 interface CustomerCatalogViewProps {
   appData: AppData;
@@ -33,7 +32,7 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
 }) => {
   // 1. Resolve Available Companies
   const companies = useMemo(() => {
-    return appData.companies && appData.companies.length > 0 ? appData.companies : DEFAULT_COMPANIES;
+    return appData.companies && appData.companies.length > 0 ? appData.companies : [];
   }, [appData.companies]);
 
   // 2. Multi-Tenant URL parameter checking (?company=RKZ-001 or ?company=COMP-000001)
@@ -1517,7 +1516,7 @@ _تم الإرسال عبر الكتالوج الإلكتروني - منظومة
 
             {/* Category Filter Pills & Material Quick Chips */}
             <div className="space-y-1.5 pt-1 border-t border-slate-100">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar text-xs">
+              <div className="flex flex-wrap items-center gap-1.5 pb-1 pt-1 text-xs">
                 <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap ml-1">الأقسام:</span>
                 {categories.map((cat) => {
                   const isSelected = selectedCategory === cat;
@@ -1541,7 +1540,7 @@ _تم الإرسال عبر الكتالوج الإلكتروني - منظومة
 
               {/* Material Quick Filters */}
               {availableMaterials.length > 2 && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+                <div className="flex flex-wrap items-center gap-1.5 pb-1 text-[11px]">
                   <span className="font-bold text-slate-400 whitespace-nowrap ml-1">خامة سريعة:</span>
                   {availableMaterials.slice(0, 8).map((mat) => {
                     const isSelected = selectedMaterialFilter === mat;

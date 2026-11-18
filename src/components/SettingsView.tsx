@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AppData, Settings } from '../types';
+import { AppData, Settings, User } from '../types';
 import {
   getCompanyApiKey,
   regenerateCompanyApiKey,
   updateCompanyProfile,
+  updateMyAccountCredentialsApi,
 } from '../services/cloudApi';
 import {
   Key,
@@ -12,21 +13,30 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
-  Server,
   Smartphone,
   ShieldCheck,
-  Globe,
   Terminal,
+  UserCog,
+  Lock,
 } from 'lucide-react';
 
 interface SettingsViewProps {
   appData: AppData;
-  onUpdateData: (newData: AppData) => void;
+  onUpdateData: (newData: AppData, actionInfo?: any) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onShareCatalog?: () => void;
+  activeUser?: User | null;
+  onAccountUpdated?: (updatedUser: User) => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateData, showToast, onShareCatalog }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  appData,
+  onUpdateData,
+  showToast,
+  onShareCatalog,
+  activeUser,
+  onAccountUpdated,
+}) => {
   const [settings, setSettings] = useState<Settings>({
     paperSize: 'A4',
     pageMargin: 5,
@@ -60,6 +70,87 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
   const [copiedKey, setCopiedKey] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 👤 Current Logged-in Admin / User Credentials Edit State
+  const resolvedUser =
+    activeUser ||
+    appData.users?.find((u) => u.id === appData.currentUser) ||
+    appData.users?.[0];
+  const [acctName, setAcctName] = useState(resolvedUser?.name || '');
+  const [acctUsername, setAcctUsername] = useState(resolvedUser?.username || '');
+  const [acctPhone, setAcctPhone] = useState(resolvedUser?.phone || '');
+  const [acctPassword, setAcctPassword] = useState('');
+  const [acctConfirmPassword, setAcctConfirmPassword] = useState('');
+  const [showAcctPass, setShowAcctPass] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+
+  useEffect(() => {
+    if (resolvedUser) {
+      setAcctName(resolvedUser.name || '');
+      setAcctUsername(resolvedUser.username || '');
+      setAcctPhone(resolvedUser.phone || '');
+    }
+  }, [resolvedUser?.id, resolvedUser?.name, resolvedUser?.username, resolvedUser?.phone]);
+
+  const handleSaveAccountCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!acctName.trim() || !acctUsername.trim()) {
+      showToast('يرجى إدخال الاسم الكامل واسم الدخول للحساب', 'warning');
+      return;
+    }
+    if (acctPassword && acctPassword.trim() !== acctConfirmPassword.trim()) {
+      showToast('كلمة المرور وتأكيدها غير متطابقين', 'error');
+      return;
+    }
+    if (acctPassword && acctPassword.trim().length < 3) {
+      showToast('كلمة المرور الجديدة يجب أن تكون 3 أحرف على الأقل', 'warning');
+      return;
+    }
+    setIsSavingAccount(true);
+    try {
+      const res = await updateMyAccountCredentialsApi({
+        name: acctName.trim(),
+        username: acctUsername.trim(),
+        newPassword: acctPassword.trim() || undefined,
+        phone: acctPhone.trim(),
+      });
+
+      if (res.success && res.user) {
+        const updatedUsers = (appData.users || []).map((u) =>
+          u.id === res.user!.id || (resolvedUser && u.id === resolvedUser.id)
+            ? {
+                ...u,
+                name: res.user!.name,
+                username: res.user!.username,
+                phone: res.user!.phone,
+                hasPassword: true,
+              }
+            : u
+        );
+        onUpdateData(
+          {
+            ...appData,
+            users: updatedUsers,
+          },
+          {
+            action: 'update_profile',
+            module: 'إعدادات الحساب والأمان',
+            details: `تحديث بيانات الدخول للاسم "${res.user.name}" (${res.user.username})`,
+          }
+        );
+        onAccountUpdated?.(res.user);
+        setAcctPassword('');
+        setAcctConfirmPassword('');
+        showToast('تم تحديث بيانات الحساب وكلمة المرور بنجاح وحفظها سحابياً', 'success');
+      } else {
+        showToast(res.error || 'تعذر تحديث بيانات الحساب', 'error');
+      }
+    } catch {
+      showToast('حدث خطأ أثناء تحديث بيانات الحساب', 'error');
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
 
   useEffect(() => {
     loadApiKey();
@@ -253,6 +344,109 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
           <span>{isSaving ? 'جارٍ الحفظ...' : 'حفظ كافة التعديلات'}</span>
         </button>
       </div>
+
+      {/* 👤 Admin / User Account Credentials & Password Management */}
+      <form
+        onSubmit={handleSaveAccountCredentials}
+        className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-indigo-200 space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <h4 className="text-[#1a237e] font-black text-sm sm:text-base flex items-center gap-2">
+            <UserCog className="w-5 h-5 text-indigo-600 shrink-0" />
+            <span>بيانات الدخول وحساب مدير النظام الحالي</span>
+          </h4>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200">
+            الدور: {resolvedUser?.role === 'company_admin' || resolvedUser?.role === 'admin' ? 'مدير عام الشركة' : 'مستخدم'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          يمكنك تعديل اسمك، اسم المستخدم للدخول، رقم الهاتف، أو تغيير كلمة المرور الخاصة بحسابك في أي وقت.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">الاسم بالكامل <span className="text-rose-500">*</span></label>
+            <input
+              type="text"
+              value={acctName}
+              onChange={(e) => setAcctName(e.target.value)}
+              className="w-full min-h-[44px] p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-bold"
+              placeholder="المدير العام"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">اسم المستخدم للدخول <span className="text-rose-500">*</span></label>
+            <input
+              type="text"
+              dir="ltr"
+              value={acctUsername}
+              onChange={(e) => setAcctUsername(e.target.value)}
+              className="w-full min-h-[44px] p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono text-left font-bold"
+              placeholder="admin"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">رقم الهاتف</label>
+            <input
+              type="text"
+              dir="ltr"
+              value={acctPhone}
+              onChange={(e) => setAcctPhone(e.target.value)}
+              className="w-full min-h-[44px] p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono text-left"
+              placeholder="010XXXXXXXX"
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">كلمة المرور الجديدة (اتركه فارغاً للإبقاء)</label>
+            <div className="relative">
+              <input
+                type={showAcctPass ? 'text' : 'password'}
+                dir="ltr"
+                value={acctPassword}
+                onChange={(e) => setAcctPassword(e.target.value)}
+                className="w-full min-h-[44px] p-2.5 pl-10 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono text-left"
+                placeholder="••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAcctPass((prev) => !prev)}
+                className="absolute inset-y-0 left-0 px-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                tabIndex={-1}
+              >
+                {showAcctPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">تأكيد كلمة المرور الجديدة</label>
+            <input
+              type={showAcctPass ? 'text' : 'password'}
+              dir="ltr"
+              value={acctConfirmPassword}
+              onChange={(e) => setAcctConfirmPassword(e.target.value)}
+              className="w-full min-h-[44px] p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono text-left"
+              placeholder="••••••"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={isSavingAccount}
+              className="w-full min-h-[44px] bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-xs disabled:opacity-50"
+            >
+              {isSavingAccount ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              <span>{isSavingAccount ? 'جاري التحديث...' : 'حفظ بيانات الدخول'}</span>
+            </button>
+          </div>
+        </div>
+      </form>
 
       {/* 🏢 1. Company Identity & Legal Information */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
@@ -667,16 +861,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
           {/* Company ID */}
           <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
             <span className="text-xs text-slate-500 block mb-1">معرف المنشأة (Company ID):</span>
-            <div className="flex items-center justify-between font-mono font-bold text-sm text-blue-900">
-              <span>{apiKeyInfo?.companyId || appData.companyId || 'COMP-672842'}</span>
+            <div className="flex items-center justify-between gap-2 font-mono font-bold text-sm text-blue-900 flex-wrap">
+              <span>{apiKeyInfo?.companyId || appData.companyId || '—'}</span>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                كود: {apiKeyInfo?.companyCode || '108'}
+                كود: {apiKeyInfo?.companyCode || appData.settings?.companyCode || '—'}
               </span>
             </div>
           </div>
 
           {/* API Base URL */}
-          <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+          <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl min-w-0">
             <span className="text-xs text-slate-500 block mb-1">رابط الخادم المباشر (API Base URL):</span>
             <div className="font-mono font-bold text-xs text-slate-700 truncate" dir="ltr">
               {typeof window !== 'undefined' ? `${window.location.origin}/api` : 'https://.../api'}
@@ -686,7 +880,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
 
         {/* API Key Box */}
         <div className="bg-slate-50 border border-slate-300 p-4 rounded-xl space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
               <Key className="w-3.5 h-3.5 text-amber-600" />
               مفتاح المصادقة السري للـ APK والسيرفر الخارجي (Secret API Key)
@@ -713,18 +907,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <input
               type={showApiKey ? 'text' : 'password'}
               readOnly
-              value={apiKeyInfo?.apiKey || 'rkz_live_672842_a9d3f8e12b7405c6'}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-sm text-emerald-400 tracking-wider focus:outline-none"
+              value={apiKeyInfo?.apiKey || ''}
+              placeholder="يتم توليد المفتاح تلقائياً عند تسجيل الدخول السحابي"
+              className="w-full min-w-0 bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-mono text-sm text-emerald-400 tracking-wider focus:outline-none"
               dir="ltr"
             />
             <button
               type="button"
               onClick={handleCopyApiKey}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shrink-0 transition-all shadow-sm active:scale-95 cursor-pointer"
+              disabled={!apiKeyInfo?.apiKey}
+              className="min-h-[44px] px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shrink-0 transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
             >
               {copiedKey ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
               {copiedKey ? 'تم النسخ!' : 'نسخ المفتاح'}
@@ -743,7 +939,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ appData, onUpdateDat
           </p>
           <div className="bg-slate-900 p-3 rounded-lg font-mono text-[11px] text-emerald-300 break-all whitespace-pre-wrap max-w-full text-left overflow-x-hidden" dir="ltr">
             curl -X GET "{typeof window !== 'undefined' ? window.location.origin : 'https://your-domain'}/api/tenant/data" \<br />
-            &nbsp;&nbsp;-H "x-api-key: {apiKeyInfo?.apiKey || 'rkz_live_672842_a9d3f8e12b7405c6'}"
+            &nbsp;&nbsp;-H "x-api-key: {apiKeyInfo?.apiKey || 'YOUR_COMPANY_API_KEY'}"
           </div>
           <div className="text-[11px] text-slate-600 flex items-center gap-1.5 pt-1">
             <Smartphone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
