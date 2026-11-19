@@ -400,7 +400,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
 
       onUpdateData(updatedData);
       showToast(`تم إصدار فاتورة POS #${nextId} بنجاح`, 'success');
-      printInvoiceWindow(newInvoice, true, updatedData.settings, showToast);
+      printInvoiceWindow(newInvoice, true, updatedData.settings, showToast, 'A5', updatedData);
     } catch (err: any) {
       showToast(err?.message || 'حدث خطأ أثناء ترحيل فاتورة نقطة البيع', 'error');
       return;

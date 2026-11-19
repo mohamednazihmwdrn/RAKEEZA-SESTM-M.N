@@ -1533,7 +1533,9 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             invoice={selectedInvoice}
             isSales={true}
             settings={appData.settings}
+            appData={appData}
             onPrint={() => handlePrintInvoice(selectedInvoice)}
+            onPrintFormat={(fmt) => handlePrintInvoice(selectedInvoice, fmt === '80mm' ? 'thermal' : fmt)}
             onClose={() => setActiveModal(null)}
             onEdit={() => {
               setActiveModal(null);

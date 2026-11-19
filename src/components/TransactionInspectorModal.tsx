@@ -73,7 +73,7 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
     if (type === 'sale' || type === 'purchase') {
       const inv = data as SaleInvoice | PurchaseInvoice;
       const isSale = type === 'sale';
-      printInvoiceWindow(inv, isSale, appData.settings, showToast, format);
+      printInvoiceWindow(inv, isSale, appData.settings, showToast, format, appData);
     } else if (type === 'cash') {
       const c = data as CashTransaction;
       if (!isThermal && format === 'A4') {
@@ -472,8 +472,8 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
 
                   {/* 2. مربع بيانات المستند */}
                   <div className="border-[1.5px] border-black bg-white p-2 mb-2 text-[10.5px] font-semibold">
-                    <div className="flex justify-between items-center flex-nowrap gap-1">
-                      <div className="flex-[1.3] text-right leading-relaxed">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                      <div className="text-right leading-relaxed min-w-0 break-words">
                         <div>
                           <strong>الطرف: </strong>
                           <span>
@@ -494,14 +494,14 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
                         )}
                       </div>
 
-                      <div className="flex-1 text-center leading-relaxed border-r border-l border-dashed border-slate-500 px-1">
+                      <div className="text-center leading-relaxed border-y sm:border-y-0 sm:border-x border-dashed border-slate-500 py-1 sm:py-0 sm:px-2 min-w-0">
                         <strong className="text-black">{getTypeTitle()}</strong>
                         <div className="text-xs font-black">
                           رقم: #{data.id || data.code || data.orderNumber || data.chequeNumber || '1'}
                         </div>
                       </div>
 
-                      <div className="flex-[1.1] text-left leading-relaxed">
+                      <div className="text-right sm:text-left leading-relaxed min-w-0">
                         <div>
                           <strong>التاريخ: </strong>
                           <span>{data.date || data.createdAt?.substring(0, 10) || '-'}</span>

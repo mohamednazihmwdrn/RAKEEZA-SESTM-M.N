@@ -971,7 +971,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
             className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'firestore_ops'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-md'
-                : 'text-amber-400 hover:bg-slate-800 border border-amber-500/30'
+                : 'text-amber-700 hover:bg-amber-50 border border-amber-300'
             }`}
           >
             <span>🔥 إدارة فايربيس والتقسيم والأرشفة</span>
@@ -1981,7 +1981,7 @@ export const OwnerPanelView: React.FC<OwnerPanelViewProps> = ({
                   <span>📐</span>
                   <span>مسار التجزئة المطبق في Firestore:</span>
                 </div>
-                <div className="font-mono text-xs text-slate-300 bg-slate-900 p-2.5 rounded-xl border border-slate-800 overflow-x-auto">
+                <div className="font-mono text-xs text-slate-300 bg-slate-900 p-2.5 rounded-xl border border-slate-800 break-all">
                   tenants / <span className="text-amber-400">&#123;companyId&#125;</span> / fiscal_years / <span className="text-emerald-400">&#123;fiscalYear&#125;</span> / sales_invoices / <span className="text-cyan-400">&#123;invoiceId&#125;</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-400 pt-1 text-[11px]">

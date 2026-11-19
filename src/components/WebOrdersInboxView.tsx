@@ -699,7 +699,7 @@ ${itemsSummary}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="ابحث برقم الطلب أو العميل أو الهاتف..."
-              className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs md:text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none flex-1 min-w-[150px] md:w-64"
+              className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs md:text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none w-full sm:w-auto sm:flex-1 min-w-0 md:w-64"
             />
 
             <TableActionButtons
