@@ -853,6 +853,12 @@ export function printStatementWindow(
         amountInWords: tafqeetNumber(Math.abs(runBal), curName, 'قرش'),
         columns: ['التاريخ', 'رقم الحركة', 'نوع الحركة والبيان', 'مدين (+)', 'دائن (-)', 'الرصيد'],
         rows,
+        kpis: [
+          { title: 'الرصيد السابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { title: 'إجمالي المدين (+)', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
+          { title: 'إجمالي الدائن (-)', value: `${totalCred.toFixed(2)} ${curSymbol}` },
+          { title: 'الرصيد الختامي', value: `${runBal.toFixed(2)} ${curSymbol}` },
+        ],
         summaries: [
           { label: 'عدد الحركات', value: `${rows.length} حركة`, color: '#16a34a' },
           { label: 'الرصيد السابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
@@ -869,35 +875,10 @@ export function printStatementWindow(
         preferredPaperSize: 'a4-portrait',
         settings: appData?.settings,
       });
+      showToast?.('تم تجهيز كشف الحساب للمعاينة والطباعة بنجاح', 'success');
     }
   } catch (err) {
     console.error('Error dispatching statement universal print:', err);
+    showToast?.('حدث خطأ أثناء تجهيز كشف الحساب للطباعة', 'error');
   }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=950,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (!printWin) {
-    return;
-  }
-
-  try {
-    let html = '';
-    if (typeof partyNameOrData === 'object' && partyNameOrData !== null) {
-      const isSupplier = partyType === 'supplier';
-      html = generateStatementPrintHtml(partyNameOrData, isSupplier);
-    } else if (appData) {
-      const compiled = compileStatementData(partyNameOrData as string, partyType || 'customer', appData, filterFromDate, filterToDate);
-      const isSupplier = partyType === 'supplier';
-      html = generateStatementPrintHtml(compiled, isSupplier);
-    }
-
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-  } catch {}
 }

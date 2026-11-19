@@ -289,26 +289,14 @@ export function printGoodsIssueNote(
         { label: 'إجمالي الكميات', value: `${totalQty}` },
         { label: 'إجمالي التكلفة', value: `${grandTotalCost.toFixed(2)} ${appData.settings?.currencySymbol || 'ج.م'}`, isTotal: true },
       ],
+      signatures: ['أمين المستودع', 'المستلم', 'اعتماد الإدارة'],
       settings: appData.settings,
       preferredPaperSize: 'a5-portrait',
     });
+    showToast?.('تم تجهيز إذن الصرف المخزني للمعاينة والطباعة بنجاح', 'success');
   } catch (err) {
     console.error('Error dispatching goods issue print:', err);
-  }
-
-  const html = generateGoodsIssuePrintHtml(issue, appData);
-  let printWindow: Window | null = null;
-  try {
-    printWindow = window.open('', '_blank', 'width=1000,height=850');
-  } catch {
-    printWindow = null;
-  }
-
-  if (printWindow) {
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
+    showToast?.('حدث خطأ أثناء تجهيز إذن الصرف للطباعة', 'error');
   }
 }
 

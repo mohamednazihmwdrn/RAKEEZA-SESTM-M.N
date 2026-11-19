@@ -497,30 +497,25 @@ export function printShiftReportWindow(
         ['صافي المبيعات', '-', `${(shiftData.salesNet || 0).toFixed(2)} ${curSymbol}`],
         ['مرتجعات الوردية', shiftData.returnsCount || 0, `${(shiftData.returnsNet || 0).toFixed(2)} ${curSymbol}`],
       ],
+      kpis: [
+        { title: 'إجمالي المبيعات', value: `${(shiftData.salesGross || 0).toFixed(2)} ${curSymbol}` },
+        { title: 'المرتجعات', value: `${(shiftData.returnsNet || 0).toFixed(2)} ${curSymbol}` },
+        { title: 'عدد الفواتير', value: `${totalInvoices} فاتورة` },
+        { title: 'صافي الوردية', value: `${totalNetSales.toFixed(2)} ${curSymbol}` },
+      ],
       amount: totalNetSales,
       summaries: [
         { label: 'عدد الفواتير', value: `${totalInvoices} فاتورة` },
         { label: 'صافي مبيعات الوردية', value: `${totalNetSales.toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
+      signatures: ['كاشير الوردية', 'مراجع المبيعات'],
       settings: appData.settings,
       preferredPaperSize: 'a5-portrait',
     });
+    showToast?.('تم تجهيز تقرير إغلاق الوردية للمعاينة والطباعة بنجاح', 'success');
   } catch (err) {
     console.error('Error dispatching shift report print:', err);
-  }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=950,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (printWin) {
-    const html = generateShiftReportPrintHtml(shiftData, appData);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
+    showToast?.('حدث خطأ أثناء تجهيز تقرير الوردية للطباعة', 'error');
   }
 }
 

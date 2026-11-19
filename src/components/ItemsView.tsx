@@ -40,6 +40,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   const [qty, setQty] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [salePrice, setSalePrice] = useState('');
+  const [wholesalePrice, setWholesalePrice] = useState('');
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState('قطعة');
   const [code, setCode] = useState('');
@@ -329,6 +330,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setQty('0');
     setPurchasePrice('0');
     setSalePrice('0');
+    setWholesalePrice('0');
     setItemLastPurchaseDate('');
     setIsModalOpen(true);
   };
@@ -343,6 +345,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setQty(item.quantity?.toString() || '0');
     setPurchasePrice(item.purchasePrice?.toString() || '0');
     setSalePrice(item.salePrice?.toString() || '0');
+    setWholesalePrice((item.wholesalePrice ?? item.wholesaleSellingPrice ?? 0).toString());
     setItemLastPurchaseDate(item.lastPurchaseDate || '');
     setIsModalOpen(true);
   };
@@ -356,6 +359,8 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     const updatedData = { ...appData };
     const pPrice = parseFloat(purchasePrice) || 0;
     const sPrice = parseFloat(salePrice) || (pPrice > 0 ? Number((pPrice * 1.25).toFixed(2)) : 0);
+    const parsedWPrice = parseFloat(wholesalePrice);
+    const wPrice = !isNaN(parsedWPrice) && parsedWPrice > 0 ? parsedWPrice : Number((sPrice * 0.92).toFixed(2));
     const qVal = parseFloat(qty) || 0;
     const currentUser = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
     const nowIso = new Date().toISOString();
@@ -376,7 +381,8 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
           costPrice: pPrice,
           salePrice: sPrice,
           normalSellingPrice: sPrice,
-          wholesaleSellingPrice: Number((sPrice * 0.92).toFixed(2)),
+          wholesalePrice: wPrice,
+          wholesaleSellingPrice: wPrice,
           lastPurchaseDate: itemLastPurchaseDate.trim() || updatedData.items[idx].lastPurchaseDate,
           updatedAt: nowIso,
           updatedBy: currentUser?.name || 'مدير النظام',
@@ -399,7 +405,8 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
         costPrice: pPrice,
         salePrice: sPrice,
         normalSellingPrice: sPrice,
-        wholesaleSellingPrice: Number((sPrice * 0.92).toFixed(2)),
+        wholesalePrice: wPrice,
+        wholesaleSellingPrice: wPrice,
         lastPurchaseDate: itemLastPurchaseDate.trim() || undefined,
         movements: [],
         createdAt: nowIso,
@@ -436,7 +443,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
+    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4 overflow-x-hidden">
       {/* 🧭 Tabs for Items, Movement, and Inventory with full phone back support */}
       <div className="bg-white p-2 rounded-xl border-2 border-slate-200 flex items-center justify-between gap-2 shadow-xs select-none">
         <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -1233,140 +1240,181 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
         </div>
       )}
 
-      {/* Add / Edit Item Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        title={editingItem ? '✏️ تعديل بيانات الصنف والتسعير' : '➕ إضافة صنف جديد للدليل'}
-        onClose={() => setIsModalOpen(false)}
-        footer={
-          <div className="flex flex-col sm:flex-row gap-2 w-full">
-            <button
-              onClick={handleSaveItem}
-              className="min-h-[44px] bg-[#2e7d32] hover:bg-[#1b5e20] active:bg-[#124116] text-white px-6 py-2.5 rounded-xl font-bold cursor-pointer transition shadow-xs flex-1 sm:flex-initial text-center flex items-center justify-center gap-1.5"
-            >
-              <span>💾</span>
-              <span>حفظ بيانات الصنف</span>
-            </button>
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="min-h-[44px] bg-gray-400 hover:bg-gray-500 active:bg-gray-600 text-white px-6 py-2.5 rounded-xl font-bold cursor-pointer transition flex-1 sm:flex-initial text-center"
-            >
-              إلغاء
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-3.5 text-xs md:text-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold mb-1 text-slate-800">اسم الصنف <span className="text-rose-500">*</span></label>
-              <input
-                type="text"
-                placeholder="اسم الصنف المعتمد..."
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-bold"
-              />
-            </div>
-            <div>
-              <label className="block font-bold mb-1 text-slate-800">كود الصنف / الباركود</label>
-              <input
-                type="text"
-                placeholder="مثال: ITM-0001 أو باركود..."
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block font-bold mb-1 text-slate-800">التصنيف / الفئة</label>
-              <input
-                type="text"
-                list="items-category-datalist"
-                placeholder="اكتب أو اختر التصنيف..."
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-bold"
-              />
-              <datalist id="items-category-datalist">
-                {uniqueCategories.map((cat) => (
-                  <option key={cat} value={cat} />
-                ))}
-              </datalist>
+      {/* Add / Edit Item Modal (Dark Navy Catalog Card Matching Reference) */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+          dir="rtl"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div className="bg-[#0f172a] text-white border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto">
+            {/* Header */}
+            <div className="px-4 py-3.5 bg-[#111b30] border-b border-slate-700/70 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Layers className="w-5 h-5 text-blue-400 shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                  {editingItem ? 'تعديل بيانات الصنف والتسعير' : 'كارت إضافة صنف جديد للدليل'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer text-lg shrink-0"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
             </div>
 
-            <div>
-              <label className="block font-bold mb-1 text-slate-800">الوحدة</label>
-              <input
-                type="text"
-                placeholder="قطعة، كرتونة، كيلو..."
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none"
-              />
-            </div>
+            {/* Body */}
+            <div className="p-4 space-y-3 text-xs sm:text-sm max-h-[82vh] overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  اسم الصنف <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="اسم الصنف المعتمد..."
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full min-h-[42px] px-3 py-2 bg-[#162238] border border-blue-500/70 focus:border-blue-400 rounded-xl text-white placeholder:text-slate-400 font-semibold focus:outline-none"
+                />
+              </div>
 
-            <div>
-              <label className="block font-bold mb-1 text-slate-800">تاريخ الشراء / التحديث</label>
-              <input
-                type="date"
-                value={itemLastPurchaseDate}
-                onChange={(e) => setItemLastPurchaseDate(e.target.value)}
-                className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono"
-              />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">كود الصنف / الباركود</label>
+                  <input
+                    type="text"
+                    placeholder="ITM-0001..."
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 font-mono text-center focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">التصنيف / الفئة</label>
+                  <input
+                    type="text"
+                    list="items-category-datalist"
+                    placeholder="اكتب أو اختر..."
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 font-semibold focus:outline-none"
+                  />
+                  <datalist id="items-category-datalist">
+                    {uniqueCategories.map((cat) => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
 
-          <div>
-            <label className="block font-bold mb-1 text-slate-800">الوصف والمواصفات</label>
-            <input
-              type="text"
-              placeholder="وصف مختصر أو مواصفات الصنف..."
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              className="w-full p-2.5 border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الوحدة</label>
+                  <input
+                    type="text"
+                    placeholder="قطعة، كرتونة، كيلو..."
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 text-center focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ الشراء</label>
+                  <input
+                    type="date"
+                    value={itemLastPurchaseDate}
+                    onChange={(e) => setItemLastPurchaseDate(e.target.value)}
+                    className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white font-mono text-center focus:outline-none"
+                  />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-            <div>
-              <label className="block font-bold mb-1 text-slate-700">الكمية الحالية</label>
-              <input
-                type="number"
-                value={qty}
-                onChange={(e) => setQty(e.target.value)}
-                className="w-full p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-0.5 block">0 = بانتظار الشراء</span>
-            </div>
-            <div>
-              <label className="block font-bold mb-1 text-slate-700">سعر الشراء (ج.م)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(e.target.value)}
-                className="w-full p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono font-bold"
-              />
-              <span className="text-[10px] text-slate-400 mt-0.5 block">يُحدث آلياً عند الشراء</span>
-            </div>
-            <div>
-              <label className="block font-bold mb-1 text-slate-700">سعر البيع (ج.م)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={salePrice}
-                onChange={(e) => setSalePrice(e.target.value)}
-                className="w-full p-2.5 bg-white border-2 border-gray-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono font-bold text-indigo-900"
-              />
-              <span className="text-[10px] text-slate-400 mt-0.5 block">سعر البيع المعتمد</span>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">بيان الصنف (وصف اختياري)</label>
+                <input
+                  type="text"
+                  placeholder="بيان / مواصفة / وصف الصنف..."
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 focus:outline-none"
+                />
+              </div>
+
+              {/* 2x2 Pricing & Stock Box */}
+              <div className="bg-[#132038] border border-blue-600/40 rounded-xl p-3 space-y-2.5 tabular-nums">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">الكمية الحالية</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={qty}
+                      onChange={(e) => setQty(e.target.value)}
+                      className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-slate-700 focus:border-blue-500 rounded-lg text-white font-mono font-bold text-center focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">سعر الشراء (ج.م)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={purchasePrice}
+                      onChange={(e) => setPurchasePrice(e.target.value)}
+                      className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-slate-700 focus:border-blue-500 rounded-lg text-rose-300 font-mono font-bold text-center focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">سعر البيع قطاعي (ج.م)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(e.target.value)}
+                      className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-blue-500/60 focus:border-blue-400 rounded-lg text-emerald-300 font-mono font-bold text-center focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1">سعر الجملة (ج.م)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={wholesalePrice}
+                      onChange={(e) => setWholesalePrice(e.target.value)}
+                      className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-slate-700 focus:border-blue-500 rounded-lg text-amber-300 font-mono font-bold text-center focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action CTA */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveItem}
+                  className="flex-1 min-h-[46px] bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-5 py-2.5 rounded-xl font-bold cursor-pointer transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+                >
+                  <span>✓</span>
+                  <span>{editingItem ? 'حفظ تعديلات الصنف' : 'حفظ وإضافة الصنف للدليل'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 px-5 py-2.5 rounded-xl font-semibold cursor-pointer transition"
+                >
+                  إلغاء
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </Modal>
+      )}
 
       {/* 🌳 Modal إضافة هيكل شجري متكامل (مجموعة > تصنيف > نوع > صنف) */}
       <Modal

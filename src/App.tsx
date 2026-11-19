@@ -1567,6 +1567,7 @@ export default function App() {
           }}
         />
         <Toast message={toastMessage} type={toastType} />
+        <CentralizedInvoicePrintModal defaultSettings={appData.settings} />
       </div>
     );
   }

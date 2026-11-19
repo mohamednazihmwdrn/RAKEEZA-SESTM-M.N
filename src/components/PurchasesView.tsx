@@ -21,14 +21,18 @@ import {
   ChevronsRight,
   ShieldCheck,
   Layers,
+  FileSpreadsheet,
+  ArrowUpDown,
+  Calendar,
+  Tag,
 } from 'lucide-react';
 import { AppData, PurchaseInvoice, InvoiceItem } from '../types';
 import { Modal } from './Modal';
 import { printInvoiceWindow } from '../utils/printInvoice';
 import { InvoiceCardTemplate } from './InvoiceCardTemplate';
 import { exportToExcel } from '../utils/excelExport';
-import { openUnifiedPrintWindow } from '../utils/printUnified';
-import { TableActionButtons } from './TableActionButtons';
+import { openBatchInvoicesPrint } from '../services/centralizedPrintService';
+import { classifyPurchaseInvoice, computeRegisterSummary } from '../utils/invoiceClassification';
 import { InvoiceItemModal } from './InvoiceItemModal';
 import { UnifiedInvoiceItemSystem, InvoiceItemUnified, PaymentRow } from './UnifiedInvoiceItemSystem';
 import { postPurchaseInvoice, deletePurchaseInvoice } from '../utils/posting';
@@ -55,9 +59,13 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // ⚡ 10M+ High-Volume Big Data Pagination States
+  // ⚡ 10M+ High-Volume Big Data Pagination & Filtering States
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('all');
+  const [docCategoryTab, setDocCategoryTab] = useState<'all' | 'invoices' | 'returns'>('all');
+  const [docTypeFilter, setDocTypeFilter] = useState<'all' | 'nagdi' | 'ajel' | 'return_nagdi' | 'return_ajel'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
 
   // Form State
   const [supplierName, setSupplierName] = useState('');
@@ -137,25 +145,58 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     return i.name.toLowerCase().includes(q) || (i.id && i.id.toString().includes(q));
   });
 
-  const filteredInvoices = appData.purchaseInvoices.filter((inv) => {
-    if (selectedBranchFilter !== 'all' && inv.branchId && inv.branchId !== selectedBranchFilter) {
-      return false;
-    }
-    const s = searchTerm.toLowerCase();
-    if (!s) return true;
-    return (
-      inv.id.toString().includes(s) ||
-      inv.supplierName?.toLowerCase().includes(s) ||
-      inv.phone?.toLowerCase().includes(s) ||
-      inv.salesRep?.toLowerCase().includes(s) ||
-      inv.notes?.toLowerCase().includes(s)
-    );
-  });
+  const allPurchasesList = appData.purchaseInvoices || [];
+  const regularPurchasesCount = allPurchasesList.filter((inv) => !inv.type?.startsWith('return_')).length;
+  const returnsPurchasesCount = allPurchasesList.filter((inv) => inv.type?.startsWith('return_')).length;
+
+  const filteredInvoices = allPurchasesList
+    .filter((inv) => {
+      if (selectedBranchFilter !== 'all' && inv.branchId && inv.branchId !== selectedBranchFilter) {
+        return false;
+      }
+      if (selectedYearFilter !== 'all' && !(inv.date || '').startsWith(selectedYearFilter)) {
+        return false;
+      }
+      const isRet = inv.type?.startsWith('return_');
+      if (docCategoryTab === 'invoices' && isRet) return false;
+      if (docCategoryTab === 'returns' && !isRet) return false;
+      if (docTypeFilter !== 'all' && inv.type !== docTypeFilter) return false;
+
+      const s = searchTerm.trim().toLowerCase();
+      if (!s) return true;
+      const matchesItem = (inv.items || []).some(
+        (it) =>
+          (it.name && it.name.toLowerCase().includes(s)) ||
+          (it.code && it.code.toLowerCase().includes(s))
+      );
+      return (
+        inv.id.toString().includes(s) ||
+        inv.supplierName?.toLowerCase().includes(s) ||
+        inv.phone?.toLowerCase().includes(s) ||
+        inv.salesRep?.toLowerCase().includes(s) ||
+        inv.notes?.toLowerCase().includes(s) ||
+        matchesItem
+      );
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'oldest') {
+        const cmp = (a.date || '').localeCompare(b.date || '');
+        return cmp !== 0 ? cmp : (Number(a.id) || 0) - (Number(b.id) || 0);
+      }
+      if (sortOrder === 'highest') return (b.total || 0) - (a.total || 0);
+      if (sortOrder === 'lowest') return (a.total || 0) - (b.total || 0);
+      const cmp = (b.date || '').localeCompare(a.date || '');
+      return cmp !== 0 ? cmp : (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
 
   const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (safeCurrentPage - 1) * pageSize;
   const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + pageSize);
+
+  const availableInvoiceYears = Array.from(
+    new Set(allPurchasesList.map((inv) => (inv.date || '').substring(0, 4)).filter(Boolean))
+  ).sort((a, b) => b.localeCompare(a));
 
   const getMethodLabel = (m: string) => {
     switch (m) {
@@ -653,56 +694,28 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     printInvoiceWindow(inv, false, appData.settings, showToast, preferredFormat, appData);
   };
 
-  // Print Purchases List
+  // Print Purchases List as Separate Independent Documents (Mode B)
   const handlePrintPurchasesList = () => {
-    const list = appData.purchaseInvoices || [];
-    const totalAmount = list.reduce((sum, i) => sum + (i.total || 0), 0);
-    const totalPaid = list.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
-    const totalRemaining = totalAmount - totalPaid;
-
-    openUnifiedPrintWindow(
-      {
-        reportTitle: 'سجل فواتير المشتريات والتوريدات',
-        subTitle: 'كشف المشتريات المعتمد',
-        serial: 'PURCH-REP',
-        branch: 'إدارة المشتريات والمخازن',
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        kpis: [
-          { title: 'عدد الفواتير', value: `${list.length} فاتورة` },
-          { title: 'إجمالي المشتريات', value: `${totalAmount.toFixed(2)} ج.م` },
-          { title: 'إجمالي المسدد', value: `${totalPaid.toFixed(2)} ج.م` },
-          { title: 'المتبقي ذمم موردين', value: `${totalRemaining.toFixed(2)} ج.م` },
-        ],
-        columns: ['#', 'التاريخ', 'المورد', 'النوع', 'الإجمالي', 'المسدد', 'المتبقي'],
-        rows: list.map((inv) => [
-          `#${inv.id}`,
-          inv.date,
-          inv.supplierName,
-          inv.type === 'return_nagdi' || inv.type === 'return_ajel'
-            ? 'مرتجع'
-            : inv.type === 'nagdi'
-            ? 'نقدي'
-            : 'آجل',
-          `${inv.total.toFixed(2)} ج.م`,
-          `${(inv.paidAmount || 0).toFixed(2)} ج.م`,
-          `${(inv.total - (inv.paidAmount || 0)).toFixed(2)} ج.م`,
-        ]),
-        summary: [
-          { label: 'إجمالي قيمة المشتريات', value: `${totalAmount.toFixed(2)} ج.م`, isTotal: true },
-          { label: 'إجمالي المبالغ المسددة', value: `${totalPaid.toFixed(2)} ج.م` },
-          { label: 'إجمالي المتبقي للموردين', value: `${totalRemaining.toFixed(2)} ج.م` },
-        ],
-        footerNote: 'تم استخراج سجل المشتريات من النظام المحاسبي المعتمد',
-      },
-      appData.settings,
-      showToast
-    );
+    const list = filteredInvoices;
+    if (list.length === 0) {
+      showToast('لا توجد فواتير مشتريات مطابقة للطباعة', 'warning');
+      return;
+    }
+    const classifiedRecords = list.map((inv) => classifyPurchaseInvoice(inv, appData));
+    openBatchInvoicesPrint(classifiedRecords, {
+      title: docCategoryTab === 'returns' ? 'سجل مرتجعات المشتريات' : 'فواتير المشتريات',
+      subtitle: `عدد المستندات: ${classifiedRecords.length} فاتورة مستقلة ببياناتها الكاملة`,
+      settings: appData.settings,
+      appData,
+      preferredPaperSize: 'a5-portrait',
+      includeSummarySheet: false,
+      summaryStats: computeRegisterSummary(classifiedRecords),
+    });
   };
 
   // Export Purchases to Excel
   const handleExportPurchasesExcel = () => {
-    const list = appData.purchaseInvoices || [];
+    const list = filteredInvoices.length > 0 ? filteredInvoices : appData.purchaseInvoices || [];
     exportToExcel({
       filename: `سجل_فواتير_المشتريات_${new Date().toISOString().split('T')[0]}`,
       sheetName: 'المشتريات',
@@ -714,12 +727,18 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
         {
           header: 'نوع الفاتورة',
           getValue: (item: PurchaseInvoice) =>
-            item.type === 'return_nagdi' || item.type === 'return_ajel'
-              ? 'مرتجع مشتريات'
+            item.type === 'return_nagdi'
+              ? 'مرتجع شراء نقدي'
+              : item.type === 'return_ajel'
+              ? 'مرتجع شراء آجل'
+              : item.purchaseType === 'wholesale'
+              ? item.type === 'ajel'
+                ? 'شراء جملة آجل'
+                : 'شراء جملة نقدي'
               : item.type === 'nagdi'
-              ? 'نقدي'
-              : 'آجل',
-          width: 16,
+              ? 'شراء نقدي'
+              : 'شراء آجل',
+          width: 18,
         },
         {
           header: 'الإجمالي (ج.م)',
@@ -757,166 +776,401 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     }
   };
 
-  const totalPurchasesAmount = (appData.purchaseInvoices || []).reduce((acc, i) => acc + (i.total || 0), 0);
-  const totalPurchasesPaid = (appData.purchaseInvoices || []).reduce((acc, i) => acc + (i.paidAmount || 0), 0);
-  const totalPurchasesRemaining = totalPurchasesAmount - totalPurchasesPaid;
+  const totalPurchasesAmount = filteredInvoices.reduce((acc, i) => acc + (i.total || 0), 0);
+  const totalPurchasesPaid = filteredInvoices.reduce((acc, i) => acc + (i.paidAmount || 0), 0);
+  const totalPurchasesRemaining = Math.max(0, totalPurchasesAmount - totalPurchasesPaid);
+  const activeFilterBranch = appData.branches?.find((b) => b.id === selectedBranchFilter);
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
-      {/* 🏛️ ترويسة قسم إدارة المشتريات والتوريد */}
-      <div className="bg-white text-slate-900 p-3.5 sm:p-4 rounded-xl border border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
-            <Building2 className="w-5 h-5 text-teal-600" />
+    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-3 overflow-x-hidden">
+      {/* 🏛️ ترويسة وأزرار قسم المشتريات (متوافق تماماً مع الهاتف بدون تمرير أفقي) */}
+      <div className="bg-white text-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                إدارة فواتير المشتريات والتوريدات
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-500">
+                توريد المخزون ونظام الكروت المباشر بدون أي تمرير أفقي
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">
-              إدارة فواتير المشتريات والتوريدات
-            </h2>
-            <p className="text-xs text-slate-500 font-normal">
-              قسم المشتريات · تسجيل وتدقيق فواتير الشراء النقدي والآجل ومستحقات الموردين
-            </p>
+
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('invoice_registry')}
+                className="min-h-[38px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Layers className="w-4 h-4" />
+                <span>السجل المصنف والطباعة</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleRunAuditAndClean}
+              className="min-h-[38px] bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+              title="فحص فوري لسندات الصرف والقبض وإزالة أي تكرار ناتج عن الشبكة وتوفيق أرصدة الخزائن"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-300" />
+              <span>فحص وتطهير التكرار</span>
+            </button>
           </div>
         </div>
 
-        {/* Quick KPI Summary */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto tabular-nums">
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">عدد الفواتير</span>
-            <span className="text-xs sm:text-sm font-semibold text-slate-900">{appData.purchaseInvoices?.length || 0}</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">إجمالي المشتريات</span>
-            <span className="text-xs sm:text-sm font-semibold text-emerald-700">{totalPurchasesAmount.toLocaleString()} ج.م</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">المسدد للموردين</span>
-            <span className="text-xs sm:text-sm font-semibold text-teal-700">{totalPurchasesPaid.toLocaleString()} ج.م</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">مستحقات آجلة</span>
-            <span className="text-xs sm:text-sm font-semibold text-amber-700">{totalPurchasesRemaining.toLocaleString()} ج.م</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Bar */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between">
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-          {/* 1. شراء نقدي */}
+        {/* Excel + Print & Export Batch PDF + Utility Tools */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
           <button
-            onClick={() => openCreateModal('nagdi', 'buy')}
-            className="min-h-[44px] sm:min-h-[40px] bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة شراء نقدي بسداد فوري للمورد من الخزينة"
+            type="button"
+            onClick={handlePrintPurchasesList}
+            className="col-span-2 sm:flex-initial min-h-[42px] bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            title="طباعة وتصدير كافة فواتير المشتريات المعروضة كل فاتورة مستقلة ببياناتها"
           >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>شراء نقدي</span>
+            <Printer className="w-4 h-4 shrink-0" />
+            <span className="truncate">طباعة وتصدير ({filteredInvoices.length}) PDF</span>
           </button>
 
-          {/* 2. شراء جملة / توريد */}
           <button
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[44px] sm:min-h-[40px] bg-cyan-800 hover:bg-cyan-900 active:bg-cyan-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة توريد وشراء كميات جملة"
+            type="button"
+            onClick={handleExportPurchasesExcel}
+            className="min-h-[42px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+            title="تصدير المشتريات إلى Excel"
           >
-            <Building2 className="w-4 h-4 shrink-0" />
-            <span>شراء جملة / توريد</span>
+            <FileSpreadsheet className="w-4 h-4 shrink-0" />
+            <span>Excel</span>
           </button>
-
-          {/* 3. شراء أجل */}
-          <button
-            onClick={() => openCreateModal('ajel', 'buy')}
-            className="min-h-[44px] sm:min-h-[40px] bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة شراء آجل على حساب ومستحقات المورد"
-          >
-            <DollarSign className="w-4 h-4 shrink-0" />
-            <span>شراء آجل</span>
-          </button>
-
-          {/* 4. مرتجع شراء نقدي */}
-          <button
-            onClick={() => openCreateModal('return_nagdi', 'buy')}
-            className="min-h-[44px] sm:min-h-[40px] bg-rose-700 hover:bg-rose-800 active:bg-rose-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع بضاعة واسترداد نقدي من المورد إلى الخزينة"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع نقدي</span>
-          </button>
-
-          {/* 5. مرتجع شراء جملة */}
-          <button
-            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="min-h-[44px] sm:min-h-[40px] bg-red-900 hover:bg-red-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع شراء جملة بسعر جملة الشراء"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع شراء جملة</span>
-          </button>
-
-          {/* 6. مرتجع أجل */}
-          <button
-            onClick={() => openCreateModal('return_ajel', 'buy')}
-            className="min-h-[44px] sm:min-h-[40px] bg-slate-700 hover:bg-slate-800 active:bg-slate-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع بضاعة وخصم من مستحقات المورد"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع آجل</span>
-          </button>
-
-          {/* 7. فحص وتطهير السندات المكررة */}
-          <button
-            onClick={handleRunAuditAndClean}
-            className="min-h-[44px] sm:min-h-[40px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فحص فوري لسندات الصرف والقبض وإزالة أي تكرار ناتج عن الشبكة وتوفيق أرصدة الخزائن"
-          >
-            <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-300" />
-            <span>فحص وتطهير التكرار</span>
-          </button>
-
-          <TableActionButtons
-            onPrint={handlePrintPurchasesList}
-            onExportExcel={handleExportPurchasesExcel}
-            printTitle="طباعة سجل فواتير المشتريات"
-            exportTitle="تصدير المشتريات إلى Excel"
-          />
 
           {onNavigate && (
             <button
               type="button"
               onClick={() => onNavigate('invoice_registry')}
-              className="min-h-[44px] sm:min-h-[40px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-              title="فتح سجل الفواتير المصنف والطباعة المجمعة (Mode B)"
+              className="md:hidden min-h-[42px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Layers className="w-4 h-4 shrink-0" />
-              <span>السجل المصنف والطباعة</span>
+              <span>السجل المصنف</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleRunAuditAndClean}
+            className="md:hidden col-span-2 sm:col-span-1 min-h-[42px] bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+            title="فحص وتطهير السندات المكررة"
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>فحص وتطهير التكرار</span>
+          </button>
         </div>
-        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0">
-          {appData.branches && appData.branches.length > 1 && (
+
+        {/* Primary Invoice Creation Buttons (Stacks vertically on mobile) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'buy')}
+            className="w-full min-h-[46px] bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            title="فاتورة شراء نقدي بسداد فوري للمورد من الخزينة"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>إنشاء فاتورة شراء نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'wholesale')}
+            className="w-full min-h-[46px] bg-cyan-800 hover:bg-cyan-900 active:bg-cyan-950 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            title="فاتورة توريد وشراء كميات جملة"
+          >
+            <Tag className="w-4 h-4 shrink-0" />
+            <span>+ شراء جملة / توريد</span>
+          </button>
+        </div>
+
+        {/* Explicit 4 Core Purchase Movements + Wholesale Quick Modes */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-slate-100 w-full">
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'buy')}
+            className="min-h-[42px] bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <DollarSign className="w-3.5 h-3.5 shrink-0" />
+            <span>شراء نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('ajel', 'buy')}
+            className="min-h-[42px] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            <span>شراء آجل</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_nagdi', 'buy')}
+            className="min-h-[42px] bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_ajel', 'buy')}
+            className="min-h-[42px] bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع آجل</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'wholesale')}
+            className="min-h-[42px] bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border border-cyan-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Tag className="w-3.5 h-3.5 shrink-0" />
+            <span>شراء جملة</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
+            className="min-h-[42px] bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع جملة</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Segmented Tabs: فواتير المشتريات | مرتجع المشتريات | الكل */}
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 grid grid-cols-3 gap-1.5 shadow-2xs w-full">
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('invoices');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'invoices'
+              ? 'bg-teal-700 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span className="truncate">فواتير المشتريات</span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'invoices'
+                ? 'bg-teal-600 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {regularPurchasesCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('returns');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'returns'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span className="flex items-center gap-1 truncate">
+            <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+            <span>المرتجعات</span>
+          </span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'returns'
+                ? 'bg-rose-500 text-white'
+                : 'bg-rose-100 text-rose-700'
+            }`}
+          >
+            {returnsPurchasesCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('all');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span>الكل</span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'all'
+                ? 'bg-slate-700 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {allPurchasesList.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Branch Scope Card (Mobile Vertical Stack -> Zero Horizontal Scroll) */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-2xs w-full">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+          <span className="text-xs font-bold text-slate-600 shrink-0">عرض فواتير المشتريات:</span>
+          <select
+            value={selectedBranchFilter}
+            onChange={(e) => {
+              setSelectedBranchFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full sm:flex-1 min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-slate-50 text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
+          >
+            <option value="all">كافة فروع المنشأة ({allPurchasesList.length})</option>
+            {(appData.branches || []).map((b) => (
+              <option key={b.id} value={b.id}>
+                فرع: {b.name} ({allPurchasesList.filter((i) => i.branchId === b.id).length})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedBranchFilter('all');
+              setCurrentPage(1);
+            }}
+            className={`w-full sm:w-auto min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              selectedBranchFilter === 'all'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            كافة الفروع ({appData.branches?.length || 1})
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 text-right sm:text-left">
+          {selectedBranchFilter === 'all'
+            ? 'عرض مجمع لجميع فروع المنشأة'
+            : `عرض مخصص لفرع: ${activeFilterBranch?.name || 'الفرع المحدد'}`}
+        </p>
+      </div>
+
+      {/* 2x2 KPI Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 tabular-nums w-full">
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">إجمالي المشتريات</div>
+          <div className="text-sm sm:text-lg font-bold text-slate-900 mt-1 break-words">
+            {totalPurchasesAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">المسدد للموردين</div>
+          <div className="text-sm sm:text-lg font-bold text-teal-700 mt-1 break-words">
+            {totalPurchasesPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">مستحقات آجلة</div>
+          <div className="text-sm sm:text-lg font-bold text-amber-700 mt-1 break-words">
+            {totalPurchasesRemaining.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">عدد الفواتير</div>
+          <div className="text-sm sm:text-lg font-bold text-slate-900 mt-1">
+            {filteredInvoices.length} فاتورة
+          </div>
+        </div>
+      </div>
+
+      {/* Search, Movement Type, Sort & Fiscal Year Bar (Vertical Grid on Mobile) */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2.5 shadow-2xs w-full">
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="بحث برقم الفاتورة، اسم المورد، الصنف، أو الملاحظات..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full min-h-[44px] pr-9 pl-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-xl text-base sm:text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none placeholder:text-slate-400"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+          <div className="flex items-center gap-2 min-w-0">
+            <Tag className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <select
-              value={selectedBranchFilter}
-              onChange={(e) => setSelectedBranchFilter(e.target.value)}
-              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
+              value={docTypeFilter}
+              onChange={(e) => {
+                setDocTypeFilter(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
             >
-              <option value="all">جميع الفروع ({appData.purchaseInvoices?.length || 0})</option>
-              {appData.branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({appData.purchaseInvoices?.filter((i) => i.branchId === b.id).length || 0})
+              <option value="all">جميع أنواع المشتريات</option>
+              <option value="nagdi">شراء نقدي</option>
+              <option value="ajel">شراء آجل</option>
+              <option value="return_nagdi">مرتجع نقدي</option>
+              <option value="return_ajel">مرتجع آجل</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <select
+              value={sortOrder}
+              onChange={(e) => {
+                setSortOrder(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
+            >
+              <option value="newest">الأحدث تاريخاً</option>
+              <option value="oldest">الأقدم تاريخاً</option>
+              <option value="highest">الأعلى قيمة</option>
+              <option value="lowest">الأقل قيمة</option>
+            </select>
+          </div>
+
+          {availableInvoiceYears.length > 0 && (
+            <select
+              value={selectedYearFilter}
+              onChange={(e) => {
+                setSelectedYearFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none cursor-pointer"
+              title="تجزئة وعرض الفواتير حسب السنة المالية"
+            >
+              <option value="all">كافة السنوات ({allPurchasesList.length})</option>
+              {availableInvoiceYears.map((yr) => (
+                <option key={yr} value={yr}>
+                  سنة {yr} ({allPurchasesList.filter((i) => (i.date || '').startsWith(yr)).length})
                 </option>
               ))}
             </select>
           )}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="بحث برقم الفاتورة أو اسم المورد..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full min-h-[44px] sm:min-h-[40px] pr-9 pl-3 py-2 border border-slate-300 bg-white rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 focus:outline-none placeholder:text-slate-400"
-            />
-          </div>
         </div>
       </div>
 

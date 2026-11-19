@@ -559,22 +559,10 @@ export function printQuotationWindow(
       settings,
       preferredPaperSize: 'a5-portrait',
     });
+    showToast?.('تم تجهيز عرض الأسعار للمعاينة والطباعة بنجاح', 'success');
   } catch (err) {
     console.error('Error dispatching quotation print:', err);
-  }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=900,height=950');
-  } catch {
-    printWin = null;
-  }
-
-  if (printWin) {
-    const html = generateQuotationPrintHtml(quotation, appData, customSettings);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
+    showToast?.('حدث خطأ أثناء تجهيز عرض الأسعار للطباعة', 'error');
   }
 }
 

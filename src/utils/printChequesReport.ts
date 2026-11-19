@@ -1,6 +1,7 @@
 import { AppData, Cheque, Settings } from '../types';
 import { tafqeetArabic } from './tafqeet';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface ChequeReportOptions {
   cheques?: Cheque[];
@@ -316,15 +317,57 @@ ${getPrintToolbarScript()}
  * Triggers printing of an individual Cheque Voucher / Note
  */
 export function printChequeVoucher(cheque: Cheque, appData: AppData): void {
-  const html = generateChequeVoucherPrintHtml(cheque, appData);
-  const printWin = window.open('', '_blank', 'width=1000,height=850');
-  if (!printWin) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    return;
+  try {
+    const settings: Partial<Settings> = appData.settings || {};
+    const curSymbol = settings.currencySymbol || 'ج.م';
+    const isReceivable = cheque.type === 'receivable';
+    const docTitle = isReceivable ? 'إشعار استلام شيك (ورقة قبض)' : 'إشعار صرف شيك (ورقة دفع)';
+    const docNumber = isReceivable
+      ? (cheque.chequeNumber.startsWith('REC-') ? cheque.chequeNumber : `REC-CHK-${cheque.chequeNumber}`)
+      : (cheque.chequeNumber.startsWith('PAY-') ? cheque.chequeNumber : `PAY-CHK-${cheque.chequeNumber}`);
+
+    const partyName = isReceivable ? (cheque.drawerName || '') : (cheque.beneficiaryName || '');
+    const matchedBank = appData.bankAccounts?.find((b) => b.id === cheque.collectingBankAccountId);
+    const accountBranch = matchedBank ? `${matchedBank.name} (${matchedBank.accountNumber})` : (cheque.bankName || 'خزينة المركز الرئيسي');
+    const amountWords = tafqeetArabic(cheque.amount || 0, { currency: curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol, fractionName: 'قرش' });
+
+    let statusLabel = 'تحت التحصيل';
+    if (cheque.status === 'collected') statusLabel = 'تم التحصيل بالبنك';
+    else if (cheque.status === 'bounced') statusLabel = 'مرتجع (بدون رصيد)';
+    else if (cheque.status === 'endorsed') statusLabel = 'مظهر لمورد';
+    else if (cheque.type === 'payable') statusLabel = 'مستحق الصرف';
+    else if (cheque.status === 'received') statusLabel = 'مستلم بالحافظة';
+
+    openUniversalPrint({
+      kind: isReceivable ? 'receipt_voucher' : 'payment_voucher',
+      title: docTitle,
+      docNumber,
+      date: (cheque as any).issueDate || cheque.dueDate || new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      partyName,
+      partyLabel: isReceivable ? 'استلمنا من' : 'اصرفوا إلى',
+      paymentMethod: `شيك رقم ${cheque.chequeNumber} (${statusLabel})`,
+      treasuryOrBank: accountBranch,
+      referenceNumber: cheque.chequeNumber,
+      amount: Number(cheque.amount || 0),
+      amountInWords: amountWords,
+      statementOrReason:
+        cheque.notes ||
+        (isReceivable
+          ? `استلام ورقة قبض / شيك مسحوب على (${cheque.bankName || 'البنك'}) بتاريخ استحقاق ${cheque.dueDate || '-'}`
+          : `إصدار ورقة دفع / شيك مسحوب على (${cheque.bankName || 'البنك'}) بتاريخ استحقاق ${cheque.dueDate || '-'}`),
+      columns: ['رقم الشيك', 'البنك المسحوب عليه', 'تاريخ الاستحقاق', 'الحساب / الفرع', 'حالة الورقة'],
+      rows: [[cheque.chequeNumber, cheque.bankName || '-', cheque.dueDate || '-', accountBranch, statusLabel]],
+      signatures: isReceivable
+        ? ['المستلم / أمين الخزينة', 'المراجع المالي', 'توقيع العميل / الساحب']
+        : ['المحرر / أمين الخزينة', 'المراجع المالي', 'توقيع المستفيد / المورد'],
+      footerTermsNote: 'يعتبر هذا الإشعار مبدئياً ولا تبرأ ذمة المحرر إلا بعد تحصيل قيمة الشيك فعلياً بالحساب البنكي',
+      preferredPaperSize: 'a5-portrait',
+      settings: settings as Settings,
+    });
+  } catch (err) {
+    console.error('Error dispatching cheque voucher universal print:', err);
   }
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
 }
 
 /**
@@ -667,13 +710,98 @@ ${getPrintToolbarScript()}
  * Triggers printing of the Cheques and Notes Report
  */
 export function printChequesReport(options: ChequeReportOptions, appData: AppData): void {
-  const html = generateChequesReportPrintHtml(options, appData);
-  const printWin = window.open('', '_blank', 'width=1100,height=900');
-  if (!printWin) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-    return;
+  try {
+    const settings: Partial<Settings> = appData.settings || {};
+    const curSymbol = settings.currencySymbol || 'ج.م';
+    const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    const extractor = options.extractorName || currentUserObj?.name || '';
+
+    let chequesList = options.cheques || appData.cheques || [];
+    if (options.filterType && options.filterType !== 'all') {
+      chequesList = chequesList.filter((c) => c.type === options.filterType);
+    }
+    if (options.filterStatus && options.filterStatus !== 'all') {
+      chequesList = chequesList.filter((c) => c.status === options.filterStatus);
+    }
+
+    const allCheques = appData.cheques || [];
+    const pendingReceivableTotal = allCheques
+      .filter((c) => c.type === 'receivable' && (c.status === 'received' || c.status === 'under_collection'))
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    const collectedReceivableTotal = allCheques
+      .filter((c) => c.type === 'receivable' && c.status === 'collected')
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    const pendingPayableTotal = allCheques
+      .filter((c) => c.type === 'payable' && (c.status === 'received' || c.status === 'under_collection'))
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    const bouncedTotal = allCheques
+      .filter((c) => c.status === 'bounced')
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+
+    let displayedTotal = 0;
+    const rows = chequesList.map((c) => {
+      displayedTotal += c.amount || 0;
+      const isRec = c.type === 'receivable';
+      const party = isRec ? c.drawerName : c.beneficiaryName;
+      let statusLabel = 'تحت التحصيل';
+      if (c.status === 'collected') statusLabel = 'تم التحصيل';
+      else if (c.status === 'bounced') statusLabel = 'مرتجع (بدون رصيد)';
+      else if (c.status === 'endorsed') statusLabel = 'مظهر لمورد';
+      else if (c.type === 'payable') statusLabel = 'مستحق الصرف';
+
+      let note = c.notes || '';
+      if (c.status === 'collected' && !note) note = 'مضاف للحساب';
+      if (c.status === 'bounced' && !note) note = 'تم إعادته للعميل';
+      if (c.status === 'endorsed' && c.endorsedToSupplier) note = `مظهر إلى: ${c.endorsedToSupplier}`;
+      if (!note) note = isRec ? 'حافظة شيكات واردة' : 'خزينة أوراق الدفع';
+
+      const chkNo =
+        c.chequeNumber.startsWith('CHK-') || c.chequeNumber.startsWith('PAY-')
+          ? c.chequeNumber
+          : `${isRec ? 'CHK-' : 'PAY-'}${c.chequeNumber}`;
+
+      return [
+        chkNo,
+        isRec ? 'قبض (شيك)' : 'دفع (شيك)',
+        party || '-',
+        c.bankName || '-',
+        c.dueDate || '-',
+        (c.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }),
+        statusLabel,
+        note,
+      ];
+    });
+
+    const fmt = (n: number) => `${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${curSymbol}`;
+
+    openUniversalPrint({
+      kind: 'treasury_movement',
+      title: options.title || 'تقرير حركة الشيكات وأوراق القبض والدفع',
+      subTitle: options.bankFilter || 'جميع البنوك والحافظات',
+      docNumber: `CHK-RPT-${new Date().toISOString().slice(0, 10)}`,
+      date: new Date().toISOString().slice(0, 10),
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      period: { from: options.fromDate, to: options.toDate },
+      branch: options.bankFilter || 'جميع البنوك والحافظات',
+      user: extractor,
+      kpis: [
+        { title: 'أوراق قبض تحت التحصيل', value: fmt(pendingReceivableTotal) },
+        { title: 'أوراق قبض محصلة', value: fmt(collectedReceivableTotal) },
+        { title: 'أوراق دفع مستحقة', value: fmt(pendingPayableTotal) },
+        { title: 'شيكات مرتجعة / مرفوضة', value: fmt(bouncedTotal) },
+      ],
+      columns: ['رقم الورقة', 'نوع الورقة', 'الطرف الثاني', 'البنك', 'الاستحقاق', 'المبلغ', 'الحالة', 'ملاحظات'],
+      rows,
+      summaries: [
+        { label: 'عدد الأوراق المعروضة', value: `${rows.length} ورقة` },
+        { label: 'الإجمالي العام للأوراق المعروضة', value: fmt(displayedTotal), isHighlight: true, isTotal: true },
+      ],
+      signatures: ['مسؤول الأوراق المالية', 'المراجع المالي', 'اعتماد المدير العام'],
+      footerTermsNote: 'هذا التقرير كشف تفصيلي بحركة الأوراق المالية والشيكات بالنظام',
+      preferredPaperSize: 'a4-portrait',
+      settings: settings as Settings,
+    });
+  } catch (err) {
+    console.error('Error dispatching cheques report universal print:', err);
   }
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
 }

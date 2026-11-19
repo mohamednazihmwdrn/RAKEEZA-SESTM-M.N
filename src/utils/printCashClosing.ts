@@ -579,6 +579,12 @@ export function printCashClosingWindow(
       partyLabel: 'مسؤول الخزينة',
       columns: ['م', 'البيان والحركة', 'وارد (+)', 'منصرف (-)', 'طريقة الدفع'],
       rows,
+      kpis: [
+        { title: 'الرصيد الافتتاحي', value: `${compiled.openBalance.toFixed(2)} ${curSymbol}` },
+        { title: 'إجمالي المقبوضات', value: `${totalIn.toFixed(2)} ${curSymbol}` },
+        { title: 'إجمالي المدفوعات', value: `${totalOut.toFixed(2)} ${curSymbol}` },
+        { title: 'الرصيد الدفتري الحالي', value: `${netCash.toFixed(2)} ${curSymbol}` },
+      ],
       amount: netCash,
       summaries: [
         { label: 'الرصيد الافتتاحي', value: `${compiled.openBalance.toFixed(2)} ${curSymbol}` },
@@ -586,25 +592,14 @@ export function printCashClosingWindow(
         { label: 'إجمالي المدفوعات', value: `${totalOut.toFixed(2)} ${curSymbol}`, color: '#dc2626' },
         { label: 'الرصيد الدفتري الحالي', value: `${netCash.toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
+      signatures: ['أمين الخزينة', 'المراجع المالي', 'اعتماد الإدارة'],
       settings: appData.settings,
       preferredPaperSize: 'a5-portrait',
     });
+    showToast?.('تم تجهيز محضر إغلاق الخزينة للمعاينة والطباعة بنجاح', 'success');
   } catch (err) {
     console.error('Error dispatching cash closing print:', err);
-  }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=950,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (printWin) {
-    const html = generateCashClosingPrintHtml(compiled);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
+    showToast?.('حدث خطأ أثناء تجهيز محضر إغلاق الخزينة للطباعة', 'error');
   }
 }
 

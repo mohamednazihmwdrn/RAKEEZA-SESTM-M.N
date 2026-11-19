@@ -928,25 +928,12 @@ export function printStocktakeSession(session: StocktakeSession, appData: AppDat
         { label: 'عدد الأصناف المجرودة', value: `${session.items?.length || 0} صنف` },
         { label: 'إجمالي الفائض / العجز', value: `${(session.netVarianceValue || 0).toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
+      signatures: ['لجنة الجرد', 'أمين المستودع', 'المراجع المالي'],
       settings: appData.settings,
       preferredPaperSize: 'a4-portrait',
     });
   } catch (err) {
     console.error('Error dispatching stocktake universal print:', err);
-  }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=1100,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (printWin) {
-    const html = generateStocktakePrintHtml(session, appData);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
   }
 }
 
@@ -984,25 +971,12 @@ export function printSettlementVoucher(voucher: InventoryAdjustmentVoucher, appD
         { label: 'عدد الأصناف', value: `${voucher.items?.length || 0} صنف` },
         { label: 'إجمالي قيمة التسوية', value: `${(voucher.netAdjustmentAmount || 0).toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
+      signatures: ['أمين المستودع', 'المراجع المالي', 'اعتماد الإدارة'],
       settings: appData.settings,
       preferredPaperSize: 'a5-portrait',
     });
   } catch (err) {
     console.error('Error dispatching settlement voucher universal print:', err);
-  }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=1100,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (printWin) {
-    const html = generateSettlementPrintHtml(voucher, appData);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
   }
 }
 
@@ -1010,17 +984,46 @@ export function printSettlementVoucher(voucher: InventoryAdjustmentVoucher, appD
  * Trigger print dialog for Annual Closing Record
  */
 export function printAnnualClosing(closingRecord: FiscalYearClosingRecord, appData: AppData): void {
-  const html = generateAnnualClosingPrintHtml(closingRecord, appData);
-  let printWin: Window | null = null;
   try {
-    printWin = window.open('', '_blank', 'width=1100,height=900');
-  } catch {
-    printWin = null;
-  }
-  if (printWin) {
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const fmt = (n: number) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+    const isProfit = (closingRecord.netProfitOrLoss || 0) >= 0;
+
+    openUniversalPrint({
+      kind: 'balance_sheet',
+      title: `محضر الإقفال السنوي والحسابات الختامية - سنة ${closingRecord.fiscalYear}`,
+      subTitle: `قيد الترحيل: JV-${closingRecord.closingJournalEntryId || 'مرحل'}`,
+      docNumber: closingRecord.closingNumber || closingRecord.id,
+      date: (closingRecord.closedAt || new Date().toISOString()).slice(0, 10),
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: 'المركز الرئيسي',
+      user: closingRecord.closedBy || 'المدير المالي',
+      period: { from: `${closingRecord.fiscalYear}-01-01`, to: `${closingRecord.fiscalYear}-12-31` },
+      kpis: [
+        { title: 'إجمالي الإيرادات', value: fmt(closingRecord.totalRevenues || 0) },
+        { title: 'إجمالي المصروفات', value: fmt(closingRecord.totalExpenses || 0) },
+        { title: isProfit ? 'صافي الربح' : 'صافي الخسارة', value: fmt(Math.abs(closingRecord.netProfitOrLoss || 0)) },
+        { title: 'قيمة المخزون عند الإقفال', value: fmt(closingRecord.inventoryValueAtClosing || 0) },
+      ],
+      columns: ['البيان المحاسبي', 'القيمة الدفترية عند الإقفال', 'حساب الترحيل / المعالجة', 'الحالة والأثر'],
+      rows: [
+        ['إجمالي الأصول والسيولة', fmt(closingRecord.totalAssetsAtClosing || 0), 'الأصول المتداولة والثابتة', 'مرحل كأرصدة افتتاحية'],
+        ['إجمالي الخصوم والالتزامات', fmt(closingRecord.totalLiabilitiesAtClosing || 0), 'الموردين والالتزامات الضريبية', 'مرحل كأرصدة افتتاحية'],
+        ['تقييم المخزون السلعي التام', fmt(closingRecord.inventoryValueAtClosing || 0), 'مخزون البضاعة (1106)', 'بضاعة أول المدة للعام الجديد'],
+        ['ترحيل صافي الأرباح / الخسائر', fmt(closingRecord.netProfitOrLoss || 0), closingRecord.closedToAccountName || 'الأرباح المرحلة', 'تم إثبات القيد الختامي'],
+      ],
+      summaries: [
+        { label: 'إجمالي الإيرادات', value: fmt(closingRecord.totalRevenues || 0), color: '#16a34a' },
+        { label: 'إجمالي المصروفات', value: fmt(closingRecord.totalExpenses || 0), color: '#dc2626' },
+        { label: 'صافي نتيجة النشاط', value: fmt(closingRecord.netProfitOrLoss || 0), isTotal: true, isHighlight: true },
+      ],
+      signatures: ['المحاسب المالي', 'مدير الحسابات / المراجع', 'رئيس مجلس الإدارة'],
+      footerTermsNote: 'هذا التقرير محضر إقفال سنوي وحسابات ختامية معتمدة تم ترحيلها محاسبياً بالنظام',
+      settings: appData.settings,
+      preferredPaperSize: 'a4-portrait',
+    });
+  } catch (err) {
+    console.error('Error dispatching annual closing universal print:', err);
   }
 }
 

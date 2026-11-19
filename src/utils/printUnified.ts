@@ -1,6 +1,51 @@
 import React from 'react';
 import { Settings } from '../types';
 import { openUniversalPrint } from '../services/centralizedPrintService';
+import { UniversalDocKind } from '../types/universalPrint';
+
+function extractReactNodeText(node: unknown): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) {
+    return node.map(extractReactNodeText).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+  if (React.isValidElement(node)) {
+    const props = (node as React.ReactElement<{ children?: unknown }>).props;
+    return extractReactNodeText(props?.children);
+  }
+  return String(node).trim();
+}
+
+export function inferDocKind(title: string = '', columns?: string[]): UniversalDocKind {
+  const t = title.toLowerCase();
+  const colsStr = (columns || []).join(' ').toLowerCase();
+
+  if (t.includes('كشف حساب')) return 'account_statement';
+  if (t.includes('عملاء') || t.includes('العملاء') || colsStr.includes('كود العميل')) return 'customers_balances';
+  if (t.includes('موردين') || t.includes('الموردين') || colsStr.includes('كود المورد')) return 'suppliers_balances';
+  if (t.includes('أعمار الديون')) return 'debt_aging';
+  if (t.includes('ميزان المراجعة')) return 'trial_balance';
+  if (t.includes('قائمة الدخل') || t.includes('الأرباح والخسائر')) return 'income_statement';
+  if (t.includes('المركز المالي') || t.includes('الميزانية')) return 'balance_sheet';
+  if (t.includes('إغلاق الخزينة') || t.includes('أرصدة الخز') || t.includes('الأرصدة النقدية')) return 'treasury_balances';
+  if (t.includes('تحويل') && t.includes('خز')) return 'treasury_transfer';
+  if (t.includes('خزينة') || t.includes('نقدية') || t.includes('مقبوضات')) return 'treasury_movement';
+  if (t.includes('تسوية بنكية') || t.includes('التسوية البنكية') || t.includes('مطابقة بنكية')) return 'bank_reconciliation';
+  if (t.includes('جرد')) return 'inventory_stocktaking';
+  if (t.includes('تسوية') && (t.includes('مخز') || t.includes('أصناف'))) return 'inventory_settlement';
+  if (t.includes('تحويل') && (t.includes('مخز') || t.includes('فروع'))) return 'inventory_transfer';
+  if (t.includes('إذن صرف') || t.includes('أذونات الصرف') || t.includes('حركة الصنف') || t.includes('كارت الصنف')) return 'inventory_movement';
+  if (t.includes('المخزون') || t.includes('الأصناف') || t.includes('تقييم')) return 'inventory_valuation';
+  if (t.includes('ضرائب') || t.includes('ضريبة') || t.includes('القيمة المضافة')) return 'tax_report';
+  if (t.includes('مصروفات') || t.includes('مصاريف')) return 'expenses_report';
+  if (t.includes('إيرادات')) return 'revenues_report';
+  if (t.includes('تدقيق') || t.includes('الرقاب') || t.includes('حركات النظام')) return 'audit_trail';
+  if (t.includes('قيد') || t.includes('يومية عامة')) return 'journal_entry';
+  if (t.includes('مبيعات') || t.includes('وردية') || t.includes('رواتب')) return 'sales_report';
+  if (t.includes('مشتريات') || t.includes('توريد')) return 'purchases_report';
+
+  return 'generic_report';
+}
 
 export interface UnifiedReportConfig {
   reportTitle: string;
@@ -54,6 +99,7 @@ export interface PrintDocumentConfig {
   paymentMethod?: string;
   items?: {
     index?: number;
+    code?: string;
     name: string;
     unit?: string;
     qty: number | string;
@@ -92,13 +138,13 @@ export interface PrintDocumentConfig {
  * - Strict Single-Page Printing Guarantee
  */
 export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
-  const companyName = config.company?.name || 'شركة ركيزة للحلول البرمجية';
+  const companyName = config.company?.name || 'المنظومة المحاسبية المعتمدة';
   const branchStr = config.branch || 'الفرع الرئيسي';
-  const companyAddress = config.company?.address || `${branchStr} - المقر الرئيسي`;
+  const companyAddress = config.company?.address || branchStr;
   const phones = config.company?.phones && config.company.phones.length > 0
     ? config.company.phones
-    : ['01029190615'];
-  const companyCode = phones[0] || '01029190615';
+    : [];
+  const companyCode = phones[0] || '';
 
   const now = new Date();
   const printDate = now.toLocaleDateString('ar-EG');
@@ -107,13 +153,13 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
   const docTypeTitle = config.subTitle || config.reportTitle || 'مستند نظام مالي';
   const docDate = config.date || printDate;
 
-  const partyCodeLabel = config.partyCodeLabel || 'كود الطرف';
+  const partyCodeLabel = config.partyCodeLabel || 'الكود';
   const partyCode = config.partyCode || '-';
-  const partyLabel = config.partyLabel || 'الحساب / الطرف المعني';
+  const partyLabel = config.partyLabel || 'البيان / النطاق';
   const partyName = config.partyName || branchStr;
   const approverOrUser = config.statementNote && config.statementNote.includes('المسؤول:')
     ? config.statementNote.replace(/.*المسؤول:\s*/, '').split('\n')[0]
-    : 'Mohamed Nazih';
+    : 'الإدارة المالية';
 
   const statementContent = (config.statementNote || config.notes || '').trim();
 
@@ -600,6 +646,7 @@ export function generateUnifiedReportHtml(config: UnifiedReportConfig): string {
 
 /**
  * Universal Print Window Opener for All Documents & Reports
+ * Routes directly through the unified in-app CentralizedInvoicePrintModal (zero about:blank popups).
  */
 export function openUnifiedPrintWindow(
   doc: PrintDocumentConfig | UnifiedReportConfig,
@@ -612,25 +659,88 @@ export function openUnifiedPrintWindow(
     unifiedConfig = doc as UnifiedReportConfig;
   } else {
     const d = doc as PrintDocumentConfig;
-    const companyName = settings?.companyName || 'شركة ركيزة للحلول البرمجية';
-    const companyAddress = settings?.address || 'القاهرة - مصر';
+    const companyName = settings?.companyName || 'المنظومة المحاسبية المعتمدة';
+    const companyAddress = settings?.address || d.branch || 'الفرع الرئيسي';
     const phones = [settings?.phone1, settings?.phone2, settings?.phone3].filter(Boolean) as string[];
+    const lowerTitle = (d.title || '').toLowerCase();
 
-    const columns = ['اسم الصنف / البند', 'البيان', 'العدد', 'السعر', 'الإجمالي'];
-    const rows = (d.items || []).map((it) => [
-      it.name,
-      it.notes || it.unit || '-',
-      it.qty,
-      it.price,
-      it.total,
-    ]);
+    let columns: string[];
+    let rows: (string | number)[][];
+
+    if (lowerTitle.includes('تدقيق') || lowerTitle.includes('الرقاب') || lowerTitle.includes('النشاط')) {
+      columns = ['القسم / الوحدة', 'تفاصيل العملية', 'المستخدم والتاريخ', 'المرجع'];
+      rows = (d.items || []).map((it) => [
+        it.unit || 'النظام',
+        it.name,
+        it.notes || '-',
+        it.code || '-',
+      ]);
+    } else if (lowerTitle.includes('رواتب') || lowerTitle.includes('مسير')) {
+      columns = ['اسم الموظف والقسم', 'الحالة', 'الأساسي', 'الاستقطاعات', 'صافي الراتب'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        it.notes || '-',
+        Number(it.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        Number(it.discount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        Number(it.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      ]);
+    } else if (lowerTitle.includes('أصول') || lowerTitle.includes('الأصول')) {
+      columns = ['اسم الأصل وكوده', 'الموقع / الحالة', 'تكلفة الشراء', 'مجمع الإهلاك', 'صافي الدفترية'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        `${it.unit || '-'} · ${it.notes || ''}`.trim(),
+        Number(it.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        Number(it.discount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        Number(it.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      ]);
+    } else if (lowerTitle.includes('قيد') || lowerTitle.includes('يومية عامة')) {
+      columns = ['الحساب / البند', 'الجانب والحركة', 'القيمة', 'ملاحظات'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        String(it.qty || '-'),
+        Number(it.total || it.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        it.notes || '-',
+      ]);
+    } else if (lowerTitle.includes('تسوية') && lowerTitle.includes('مخز')) {
+      columns = ['رقم السند والمرجع', 'الفرع', 'الأصناف', 'تفاصيل التسوية والقيد', 'صافي الأثر'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        it.unit || 'الرئيسي',
+        it.qty,
+        it.notes || '-',
+        Number(it.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      ]);
+    } else if (lowerTitle.includes('أذونات الصرف') || lowerTitle.includes('إذن صرف')) {
+      columns = ['المستلم والمرجع', 'الفرع', 'الكمية', 'الغرض والتاريخ', 'إجمالي التكلفة'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        it.unit || 'الرئيسي',
+        it.qty,
+        it.notes || '-',
+        Number(it.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      ]);
+    } else {
+      columns = ['اسم الصنف / البند', 'البيان', 'العدد', 'السعر', 'الإجمالي'];
+      rows = (d.items || []).map((it) => [
+        it.name,
+        it.notes || it.unit || '-',
+        it.qty,
+        it.price,
+        it.total,
+      ]);
+    }
 
     const summary = (d.totals || []).map((t) => ({
       label: t.label,
-      value: `${t.value} ${settings?.currencySymbol || 'ج.م'}`,
+      value:
+        typeof t.value === 'number'
+          ? `${t.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${settings?.currencySymbol || 'ج.م'}`
+          : String(t.value),
       isTotal: t.isHighlight || t.isBold,
       isHighlight: t.isHighlight,
     }));
+
+    const isQuoteOrOrder = lowerTitle.includes('عرض أسعار') || lowerTitle.includes('أمر شراء');
 
     unifiedConfig = {
       reportTitle: d.title,
@@ -643,7 +753,7 @@ export function openUnifiedPrintWindow(
         name: companyName,
         address: companyAddress,
         logo: (settings as any)?.logo || (settings as any)?.logoUrl || '',
-        phones: phones.length > 0 ? phones : ['01029190615'],
+        phones,
       },
       partyCode: d.partyCode,
       partyCodeLabel: d.partyCodeLabel,
@@ -656,18 +766,26 @@ export function openUnifiedPrintWindow(
       rows,
       summary,
       notes: d.notes,
-      footerNote: d.footerNote || settings?.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً للشروط والأحكام',
+      footerNote:
+        d.footerNote ||
+        (isQuoteOrOrder
+          ? settings?.invoiceFooterNote || 'يُعتمد هذا العرض وفق الشروط التجارية المتفق عليها'
+          : 'تم استخراج هذا المستند آلياً من السجلات المحاسبية المعتمدة بالنظام'),
       signatures: d.signatures,
       isThermal: d.isThermal,
-      preferredPaperSize: d.preferredPaperSize || (d.isThermal ? 'thermal' : 'A5'),
+      preferredPaperSize: d.preferredPaperSize || (d.isThermal ? 'thermal' : 'A4'),
     };
   }
 
-  // 🖨️ Dispatch to in-app Universal Print Modal immediately for instant zero-popup preview
   try {
     const rawRows = (unifiedConfig.rows || []).map((r) =>
-      r.map((cell) => (typeof cell === 'string' || typeof cell === 'number' ? cell : ''))
+      r.map((cell) => {
+        if (typeof cell === 'number') return cell;
+        const txt = extractReactNodeText(cell);
+        return txt !== '' ? txt : '-';
+      })
     );
+
     const summaries = (unifiedConfig.summary || []).map((s) => ({
       label: s.label,
       value: s.value,
@@ -676,94 +794,47 @@ export function openUnifiedPrintWindow(
       color: s.isTotal ? '#dc2626' : '#16a34a',
     }));
 
+    const inferredKind = inferDocKind(unifiedConfig.reportTitle, unifiedConfig.columns);
+    const extractedUser =
+      unifiedConfig.statementNote && unifiedConfig.statementNote.includes('المسؤول:')
+        ? unifiedConfig.statementNote.replace(/.*المسؤول:\s*/, '').split('\n')[0].trim()
+        : undefined;
+
     openUniversalPrint({
-      kind: 'generic_report',
+      kind: inferredKind,
       title: unifiedConfig.reportTitle,
       subTitle: unifiedConfig.subTitle,
       docNumber: unifiedConfig.serial,
       date: unifiedConfig.date,
       time: unifiedConfig.time,
       branch: unifiedConfig.branch,
+      user: extractedUser,
       partyName: unifiedConfig.partyName,
       partyCode: unifiedConfig.partyCode,
+      partyCodeLabel: unifiedConfig.partyCodeLabel,
       partyPhone: unifiedConfig.partyPhone,
       partyLabel: unifiedConfig.partyLabel,
       paymentMethod: unifiedConfig.paymentMethod,
       statementOrReason: unifiedConfig.statementNote || unifiedConfig.notes,
+      kpis: unifiedConfig.kpis,
       columns: unifiedConfig.columns,
       rows: rawRows,
       summaries,
-      footerTermsNote: unifiedConfig.footerNote,
+      signatures: unifiedConfig.signatures,
+      footerTermsNote:
+        unifiedConfig.footerNote || 'تم استخراج هذا المستند آلياً من السجلات المحاسبية المعتمدة بالنظام',
       preferredPaperSize:
         unifiedConfig.preferredPaperSize === 'A4'
           ? 'a4-portrait'
-          : unifiedConfig.preferredPaperSize === 'thermal'
+          : unifiedConfig.preferredPaperSize === 'thermal' || unifiedConfig.preferredPaperSize === '58mm'
           ? 'thermal-80'
           : 'a5-portrait',
       settings,
     });
   } catch (err) {
     console.error('Error dispatching openUniversalPrint:', err);
-  }
-
-  const html = generateUnifiedReportHtml(unifiedConfig);
-
-  let printWindow: Window | null = null;
-  try {
-    printWindow = window.open('', '_blank', 'width=950,height=900');
-  } catch {
-    printWindow = null;
-  }
-
-  if (printWindow) {
-    try {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      return;
-    } catch {
-      // Fall back to hidden iframe
+    if (showToast) {
+      showToast('حدث خطأ أثناء تجهيز معاينة الطباعة', 'error');
     }
-  }
-
-  // Fallback: hidden iframe for sandboxed environments
-  try {
-    let iframe = document.getElementById('rakeeza-report-print-frame') as HTMLIFrameElement;
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'rakeeza-report-print-frame';
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      iframe.style.visibility = 'hidden';
-      document.body.appendChild(iframe);
-    }
-    const frameDoc = iframe.contentWindow?.document || iframe.contentDocument;
-    if (frameDoc) {
-      frameDoc.open();
-      frameDoc.write(html);
-      frameDoc.close();
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-          if (showToast) {
-            showToast('تم إرسال أمر طباعة المستند بنجاح', 'success');
-          }
-        } catch (err) {
-          console.error('Iframe report print error:', err);
-        }
-      }, 500);
-      return;
-    }
-  } catch (err) {
-    console.error('Report fallback print error:', err);
-  }
-
-  if (showToast) {
-    showToast('يرجى السماح بالنوافذ المنبثقة (Popups) لمعاينة وطباعة المستند', 'warning');
   }
 }

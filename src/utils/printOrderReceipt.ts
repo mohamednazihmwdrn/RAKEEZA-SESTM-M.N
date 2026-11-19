@@ -1,274 +1,74 @@
 import { Quotation, AppData } from '../types';
 import { tafqeetArabic } from './tafqeet';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export function printWebOrderReceipt(
   order: Quotation,
   appData: AppData,
   format: '80mm' | 'a4' = '80mm',
-  autoClose = true
+  _autoClose = true
 ): void {
-  const settings = appData.settings;
-  const config = appData.catalogConfig;
+  try {
+    const settings = appData.settings;
+    const config = appData.catalogConfig;
+    const currency = config?.currencySymbol || settings.currencySymbol || 'ج.م';
 
-  const companyName = config?.storeName || settings.companyName || 'مؤسسة ركيزة التجارية';
-  const companyAddress = settings.address || '';
-  const companyPhone = config?.contactPhone || settings.phone1 || '01029190615';
-  const currency = config?.currencySymbol || settings.currencySymbol || 'ج.م';
+    const orderNumber = order.orderReference || `ORD-${order.id}`;
+    const orderDate = order.date || new Date().toISOString().split('T')[0];
+    const orderTime = order.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const clientName = order.clientName || 'عميل المتجر الإلكتروني';
+    const clientPhone = order.phone || '-';
+    const clientAddress = order.customerAddress || 'استلام من الفرع / لم يحدد';
+    const notes = order.deliveryNotes || order.notes || '';
+    const tafqeetStr = tafqeetArabic(order.total || 0, { currency });
 
-  const orderNumber = order.orderReference || `ORD-${order.id}`;
-  const orderDate = order.date || new Date().toISOString().split('T')[0];
-  const orderTime = order.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-  const clientName = order.clientName || 'عميل المتجر الإلكتروني';
-  const clientPhone = order.phone || '-';
-  const clientAddress = order.customerAddress || 'استلام من الفرع / لم يحدد';
-  const notes = order.deliveryNotes || order.notes || '';
+    const items = (order.items || []).map((item, idx) => ({
+      index: idx + 1,
+      code: (item as any).code || `ORD-${idx + 1}`,
+      name: item.name || 'صنف',
+      unit: (item as any).unit || 'قطعة',
+      qty: Number(item.qty || 0),
+      price: Number(item.price || 0),
+      total: Number(item.total ?? Number(item.qty || 0) * Number(item.price || 0)),
+      notes: item.notes || '',
+    }));
 
-  const printWindow = window.open('', '_blank', format === '80mm' ? 'width=380,height=700' : 'width=850,height=950');
-  if (!printWindow) {
-    alert('يرجى السماح بالنوافذ المنبثقة للطباعة الفورية لإيصال الطلب');
-    return;
+    const mergedSettings = {
+      ...settings,
+      companyName: config?.storeName || settings.companyName || 'RAKEEZA',
+      phone1: config?.contactPhone || settings.phone1 || '',
+    };
+
+    openUniversalPrint({
+      kind: 'sales_invoice',
+      title: 'إيصال طلب من المتجر الإلكتروني',
+      subTitle: 'طلب إلكتروني معتمد',
+      docNumber: orderNumber,
+      date: orderDate,
+      time: orderTime,
+      branch: (settings as any)?.branchName || 'المتجر الإلكتروني',
+      partyName: clientName,
+      partyPhone: clientPhone,
+      partyAddress: clientAddress,
+      partyLabel: 'العميل',
+      notes,
+      items,
+      subtotal: Number(order.subtotal || order.total || 0),
+      discountAmount: Number(order.discount || 0),
+      taxAmount: Number(order.tax || 0),
+      amount: Number(order.total || 0),
+      amountInWords: tafqeetStr,
+      summaries: [
+        { label: 'عدد الأصناف', value: `${items.length} صنف` },
+        ...(order.discount ? [{ label: 'الخصم', value: `-${Number(order.discount).toFixed(2)} ${currency}`, color: '#dc2626' }] : []),
+        ...(order.tax ? [{ label: 'الضريبة', value: `+${Number(order.tax).toFixed(2)} ${currency}` }] : []),
+        { label: 'الصافي المطلوب', value: `${Number(order.total || 0).toFixed(2)} ${currency}`, isTotal: true, isHighlight: true },
+      ],
+      footerTermsNote: 'يرجى مراجعة الأصناف والتجهيز للتسليم أو الشحن',
+      preferredPaperSize: format === '80mm' ? 'thermal-80' : 'a4-portrait',
+      settings: mergedSettings,
+    });
+  } catch (err) {
+    console.error('Error dispatching web order universal print:', err);
   }
-
-  const itemsHtml = (order.items || [])
-    .map(
-      (item, idx) => `
-    <tr style="border-bottom: 1px dashed #ccc;">
-      <td style="padding: 5px 2px; text-align: right; font-weight: bold; font-size: ${format === '80mm' ? '12px' : '14px'};">
-        ${idx + 1}. ${item.name}
-        ${item.notes ? `<div style="font-size: 10px; color: #555; font-weight: normal;">${item.notes}</div>` : ''}
-      </td>
-      <td style="padding: 5px 2px; text-align: center; font-size: ${format === '80mm' ? '12px' : '14px'}; font-weight: bold;">
-        ${item.qty}
-      </td>
-      <td style="padding: 5px 2px; text-align: center; font-size: ${format === '80mm' ? '11px' : '13px'};">
-        ${Number(item.price).toFixed(2)}
-      </td>
-      <td style="padding: 5px 2px; text-align: left; font-weight: bold; font-size: ${format === '80mm' ? '12px' : '14px'};">
-        ${Number(item.total).toFixed(2)}
-      </td>
-    </tr>
-  `
-    )
-    .join('');
-
-  const tafqeetStr = tafqeetArabic(order.total || 0, { currency });
-
-  const html = `
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>إيصال طلب إلكتروني #${orderNumber}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet">
-      <style>
-        @page {
-          size: ${format === '80mm' ? '80mm auto' : 'A4 portrait'};
-          margin: ${format === '80mm' ? '3mm' : '12mm'};
-        }
-        body {
-          font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif;
-          direction: rtl;
-          margin: 0;
-          padding: ${format === '80mm' ? '4px' : '20px'};
-          color: #0f172a;
-          background: #fff;
-          font-size: ${format === '80mm' ? '12px' : '14px'};
-          line-height: 1.4;
-          font-variant-numeric: tabular-nums;
-          -webkit-font-smoothing: antialiased;
-        }
-        .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .text-right { text-align: right; }
-        .font-bold { font-weight: 700; }
-        .dashed-line {
-          border-top: 1px dashed #64748b;
-          margin: 8px 0;
-        }
-        .double-line {
-          border-top: 1.5px solid #0f172a;
-          margin: 8px 0;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 6px 0;
-        }
-        thead { display: table-header-group; }
-        tr { break-inside: avoid; page-break-inside: avoid; }
-        th {
-          border-bottom: 1.5px solid #0f172a;
-          padding: 5px 3px;
-          font-size: ${format === '80mm' ? '11px' : '13px'};
-          font-weight: 600;
-        }
-        td {
-          font-variant-numeric: tabular-nums;
-        }
-        .badge {
-          display: inline-block;
-          background: #0f172a;
-          color: #fff;
-          padding: 3px 10px;
-          border-radius: 4px;
-          font-size: ${format === '80mm' ? '11px' : '13px'};
-          font-weight: 600;
-          margin: 4px 0;
-        }
-        .highlight-box {
-          background: #f8fafc;
-          border: 1px solid #cbd5e1;
-          padding: 8px;
-          border-radius: 4px;
-          margin: 6px 0;
-        }
-        @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none !important; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="text-center">
-        <h2 style="margin: 2px 0 4px 0; font-size: ${format === '80mm' ? '16px' : '22px'}; font-weight: 700;">
-          ${companyName}
-        </h2>
-        ${companyAddress ? `<div style="font-size: 11px; color: #475569;">${companyAddress}</div>` : ''}
-        ${companyPhone ? `<div style="font-size: 11px; font-weight: 600;">هاتف / واتساب: ${companyPhone}</div>` : ''}
-
-        <div class="badge">إيصال طلب من المتجر الإلكتروني (WEB ORDER)</div>
-        <div style="font-size: ${format === '80mm' ? '13px' : '16px'}; font-weight: 700; margin: 2px 0;">
-          رقم الطلب: ${orderNumber}
-        </div>
-        <div style="font-size: 11px; color: #475569;">
-          التاريخ: <strong>${orderDate}</strong> | الوقت: <strong>${orderTime}</strong>
-        </div>
-      </div>
-
-      <div class="dashed-line"></div>
-
-      <!-- Customer Details -->
-      <div class="highlight-box">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-          <span>العميل:</span>
-          <strong style="font-size: ${format === '80mm' ? '13px' : '15px'};">${clientName}</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-          <span>الهاتف:</span>
-          <strong style="font-size: ${format === '80mm' ? '13px' : '15px'}; direction: ltr;">${clientPhone}</strong>
-        </div>
-        ${
-          clientAddress
-            ? `
-          <div style="margin-top: 3px; border-top: 1px dashed #ccc; padding-top: 3px;">
-            <span>العنوان / التوصيل:</span>
-            <div style="font-weight: bold;">${clientAddress}</div>
-          </div>
-        `
-            : ''
-        }
-        ${
-          notes
-            ? `
-          <div style="margin-top: 3px; border-top: 1px dashed #ccc; padding-top: 3px; color: #854d0e; font-weight: bold;">
-            <span>ملاحظات العميل:</span>
-            <div>${notes}</div>
-          </div>
-        `
-            : ''
-        }
-      </div>
-
-      <div class="dashed-line"></div>
-
-      <!-- Items Table -->
-      <table>
-        <thead>
-          <tr>
-            <th class="text-right" style="width: 50%;">الصنف</th>
-            <th class="text-center" style="width: 15%;">الكمية</th>
-            <th class="text-center" style="width: 17%;">السعر</th>
-            <th class="text-left" style="width: 18%;">الإجمالي</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHtml}
-        </tbody>
-      </table>
-
-      <div class="dashed-line"></div>
-
-      <!-- Totals -->
-      <div style="margin-top: 6px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-          <span>المجموع الفرعي:</span>
-          <span>${Number(order.subtotal || order.total).toFixed(2)} ${currency}</span>
-        </div>
-        ${
-          order.discount
-            ? `
-          <div style="display: flex; justify-content: space-between; margin-bottom: 2px; color: #dc2626;">
-            <span>الخصم:</span>
-            <span>-${Number(order.discount).toFixed(2)} ${currency}</span>
-          </div>
-        `
-            : ''
-        }
-        ${
-          order.tax
-            ? `
-          <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-            <span>الضريبة:</span>
-            <span>+${Number(order.tax).toFixed(2)} ${currency}</span>
-          </div>
-        `
-            : ''
-        }
-        <div class="double-line"></div>
-        <div style="display: flex; justify-content: space-between; font-size: ${
-          format === '80mm' ? '15px' : '18px'
-        }; font-weight: 700;">
-          <span>الصافي المطلوب:</span>
-          <span>${Number(order.total).toFixed(2)} ${currency}</span>
-        </div>
-        ${
-          tafqeetStr
-            ? `
-          <div style="font-size: 10px; color: #555; text-align: center; margin-top: 4px; font-weight: bold;">
-            (${tafqeetStr})
-          </div>
-        `
-            : ''
-        }
-      </div>
-
-      <div class="dashed-line"></div>
-
-      <!-- Footer -->
-      <div class="text-center" style="margin-top: 10px; font-size: 10px; color: #444;">
-        <div style="font-weight: bold;">نظام ركيزة لإدارة المبيعات والمتاجر الإلكترونية (Rakeeza ERP)</div>
-        <div>يرجى مراجعة الأصناف والتجهيز فوراً للتسليم أو الشحن</div>
-        <div style="margin-top: 4px; font-size: 9.5px; color: #475569; font-weight: 600;">
-          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
-        </div>
-        <div style="margin-top: 6px; letter-spacing: 2px; font-family: monospace; font-size: 11px;">
-          *${orderNumber}*
-        </div>
-      </div>
-
-      <script>
-        window.onload = function() {
-          window.focus();
-          window.print();
-          ${autoClose ? 'setTimeout(function(){ window.close(); }, 750);' : ''}
-        };
-      </script>
-    </body>
-    </html>
-  `;
-
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
 }

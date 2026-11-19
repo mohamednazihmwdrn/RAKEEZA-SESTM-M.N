@@ -1,5 +1,6 @@
 import { AppData, Settings } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface CashLocationBalance {
   location: string;
@@ -353,19 +354,68 @@ export function printCashBalancesReportWindow(
   showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void
 ): void {
   try {
-    const htmlContent = generateCashBalancesReportHtml(appData);
-    const printWindow = window.open('', '_blank', 'width=1100,height=850,menubar=no,toolbar=no,location=no,status=no');
+    const { company, issuerName, cashData, targetDate } = compileCashBalancesData(appData);
+    const curSymbol = company.currencySymbol || 'ج.م';
 
-    if (!printWindow) {
-      if (showToast) {
-        showToast('يرجى السماح بالنوافذ المنبثقة لطباعة تقرير الأرصدة النقدية ووسائل الدفع', 'warning');
-      }
-      return;
-    }
+    const paymentMethodsSet = new Set<string>();
+    cashData.forEach((item) => {
+      Object.keys(item.amounts).forEach((method) => paymentMethodsSet.add(method));
+    });
+    const methods = Array.from(paymentMethodsSet);
 
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    const methodTotals: Record<string, number> = {};
+    methods.forEach((m) => (methodTotals[m] = 0));
+    let grandTotal = 0;
+
+    const rows: (string | number)[][] = cashData.map((item) => {
+      let rowTotal = 0;
+      const cells: (string | number)[] = [item.location];
+      methods.forEach((m) => {
+        const val = item.amounts[m] || 0;
+        methodTotals[m] += val;
+        grandTotal += val;
+        rowTotal += val;
+        cells.push(val > 0 ? formatEnNumber(val) : '-');
+      });
+      cells.push(formatEnNumber(rowTotal));
+      return cells;
+    });
+
+    const kpis = [
+      ...methods.slice(0, 3).map((m) => ({
+        title: m,
+        value: `${formatEnNumber(methodTotals[m])} ${curSymbol}`,
+      })),
+      { title: 'إجمالي جميع الوسائل', value: `${formatEnNumber(grandTotal)} ${curSymbol}` },
+    ];
+
+    openUniversalPrint({
+      kind: 'treasury_balances',
+      title: 'تقرير الخزينة والأرصدة النقدية ووسائل الدفع',
+      subTitle: 'مصفوفة أرصدة الخزائن والبنوك والمحافظ الإلكترونية',
+      docNumber: `TREASURY-${targetDate}`,
+      date: targetDate,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (company as any)?.branchName || 'الفرع الرئيسي',
+      user: issuerName,
+      kpis,
+      columns: ['جهة الحساب / الخزينة', ...methods, 'إجمالي الحساب'],
+      rows,
+      amount: grandTotal,
+      summaries: [
+        ...methods.map((m) => ({ label: `إجمالي ${m}`, value: `${formatEnNumber(methodTotals[m])} ${curSymbol}` })),
+        {
+          label: 'الإجمالي العام لجميع الأرصدة النقدية',
+          value: `${formatEnNumber(grandTotal)} ${curSymbol}`,
+          isHighlight: true,
+          isTotal: true,
+        },
+      ],
+      signatures: ['أمين الخزينة', 'المراجع المحاسبي', 'المدير المالي'],
+      footerTermsNote: 'تقرير رسمي بمصفوفة السيولة والأرصدة النقدية والبنكية المعتمدة بالنظام',
+      preferredPaperSize: 'a4-portrait',
+      settings: company,
+    });
 
     if (showToast) {
       showToast('تم تجهيز وفتح تقرير الأرصدة النقدية ووسائل الدفع للطباعة والمعاينة بنجاح', 'success');

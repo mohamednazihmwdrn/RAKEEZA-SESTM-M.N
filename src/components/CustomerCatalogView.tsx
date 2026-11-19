@@ -3,6 +3,7 @@ import { AppData, Item, Quotation, InvoiceItem, TenantCompany } from '../types';
 import { addAuditLog } from '../utils/storage';
 import { printWebOrderReceipt } from '../utils/printOrderReceipt';
 import { playOrderAlertChime } from '../utils/audioChime';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 interface CustomerCatalogViewProps {
   appData: AppData;
@@ -919,100 +920,40 @@ _تم الإرسال عبر الكتالوج الإلكتروني - منظومة
   // Print Order Receipt
   const handlePrintOrderReceipt = () => {
     if (!confirmedOrder) return;
-    const printWindow = window.open('', '_blank', 'width=750,height=900');
-    if (!printWindow) {
-      alert('يرجى السماح بالنوافذ المنبثقة للطباعة');
-      return;
-    }
-
-    const itemsRows = confirmedOrder.items
-      .map(
-        (it, idx) => `
-      <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${idx + 1}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold;">${it.item.name}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.qty} ${it.item.unit || 'قطعة'}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${it.price.toFixed(2)}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: center; font-weight: bold;">${(it.qty * it.price).toFixed(2)}</td>
-      </tr>
-    `
-      )
-      .join('');
-
-    const html = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8">
-        <title>إيصال طلب شراء - ${confirmedOrder.orderReference}</title>
-        <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
-          body { padding: 30px; background: #fff; color: #1e293b; font-size: 14px; }
-          .header { border-bottom: 2px solid #1a237e; padding-bottom: 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-          .store-name { font-size: 24px; font-weight: bold; color: #1a237e; }
-          .order-ref { font-size: 18px; font-weight: 800; color: #0d47a1; }
-          .details-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th { background: #1a237e; color: #fff; padding: 10px; font-size: 13px; }
-          .total-box { background: #e8eaf6; border: 2px solid #1a237e; border-radius: 12px; padding: 16px; text-align: left; font-size: 18px; font-weight: 900; color: #1a237e; }
-          .footer { text-align: center; margin-top: 30px; color: #64748b; font-size: 12px; border-top: 1px dashed #cbd5e1; padding-top: 15px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <div class="store-name">${storeName}</div>
-            <div style="color: #64748b; font-size: 13px; margin-top: 4px;">إيصال تأكيد طلب شراء إلكتروني</div>
-          </div>
-          <div style="text-align: left;">
-            <div class="order-ref">${confirmedOrder.orderReference}</div>
-            <div style="font-size: 12px; color: #64748b;">التاريخ: ${confirmedOrder.date}</div>
-          </div>
-        </div>
-
-        <div class="details-box">
-          <div><strong>العميل:</strong> ${confirmedOrder.customerName}</div>
-          <div><strong>الهاتف:</strong> <span dir="ltr">${confirmedOrder.customerPhone}</span></div>
-          ${confirmedOrder.deliveryAddress ? `<div style="grid-column: span 2;"><strong>عنوان التوصيل:</strong> ${confirmedOrder.deliveryAddress}</div>` : ''}
-          ${confirmedOrder.orderNotes ? `<div style="grid-column: span 2;"><strong>ملاحظات الطلب:</strong> ${confirmedOrder.orderNotes}</div>` : ''}
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 40px;">#</th>
-              <th style="text-align: right;">المنتج</th>
-              <th style="width: 100px;">الكمية</th>
-              <th style="width: 100px;">السعر (${currency})</th>
-              <th style="width: 120px;">الإجمالي (${currency})</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsRows}
-          </tbody>
-        </table>
-
-        <div class="total-box">
-          الإجمالي الكلي: ${confirmedOrder.total.toFixed(2)} ${currency}
-        </div>
-
-        <div class="footer">
-          <div>شكراً لتسوقكم معنا! للتواصل: ${contactPhone} | ${appData.settings.address || ''}</div>
-          <div style="margin-top: 6px; font-size: 10px; color: #64748b;">جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615</div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() { window.print(); }, 400);
-          }
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    openUniversalPrint({
+      kind: 'sales_invoice',
+      title: 'إيصال تأكيد طلب شراء إلكتروني',
+      docNumber: confirmedOrder.orderReference,
+      date: confirmedOrder.date,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: 'المتجر الإلكتروني',
+      partyName: confirmedOrder.customerName,
+      partyPhone: confirmedOrder.customerPhone,
+      partyAddress: confirmedOrder.deliveryAddress || '-',
+      partyLabel: 'العميل',
+      notes: confirmedOrder.orderNotes || '',
+      items: confirmedOrder.items.map((it, idx) => ({
+        index: idx + 1,
+        code: it.item.code || `CAT-${idx + 1}`,
+        name: it.item.name,
+        unit: it.item.unit || 'قطعة',
+        qty: it.qty,
+        price: it.price,
+        total: it.qty * it.price,
+      })),
+      amount: confirmedOrder.total,
+      summaries: [
+        { label: 'عدد المنتجات', value: `${confirmedOrder.items.length} صنف` },
+        { label: 'الإجمالي الكلي', value: `${confirmedOrder.total.toFixed(2)} ${currency}`, isTotal: true, isHighlight: true },
+      ],
+      footerTermsNote: `شكراً لتسوقكم معنا! للتواصل: ${contactPhone}`,
+      preferredPaperSize: 'a5-portrait',
+      settings: {
+        ...appData.settings,
+        companyName: storeName,
+        phone1: contactPhone,
+      },
+    });
   };
 
   // Helper category icons

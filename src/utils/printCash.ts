@@ -609,7 +609,7 @@ export function printCashVoucherWindow(
       (trans as any).partyName ||
       (trans as any).customerName ||
       (trans as any).supplierName ||
-      'طرف نقدي عام';
+      '';
     const curSymbol = settings?.currencySymbol || 'ج.م';
     const curName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
     const amountNum = Number(trans.amount || 0);
@@ -630,25 +630,9 @@ export function printCashVoucherWindow(
       preferredPaperSize: 'a5-portrait',
       settings,
     });
+    showToast?.('تم تجهيز السند للمعاينة والطباعة بنجاح', 'success');
   } catch (err) {
     console.error('Error dispatching voucher universal print:', err);
+    showToast?.('تعذر تجهيز السند للطباعة', 'error');
   }
-
-  let printWin: Window | null = null;
-  try {
-    printWin = window.open('', '_blank', 'width=850,height=900');
-  } catch {
-    printWin = null;
-  }
-
-  if (!printWin) {
-    return;
-  }
-
-  try {
-    const html = generateCashVoucherPrintHtml(trans, appDataOrSettings);
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-  } catch {}
 }

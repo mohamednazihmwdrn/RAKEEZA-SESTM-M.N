@@ -25,6 +25,8 @@ import {
   Activity,
   Sparkles,
   Layers,
+  FileSpreadsheet,
+  ArrowUpDown,
 } from 'lucide-react';
 import { AppData, SaleInvoice, InvoiceItem } from '../types';
 import { Modal } from './Modal';
@@ -34,8 +36,8 @@ import { getProductActivePrice } from '../utils/priceService';
 import { InvoiceItemModal } from './InvoiceItemModal';
 import { UnifiedInvoiceItemSystem, InvoiceItemUnified, PaymentRow } from './UnifiedInvoiceItemSystem';
 import { exportToExcel } from '../utils/excelExport';
-import { openUnifiedPrintWindow } from '../utils/printUnified';
-import { TableActionButtons } from './TableActionButtons';
+import { openBatchInvoicesPrint } from '../services/centralizedPrintService';
+import { classifySaleInvoice, computeRegisterSummary } from '../utils/invoiceClassification';
 import { generateInvoiceWhatsAppMessage, openWhatsAppChat } from '../services/whatsappService';
 import { postSaleInvoice, deleteSaleInvoice } from '../utils/posting';
 import { calculateCustomerBalance } from '../utils/accounting';
@@ -66,6 +68,9 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
   const [selectedYearFilter, setSelectedYearFilter] = useState<string>('all');
+  const [docCategoryTab, setDocCategoryTab] = useState<'all' | 'invoices' | 'returns'>('all');
+  const [docTypeFilter, setDocTypeFilter] = useState<'all' | 'nagdi' | 'ajel' | 'return_nagdi' | 'return_ajel'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
   const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState<boolean>(false);
 
   // 🏷️ Centralized Price Management Master Source Control: 'cash' vs 'wholesale'
@@ -159,23 +164,50 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     return i.name.toLowerCase().includes(q) || (i.id && i.id.toString().includes(q));
   });
 
-  const filteredInvoices = appData.salesInvoices.filter((inv) => {
-    if (selectedBranchFilter !== 'all' && inv.branchId && inv.branchId !== selectedBranchFilter) {
-      return false;
-    }
-    if (selectedYearFilter !== 'all' && !(inv.date || '').startsWith(selectedYearFilter)) {
-      return false;
-    }
-    const s = searchTerm.toLowerCase();
-    if (!s) return true;
-    return (
-      inv.id.toString().includes(s) ||
-      inv.customerName?.toLowerCase().includes(s) ||
-      inv.phone?.toLowerCase().includes(s) ||
-      inv.salesRep?.toLowerCase().includes(s) ||
-      inv.notes?.toLowerCase().includes(s)
-    );
-  });
+  const allSalesList = appData.salesInvoices || [];
+  const regularSalesCount = allSalesList.filter((inv) => !inv.type?.startsWith('return_')).length;
+  const returnsSalesCount = allSalesList.filter((inv) => inv.type?.startsWith('return_')).length;
+
+  const filteredInvoices = allSalesList
+    .filter((inv) => {
+      if (selectedBranchFilter !== 'all' && inv.branchId && inv.branchId !== selectedBranchFilter) {
+        return false;
+      }
+      if (selectedYearFilter !== 'all' && !(inv.date || '').startsWith(selectedYearFilter)) {
+        return false;
+      }
+      const isRet = inv.type?.startsWith('return_');
+      if (docCategoryTab === 'invoices' && isRet) return false;
+      if (docCategoryTab === 'returns' && !isRet) return false;
+      if (docTypeFilter !== 'all' && inv.type !== docTypeFilter) return false;
+
+      const s = searchTerm.trim().toLowerCase();
+      if (!s) return true;
+      const matchesItem = (inv.items || []).some(
+        (it) =>
+          (it.name && it.name.toLowerCase().includes(s)) ||
+          (it.code && it.code.toLowerCase().includes(s))
+      );
+      return (
+        inv.id.toString().includes(s) ||
+        inv.customerName?.toLowerCase().includes(s) ||
+        inv.phone?.toLowerCase().includes(s) ||
+        inv.salesRep?.toLowerCase().includes(s) ||
+        inv.notes?.toLowerCase().includes(s) ||
+        matchesItem
+      );
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'oldest') {
+        const cmp = (a.date || '').localeCompare(b.date || '');
+        return cmp !== 0 ? cmp : (Number(a.id) || 0) - (Number(b.id) || 0);
+      }
+      if (sortOrder === 'highest') return (b.total || 0) - (a.total || 0);
+      if (sortOrder === 'lowest') return (a.total || 0) - (b.total || 0);
+      // newest
+      const cmp = (b.date || '').localeCompare(a.date || '');
+      return cmp !== 0 ? cmp : (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
 
   const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -815,56 +847,28 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     }
   };
 
-  // Print Sales Invoices List
+  // Print Sales Invoices List as Separate Independent Documents (Mode B)
   const handlePrintSalesList = () => {
-    const list = appData.salesInvoices || [];
-    const totalAmount = list.reduce((sum, i) => sum + (i.total || 0), 0);
-    const totalPaid = list.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
-    const totalRemaining = totalAmount - totalPaid;
-
-    openUnifiedPrintWindow(
-      {
-        reportTitle: 'سجل فواتير المبيعات والإيرادات',
-        subTitle: 'كشف المبيعات المعتمد',
-        serial: 'SALES-REP',
-        branch: 'إدارة المبيعات',
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        kpis: [
-          { title: 'عدد الفواتير', value: `${list.length} فاتورة` },
-          { title: 'إجمالي المبيعات', value: `${totalAmount.toFixed(2)} ج.م` },
-          { title: 'إجمالي المحصل', value: `${totalPaid.toFixed(2)} ج.م` },
-          { title: 'المتبقي ذمم عملاء', value: `${totalRemaining.toFixed(2)} ج.م` },
-        ],
-        columns: ['#', 'التاريخ', 'العميل', 'النوع', 'الإجمالي', 'المحصل', 'المتبقي'],
-        rows: list.map((inv) => [
-          `#${inv.id}`,
-          inv.date,
-          inv.customerName,
-          inv.type === 'return_nagdi' || inv.type === 'return_ajel'
-            ? 'مرتجع'
-            : inv.type === 'nagdi'
-            ? 'نقدي'
-            : 'آجل',
-          `${inv.total.toFixed(2)} ج.م`,
-          `${(inv.paidAmount || 0).toFixed(2)} ج.م`,
-          `${(inv.total - (inv.paidAmount || 0)).toFixed(2)} ج.م`,
-        ]),
-        summary: [
-          { label: 'إجمالي قيمة المبيعات', value: `${totalAmount.toFixed(2)} ج.م`, isTotal: true },
-          { label: 'إجمالي المبالغ المحصلة', value: `${totalPaid.toFixed(2)} ج.م` },
-          { label: 'إجمالي المتبقي على العملاء', value: `${totalRemaining.toFixed(2)} ج.م` },
-        ],
-        footerNote: 'تم استخراج سجل المبيعات من النظام المحاسبي المعتمد',
-      },
-      appData.settings,
-      showToast
-    );
+    const list = filteredInvoices;
+    if (list.length === 0) {
+      showToast('لا توجد فواتير مبيعات مطابقة للطباعة', 'warning');
+      return;
+    }
+    const classifiedRecords = list.map((inv) => classifySaleInvoice(inv, appData));
+    openBatchInvoicesPrint(classifiedRecords, {
+      title: docCategoryTab === 'returns' ? 'سجل مرتجعات المبيعات' : 'فواتير المبيعات',
+      subtitle: `عدد المستندات: ${classifiedRecords.length} فاتورة مستقلة ببياناتها الكاملة`,
+      settings: appData.settings,
+      appData,
+      preferredPaperSize: 'a5-portrait',
+      includeSummarySheet: false,
+      summaryStats: computeRegisterSummary(classifiedRecords),
+    });
   };
 
   // Export Sales to Excel
   const handleExportSalesExcel = () => {
-    const list = appData.salesInvoices || [];
+    const list = filteredInvoices.length > 0 ? filteredInvoices : appData.salesInvoices || [];
     exportToExcel({
       filename: `سجل_فواتير_المبيعات_${new Date().toISOString().split('T')[0]}`,
       sheetName: 'المبيعات',
@@ -872,12 +876,18 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
       columns: [
         { header: 'رقم الفاتورة', key: 'id', width: 14 },
         { header: 'التاريخ', key: 'date', width: 14 },
-        { header: 'اسم العميل', key: 'clientName', width: 26 },
+        { header: 'اسم العميل', key: 'customerName', width: 26 },
         {
           header: 'نوع الفاتورة',
           getValue: (item: SaleInvoice) =>
-            item.type === 'return_nagdi' || item.type === 'return_ajel'
-              ? 'مرتجع مبيعات'
+            item.type === 'return_nagdi'
+              ? 'مرتجع نقدي'
+              : item.type === 'return_ajel'
+              ? 'مرتجع آجل'
+              : item.salesType === 'wholesale'
+              ? item.type === 'ajel'
+                ? 'جملة آجل'
+                : 'جملة نقدي'
               : item.type === 'nagdi'
               ? 'نقدي'
               : 'آجل',
@@ -900,152 +910,391 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     showToast('تم تصدير سجل المبيعات إلى ملف Excel بنجاح', 'success');
   };
 
-  const totalSalesAmount = (appData.salesInvoices || []).reduce((acc, i) => acc + (i.total || 0), 0);
-  const totalSalesPaid = (appData.salesInvoices || []).reduce((acc, i) => acc + (i.paidAmount || 0), 0);
-  const totalSalesRemaining = totalSalesAmount - totalSalesPaid;
+  const totalSalesAmount = filteredInvoices.reduce((acc, i) => acc + (i.total || 0), 0);
+  const totalSalesPaid = filteredInvoices.reduce((acc, i) => acc + (i.paidAmount || 0), 0);
+  const totalSalesRemaining = Math.max(0, totalSalesAmount - totalSalesPaid);
+  const activeFilterBranch = appData.branches?.find((b) => b.id === selectedBranchFilter);
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-4">
-      {/* 🏛️ ترويسة قسم إدارة المبيعات والفواتير */}
-      <div className="bg-white text-slate-900 p-3.5 sm:p-4 rounded-xl border border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5 text-blue-600" />
+    <div className="w-full max-w-7xl mx-auto flex flex-col space-y-3 overflow-x-hidden">
+      {/* 🏛️ ترويسة وأزرار قسم المبيعات (متوافق تماماً مع الهاتف بدون تمرير أفقي) */}
+      <div className="bg-white text-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                إدارة نقاط البيع وفواتير المبيعات
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-500">
+                البيع السريع ونظام الكروت المباشر بدون أي تمرير أفقي
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900">
-              إدارة فواتير المبيعات والإيرادات
-            </h2>
-            <p className="text-xs text-slate-500 font-normal">
-              قسم المبيعات · تسجيل ومتابعة فواتير البيع النقدي والجملة والآجل ومردودات المبيعات
-            </p>
+
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('invoice_registry')}
+                className="min-h-[38px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Layers className="w-4 h-4" />
+                <span>السجل المصنف والطباعة</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsDiagnosticsModalOpen(true)}
+              className="min-h-[38px] bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <span>صحة البيانات</span>
+            </button>
           </div>
         </div>
 
-        {/* Quick KPI Summary */}
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto tabular-nums">
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">عدد الفواتير</span>
-            <span className="text-xs sm:text-sm font-semibold text-slate-900">{appData.salesInvoices?.length || 0}</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">إجمالي المبيعات</span>
-            <span className="text-xs sm:text-sm font-semibold text-emerald-700">{totalSalesAmount.toLocaleString()} ج.م</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">المحصل نقداً</span>
-            <span className="text-xs sm:text-sm font-semibold text-blue-700">{totalSalesPaid.toLocaleString()} ج.م</span>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex flex-col items-start sm:items-center">
-            <span className="text-[11px] text-slate-500 font-medium">المتبقي ذمم</span>
-            <span className="text-xs sm:text-sm font-semibold text-amber-700">{totalSalesRemaining.toLocaleString()} ج.م</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Bar */}
-      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 flex flex-col xl:flex-row gap-3 items-stretch xl:items-center justify-between">
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-          {/* 1. بيع نقدي */}
+        {/* Excel + Print & Export Batch PDF + Utility Tools */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full">
           <button
-            onClick={() => openCreateModal('nagdi', 'cash')}
-            className="min-h-[44px] sm:min-h-[40px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة بيع نقدي قطاعي بسداد فوري"
+            type="button"
+            onClick={handlePrintSalesList}
+            className="col-span-2 sm:flex-initial min-h-[42px] bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            title="طباعة وتصدير كافة الفواتير المعروضة كل فاتورة مستقلة ببياناتها"
           >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>بيع نقدي</span>
+            <Printer className="w-4 h-4 shrink-0" />
+            <span className="truncate">طباعة وتصدير ({filteredInvoices.length}) PDF</span>
           </button>
 
-          {/* 2. بيع جملة نقدي */}
           <button
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[44px] sm:min-h-[40px] bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة بيع جملة بسداد نقدي فوري"
+            type="button"
+            onClick={handleExportSalesExcel}
+            className="min-h-[42px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+            title="تصدير المبيعات إلى Excel"
           >
-            <Tag className="w-4 h-4 shrink-0" />
-            <span>جملة نقدي</span>
+            <FileSpreadsheet className="w-4 h-4 shrink-0" />
+            <span>Excel</span>
           </button>
-
-          {/* 2b. بيع جملة آجل */}
-          <button
-            onClick={() => openCreateModal('ajel', 'wholesale')}
-            className="min-h-[44px] sm:min-h-[40px] bg-violet-700 hover:bg-violet-800 active:bg-violet-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة بيع جملة آجل على حساب العميل"
-          >
-            <Tag className="w-4 h-4 shrink-0" />
-            <span>جملة آجل</span>
-          </button>
-
-          {/* 3. بيع أجل */}
-          <button
-            onClick={() => openCreateModal('ajel', 'cash')}
-            className="min-h-[44px] sm:min-h-[40px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فاتورة بيع آجل على حساب ومديونية العميل"
-          >
-            <Calendar className="w-4 h-4 shrink-0" />
-            <span>بيع آجل</span>
-          </button>
-
-          {/* 4. مرتجع نقدي */}
-          <button
-            onClick={() => openCreateModal('return_nagdi', 'cash')}
-            className="min-h-[44px] sm:min-h-[40px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع مبيعات نقدي بسعر القطاعي"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع نقدي</span>
-          </button>
-
-          {/* 5. مرتجع جملة */}
-          <button
-            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="min-h-[44px] sm:min-h-[40px] bg-red-800 hover:bg-red-900 active:bg-red-950 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع مبيعات جملة بسعر الجملة"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع جملة</span>
-          </button>
-
-          {/* 6. مرتجع أجل */}
-          <button
-            onClick={() => openCreateModal('return_ajel', 'cash')}
-            className="min-h-[44px] sm:min-h-[40px] bg-purple-700 hover:bg-purple-800 active:bg-purple-900 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="مرتجع مبيعات آجل وخصم من مديونية العميل"
-          >
-            <RotateCcw className="w-4 h-4 shrink-0" />
-            <span>مرتجع آجل</span>
-          </button>
-
-          <TableActionButtons
-            onPrint={handlePrintSalesList}
-            onExportExcel={handleExportSalesExcel}
-            printTitle="طباعة سجل فواتير المبيعات"
-            exportTitle="تصدير المبيعات إلى Excel"
-          />
 
           {onNavigate && (
             <button
               type="button"
               onClick={() => onNavigate('invoice_registry')}
-              className="min-h-[44px] sm:min-h-[40px] bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-              title="فتح سجل الفواتير المصنف والطباعة المجمعة (Mode B)"
+              className="md:hidden min-h-[42px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Layers className="w-4 h-4 shrink-0" />
-              <span>السجل المصنف والطباعة</span>
+              <span>السجل المصنف</span>
             </button>
           )}
 
-          {/* ⚡ زر فحص النزاهة وصحة البيانات الضخمة (10M+) */}
           <button
+            type="button"
             onClick={() => setIsDiagnosticsModalOpen(true)}
-            className="min-h-[44px] sm:min-h-[40px] bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 whitespace-nowrap"
-            title="فحص النزاهة المحاسبية ومراقبة أداء وسعة قاعدة البيانات الضخمة"
+            className="md:hidden col-span-2 sm:col-span-1 min-h-[42px] bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
+            title="فحص النزاهة وصحة البيانات"
           >
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span className="hidden xl:inline">صحة البيانات</span>
+            <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>فحص صحة البيانات</span>
           </button>
         </div>
-        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0">
+
+        {/* Primary Invoice Creation Buttons (Stacks vertically on mobile) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'cash')}
+            className="w-full min-h-[46px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            title="فاتورة بيع نقدي قطاعي بسداد فوري"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>إنشاء فاتورة بيع نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'wholesale')}
+            className="w-full min-h-[46px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            title="فاتورة بيع جملة بسداد نقدي أو آجل"
+          >
+            <Tag className="w-4 h-4 shrink-0" />
+            <span>+ فاتورة بيع جملة</span>
+          </button>
+        </div>
+
+        {/* Explicit 4 Core Sales Movements + Wholesale Quick Modes */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-100 w-full">
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'cash')}
+            className="min-h-[42px] bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <DollarSign className="w-3.5 h-3.5 shrink-0" />
+            <span>بيع نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('ajel', 'cash')}
+            className="min-h-[42px] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            <span>بيع آجل</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_nagdi', 'cash')}
+            className="min-h-[42px] bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_ajel', 'cash')}
+            className="min-h-[42px] bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع آجل</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('nagdi', 'wholesale')}
+            className="min-h-[42px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Tag className="w-3.5 h-3.5 shrink-0" />
+            <span>جملة نقدي</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('ajel', 'wholesale')}
+            className="min-h-[42px] bg-violet-50 hover:bg-violet-100 text-violet-900 border border-violet-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Tag className="w-3.5 h-3.5 shrink-0" />
+            <span>جملة آجل</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
+            className="col-span-2 sm:col-span-1 min-h-[42px] bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span>مرتجع جملة</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Segmented Tabs: فواتير المبيعات | مرتجع المبيعات | الكل */}
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 grid grid-cols-3 gap-1.5 shadow-2xs w-full">
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('invoices');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'invoices'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span className="truncate">فواتير المبيعات</span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'invoices'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {regularSalesCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('returns');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'returns'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span className="flex items-center gap-1 truncate">
+            <RotateCcw className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+            <span>المرتجعات</span>
+          </span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'returns'
+                ? 'bg-rose-500 text-white'
+                : 'bg-rose-100 text-rose-700'
+            }`}
+          >
+            {returnsSalesCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setDocCategoryTab('all');
+            setDocTypeFilter('all');
+            setCurrentPage(1);
+          }}
+          className={`min-h-[48px] px-1.5 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+            docCategoryTab === 'all'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <span>الكل</span>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-mono tabular-nums ${
+              docCategoryTab === 'all'
+                ? 'bg-slate-700 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {allSalesList.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Branch Scope Card (Mobile Vertical Stack -> Zero Horizontal Scroll) */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-2xs w-full">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+          <span className="text-xs font-bold text-slate-600 shrink-0">عرض فواتير المبيعات:</span>
+          <select
+            value={selectedBranchFilter}
+            onChange={(e) => {
+              setSelectedBranchFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full sm:flex-1 min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-slate-50 text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 focus:outline-none cursor-pointer"
+          >
+            <option value="all">كافة فروع المنشأة ({allSalesList.length})</option>
+            {(appData.branches || []).map((b) => (
+              <option key={b.id} value={b.id}>
+                فرع: {b.name} ({allSalesList.filter((i) => i.branchId === b.id).length})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedBranchFilter('all');
+              setCurrentPage(1);
+            }}
+            className={`w-full sm:w-auto min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              selectedBranchFilter === 'all'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            كافة الفروع ({appData.branches?.length || 1})
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 text-right sm:text-left">
+          {selectedBranchFilter === 'all'
+            ? 'عرض مجمع لجميع فروع المنشأة'
+            : `عرض مخصص لفرع: ${activeFilterBranch?.name || 'الفرع المحدد'}`}
+        </p>
+      </div>
+
+      {/* 2x2 KPI Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 tabular-nums w-full">
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">إجمالي المبيعات</div>
+          <div className="text-sm sm:text-lg font-bold text-slate-900 mt-1 break-words">
+            {totalSalesAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">المحصل نقدياً</div>
+          <div className="text-sm sm:text-lg font-bold text-emerald-700 mt-1 break-words">
+            {totalSalesPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">المتبقي آجل</div>
+          <div className="text-sm sm:text-lg font-bold text-rose-700 mt-1 break-words">
+            {totalSalesRemaining.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-3 sm:p-3.5 rounded-2xl text-center shadow-2xs min-w-0">
+          <div className="text-xs text-slate-500 font-medium">عدد الفواتير</div>
+          <div className="text-sm sm:text-lg font-bold text-slate-900 mt-1">
+            {filteredInvoices.length} فاتورة
+          </div>
+        </div>
+      </div>
+
+      {/* Search, Movement Type, Sort & Fiscal Year Bar (Vertical Grid on Mobile) */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2.5 shadow-2xs w-full">
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="بحث برقم الفاتورة، اسم العميل، الصنف، أو الملاحظات..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full min-h-[44px] pr-9 pl-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-xl text-base sm:text-xs focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 focus:outline-none placeholder:text-slate-400"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+          <div className="flex items-center gap-2 min-w-0">
+            <Tag className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <select
+              value={docTypeFilter}
+              onChange={(e) => {
+                setDocTypeFilter(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 focus:outline-none cursor-pointer"
+            >
+              <option value="all">جميع أنواع المبيعات</option>
+              <option value="nagdi">بيع نقدي</option>
+              <option value="ajel">بيع آجل</option>
+              <option value="return_nagdi">مرتجع نقدي</option>
+              <option value="return_ajel">مرتجع آجل</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <select
+              value={sortOrder}
+              onChange={(e) => {
+                setSortOrder(e.target.value as any);
+                setCurrentPage(1);
+              }}
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 focus:outline-none cursor-pointer"
+            >
+              <option value="newest">الأحدث تاريخاً</option>
+              <option value="oldest">الأقدم تاريخاً</option>
+              <option value="highest">الأعلى قيمة</option>
+              <option value="lowest">الأقل قيمة</option>
+            </select>
+          </div>
+
           {availableInvoiceYears.length > 0 && (
             <select
               value={selectedYearFilter}
@@ -1053,48 +1302,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
                 setSelectedYearFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none cursor-pointer"
+              className="w-full min-w-0 min-h-[42px] px-3 py-2 border border-slate-200 bg-white text-slate-800 font-semibold rounded-xl text-xs focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 focus:outline-none cursor-pointer"
               title="تجزئة وعرض الفواتير حسب السنة المالية"
             >
-              <option value="all">كافة السنوات ({appData.salesInvoices?.length || 0})</option>
+              <option value="all">كافة السنوات ({allSalesList.length})</option>
               {availableInvoiceYears.map((yr) => (
                 <option key={yr} value={yr}>
-                  سنة {yr} ({appData.salesInvoices?.filter((i) => (i.date || '').startsWith(yr)).length || 0})
+                  سنة {yr} ({allSalesList.filter((i) => (i.date || '').startsWith(yr)).length})
                 </option>
               ))}
             </select>
           )}
-
-          {appData.branches && appData.branches.length > 1 && (
-            <select
-              value={selectedBranchFilter}
-              onChange={(e) => {
-                setSelectedBranchFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="min-h-[44px] sm:min-h-[40px] px-3 py-2 border border-slate-300 bg-white text-slate-800 font-medium rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none cursor-pointer"
-            >
-              <option value="all">جميع الفروع ({appData.salesInvoices?.length || 0})</option>
-              {appData.branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({appData.salesInvoices?.filter((i) => i.branchId === b.id).length || 0})
-                </option>
-              ))}
-            </select>
-          )}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="بحث برقم الفاتورة أو اسم العميل..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full min-h-[44px] sm:min-h-[40px] pr-9 pl-3 py-2 border border-slate-300 bg-white rounded-lg text-base sm:text-xs focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 focus:outline-none placeholder:text-slate-400"
-            />
-          </div>
         </div>
       </div>
 

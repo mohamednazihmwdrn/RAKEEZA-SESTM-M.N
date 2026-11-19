@@ -1,5 +1,6 @@
 import { AppData, Settings, BankAccount, BankStatementItem, ApprovalRequest } from '../types';
 import { getPrintToolbarStyles, getPrintToolbarHtml, getPrintToolbarScript } from './printToolbarHelper';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 export interface BankReconciliationData {
   company: Settings;
@@ -397,19 +398,61 @@ export function printBankReconciliationReportWindow(
   showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void
 ): void {
   try {
-    const htmlContent = generateBankReconciliationReportHtml(appData, bankAccountId, targetDate);
-    const printWindow = window.open('', '_blank', 'width=1100,height=850,menubar=no,toolbar=no,location=no,status=no');
+    const data = compileBankReconciliationData(appData, bankAccountId, targetDate);
+    const curSymbol = data.company.currencySymbol || 'ج.م';
 
-    if (!printWindow) {
-      if (showToast) {
-        showToast('يرجى السماح بالنوافذ المنبثقة لطباعة مذكرة التسوية والمطابقة البنكية', 'warning');
-      }
-      return;
-    }
+    let totalDebit = 0;
+    let totalCredit = 0;
+    const rows = data.statementItems.map((item) => {
+      totalDebit += item.debit || 0;
+      totalCredit += item.credit || 0;
+      const isCredit = (item.credit || 0) > 0;
+      return [
+        item.date || '-',
+        item.reference || '-',
+        item.description || '-',
+        isCredit ? 'إيداع وارد (+)' : 'سحب / عمولة (-)',
+        item.debit > 0 ? formatNumber(item.debit) : '-',
+        item.credit > 0 ? formatNumber(item.credit) : '-',
+        item.isReconciled ? 'تمت المطابقة' : 'معلق للمراجعة',
+      ];
+    });
 
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    const isMatched = Math.abs(data.difference) < 0.01;
+
+    openUniversalPrint({
+      kind: 'bank_reconciliation',
+      title: `مذكرة التسوية والمطابقة البنكية — ${data.selectedBank.name}`,
+      subTitle: data.selectedBank.accountNumber ? `رقم الحساب: ${data.selectedBank.accountNumber}` : 'المطابقة البنكية',
+      docNumber: `RECON-${data.targetDate}`,
+      date: data.targetDate,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: (data.company as any)?.branchName || 'الإدارة المالية',
+      user: data.issuerName,
+      kpis: [
+        { title: 'الرصيد الدفتري بالنظام', value: `${formatNumber(data.bookBalance)} ${curSymbol}` },
+        { title: 'رصيد كشف البنك', value: `${formatNumber(data.statementBalance)} ${curSymbol}` },
+        { title: 'فارق التسوية', value: `${formatNumber(data.difference)} ${curSymbol}` },
+        { title: 'الحركات المطابقة / المعلقة', value: `${data.reconciledCount} / ${data.pendingCount}` },
+      ],
+      columns: ['التاريخ', 'المرجع', 'البيان', 'نوع الحركة', 'مدين (-)', 'دائن (+)', 'الحالة'],
+      rows,
+      amount: Math.abs(data.difference),
+      summaries: [
+        { label: 'إجمالي السحوبات والعمولات (مدين)', value: `${formatNumber(totalDebit)} ${curSymbol}`, color: '#dc2626' },
+        { label: 'إجمالي الإيداعات والتحويلات (دائن)', value: `${formatNumber(totalCredit)} ${curSymbol}`, color: '#16a34a' },
+        {
+          label: isMatched ? 'نتيجة التسوية البنكية (متطابق)' : 'فرق التسوية المطلوب مراجعته',
+          value: `${formatNumber(data.difference)} ${curSymbol}`,
+          isHighlight: true,
+          isTotal: true,
+        },
+      ],
+      signatures: ['محاسب البنوك', 'المراجع المالي', 'اعتماد المدير المالي'],
+      footerTermsNote: 'مذكرة تسوية ومطابقة بنكية رسمية مستخرجة من دفاتر النظام ومطابقة لكشف الحساب',
+      preferredPaperSize: 'a4-portrait',
+      settings: data.company,
+    });
 
     if (showToast) {
       showToast('تم فتح وتجهيز مذكرة التسوية البنكية ومحضر الاعتماد للطباعة والمعاينة بنجاح', 'success');

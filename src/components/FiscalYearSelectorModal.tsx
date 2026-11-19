@@ -3,6 +3,7 @@ import { AppData, FiscalYearClosingRecord, FiscalYearInfo, SaleInvoice } from '.
 import { Modal } from './Modal';
 import { firestoreShardingService, ShardedFiscalYearSummary } from '../services/firestoreShardingService';
 import { Calendar, Lock, Unlock, CloudDownload, Printer, CheckCircle, RefreshCw, BarChart2, ShieldCheck, ArrowRight } from 'lucide-react';
+import { printAnnualClosing } from '../utils/printInventoryAdjustment';
 
 const formatCurrency = (val: number, currency: string = 'ج.م') => {
   return `${Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
@@ -167,118 +168,8 @@ export const FiscalYearSelectorModal: React.FC<FiscalYearSelectorModalProps> = (
 
   // Print Official Certified Closing Dossier
   const handlePrintClosingDossier = (record: FiscalYearClosingRecord) => {
-    const company = appData.settings || {};
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      showToast?.('يرجى السماح بالنوافذ المنبثقة للطباعة', 'warning');
-      return;
-    }
-
-    const html = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8">
-        <title>محضر إقفال السنة المالية ${record.fiscalYear} - معتمد</title>
-        <style>
-          @page { size: A4 portrait; margin: 15mm; }
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; color: #1e293b; margin: 0; padding: 20px; font-size: 13px; line-height: 1.6; }
-          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; }
-          .title { font-size: 20px; font-weight: 900; color: #0f172a; margin: 5px 0; }
-          .subtitle { font-size: 13px; color: #475569; }
-          .badge { display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 999px; font-weight: bold; font-size: 11px; margin-top: 5px; border: 1px solid #fde68a; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-          .card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #f8fafc; }
-          .card-title { font-weight: 800; font-size: 14px; margin-bottom: 8px; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-          .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #e2e8f0; }
-          .label { color: #64748b; font-weight: 600; }
-          .val { font-weight: bold; color: #0f172a; direction: ltr; }
-          .positive { color: #15803d; }
-          .negative { color: #b91c1c; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: right; }
-          th { background: #f1f5f9; font-weight: 800; }
-          .footer { margin-top: 40px; display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid #cbd5e1; font-weight: bold; }
-          .sign-box { text-align: center; width: 200px; }
-          .sign-line { margin-top: 40px; border-top: 1px dashed #94a3b8; }
-          @media print {
-            body { padding: 0; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div style="font-size: 18px; font-weight: 900;">${appData.settings?.companyName || 'منظومة ركيزة السحابية'}</div>
-          <div class="title">محضر إقفال السنة المالية والحسابات الختامية المعتمدة</div>
-          <div class="subtitle">السنة المالية: ${record.fiscalYear} | الترحيل إلى: ${record.nextFiscalYear}</div>
-          <span class="badge">🔒 محضر رسمي نهائي معتمد وموثق سحابياً</span>
-        </div>
-
-        <div class="grid">
-          <div class="card">
-            <div class="card-title">📊 نتائج الأعمال وقائمة الدخل (P&L)</div>
-            <div class="row"><span class="label">إجمالي الإيرادات والمبيعات:</span><span class="val">${formatCurrency(record.totalRevenues)}</span></div>
-            <div class="row"><span class="label">إجمالي المصروفات وتكلفة المبيعات:</span><span class="val">${formatCurrency(record.totalExpenses)}</span></div>
-            <div class="row" style="font-size: 15px; background: #e2e8f0; padding: 6px 4px; border-radius: 4px; margin-top: 6px;">
-              <span class="label" style="color: #0f172a;">صافي النتيجة (أرباح / خسائر):</span>
-              <span class="val ${record.netProfitOrLoss >= 0 ? 'positive' : 'negative'}">${formatCurrency(record.netProfitOrLoss)}</span>
-            </div>
-            <div class="row"><span class="label">حساب الترحيل وحقوق الملكية:</span><span class="val" style="direction: rtl;">${record.closedToAccountName} (${record.closedToAccountCode})</span></div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">⚖️ الميزانية العمومية والمركز المالي عند الإقفال</div>
-            <div class="row"><span class="label">تقييم بضاعة آخر المدة (المخزون):</span><span class="val">${formatCurrency(record.inventoryValueAtClosing)}</span></div>
-            <div class="row"><span class="label">إجمالي الأصول والموجودات:</span><span class="val">${formatCurrency(record.totalAssetsAtClosing)}</span></div>
-            <div class="row"><span class="label">إجمالي الالتزامات والخصوم:</span><span class="val">${formatCurrency(record.totalLiabilitiesAtClosing)}</span></div>
-            <div class="row"><span class="label">إجمالي حقوق الملكية:</span><span class="val">${formatCurrency(record.totalEquityAtClosing)}</span></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">📑 بيانات التوثيق المحاسبي والقيود اليومية</div>
-          <div class="grid" style="margin-bottom: 0;">
-            <div>
-              <div class="row"><span class="label">رقم قيد الإقفال السنوي:</span><span class="val">#${record.closingJournalEntryId}</span></div>
-              <div class="row"><span class="label">تاريخ ووقت اعتماد الإقفال:</span><span class="val" style="direction: rtl;">${new Date(record.closedAt).toLocaleString('ar-EG')}</span></div>
-            </div>
-            <div>
-              <div class="row"><span class="label">المسؤول عن الإقفال والاعتماد:</span><span class="val" style="direction: rtl;">${record.closedBy}</span></div>
-              <div class="row"><span class="label">ملاحظات المحضر:</span><span class="val" style="direction: rtl;">${record.notes || 'تم الإقفال بنجاح وفق المعايير المحاسبية المعتمدة'}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="footer">
-          <div class="sign-box">
-            <div>المحاسب المالي المسؤول</div>
-            <div class="sign-line"></div>
-          </div>
-          <div class="sign-box">
-            <div>المدير المالي / مراجع الحسابات</div>
-            <div class="sign-line"></div>
-          </div>
-          <div class="sign-box">
-            <div>اعتماد الإدارة العليا</div>
-            <div class="sign-line"></div>
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 400);
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printAnnualClosing(record, appData);
+    showToast?.('تم تجهيز محضر الإقفال السنوي للمعاينة والطباعة بنجاح', 'success');
   };
 
   return (

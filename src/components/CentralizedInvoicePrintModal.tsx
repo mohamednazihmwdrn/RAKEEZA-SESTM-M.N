@@ -400,6 +400,9 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     if (!printSheetRef.current || isExportingPdf) return;
     setIsExportingPdf(true);
     try {
+      // Allow a brief tick so print-layout tables become visible before html2canvas capture on mobile screens
+      await new Promise((resolve) => setTimeout(resolve, 90));
+
       let format: 'a4' | 'a5' | 'thermal' = 'a5';
       if (selectedSize === 'a4-portrait' || selectedSize === 'a4-landscape') {
         format = 'a4';
@@ -450,7 +453,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     activePayload.kind === 'purchase_return';
 
   const modalHeaderTitle = isBatchMode
-    ? `${activePayload.title} (${batchDocs.length})`
+    ? `معاينة وطباعة (${activePayload.title})`
     : isInvoiceKind
     ? `معاينة الفاتورة (${docSerial})`
     : `${activePayload.title} (${docSerial})`;
@@ -462,11 +465,50 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     >
       {/* Top Bar matching Reference Screenshot */}
       <div className="preview-header-area no-print bg-white text-slate-900 border-b border-slate-200 px-3 sm:px-5 py-2.5 shadow-xs shrink-0">
-        {/* Row 1: Title + Close */}
+        {/* Row 1: Title + Controls + Close */}
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate flex-1 min-w-0">
             {modalHeaderTitle}
           </h2>
+          {isBatchMode && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {activePayload.batchSummary && (
+                <button
+                  type="button"
+                  onClick={() => setIncludeBatchSummary((prev) => !prev)}
+                  className={`w-10 h-10 rounded-xl text-xs font-semibold flex items-center justify-center transition cursor-pointer border ${
+                    includeBatchSummary
+                      ? 'bg-emerald-600 border-emerald-600 text-white'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                  title={includeBatchSummary ? 'إخفاء ورقة ملخص السجل' : 'تضمين ورقة ملخص السجل'}
+                >
+                  <FileCheck className="w-4 h-4 shrink-0" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSavePdf}
+                disabled={isExportingPdf}
+                className="w-10 h-10 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 shrink-0"
+                title="حفظ بتنسيق PDF"
+                aria-label="حفظ PDF"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                title="طباعة فورية لكافة الفواتير"
+              >
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>طباعة فورية</span>
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleClose}
@@ -478,76 +520,61 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           </button>
         </div>
 
-        {/* Row 2: [Preview / Audit] Toggle + PDF Icon + Print Button */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setActiveTab('preview')}
-              className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'preview'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5 shrink-0" />
-              <span>{isBatchMode ? `المستندات (${batchDocs.length})` : isInvoiceKind ? 'معاينة الفاتورة' : 'معاينة المستند'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('audit')}
-              className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                activeTab === 'audit'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>التدقيق (1)</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {isBatchMode && activePayload.batchSummary && (
+        {/* Row 2 (Single Document Mode): [Preview / Audit] Toggle + PDF Icon + Print Button */}
+        {!isBatchMode && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+            <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
                 type="button"
-                onClick={() => setIncludeBatchSummary((prev) => !prev)}
-                className={`min-h-[38px] px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer border ${
-                  includeBatchSummary
-                    ? 'bg-emerald-700 border-emerald-700 text-white'
-                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                onClick={() => setActiveTab('preview')}
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'preview'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="إضافة ورقة ملخص السجل"
               >
-                <Layers className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">{includeBatchSummary ? 'الملخص مفعّل ✓' : 'تضمين ملخص السجل'}</span>
-                <span className="sm:hidden">{includeBatchSummary ? 'ملخص ✓' : 'ملخص'}</span>
+                <Eye className="w-3.5 h-3.5 shrink-0" />
+                <span>{isInvoiceKind ? 'معاينة الفاتورة' : 'معاينة المستند'}</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={handleSavePdf}
-              disabled={isExportingPdf}
-              className="w-10 h-10 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 shrink-0"
-              title="حفظ بتنسيق PDF"
-              aria-label="حفظ PDF"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('audit')}
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                  activeTab === 'audit'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>التدقيق (1)</span>
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
-              title="طباعة الفاتورة"
-            >
-              <Printer className="w-4 h-4 shrink-0" />
-              <span>{isInvoiceKind ? 'طباعة الفاتورة' : 'طباعة'}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSavePdf}
+                disabled={isExportingPdf}
+                className="w-10 h-10 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 shrink-0"
+                title="حفظ بتنسيق PDF"
+                aria-label="حفظ PDF"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                title="طباعة الفاتورة"
+              >
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>{isInvoiceKind ? 'طباعة الفاتورة' : 'طباعة'}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Row 3: Exact 3-Option Paper Size Segmented Selector */}
         <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
@@ -600,6 +627,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                       currencyName={docCur === 'ج.م' ? 'جنيه مصري' : docCur}
                       selectedSize={selectedSize}
                       isThermal={isThermal}
+                      forcePrintTable={isExportingPdf}
                       batchPositionLabel={`مستند ${idx + 1} من ${batchDocs.length}`}
                     />
                   </div>
@@ -618,6 +646,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                     settings={settings}
                     currencySymbol={currencySymbol}
                     isThermal={isThermal}
+                    forcePrintTable={isExportingPdf}
                   />
                 </div>
               )}
@@ -638,6 +667,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 currencyName={currencyName}
                 selectedSize={selectedSize}
                 isThermal={isThermal}
+                forcePrintTable={isExportingPdf}
               />
             </div>
           )
@@ -778,6 +808,7 @@ interface InvoiceDocumentSheetProps {
   currencyName: string;
   selectedSize: UniversalPaperSize;
   isThermal: boolean;
+  forcePrintTable?: boolean;
   batchPositionLabel?: string;
 }
 
@@ -788,6 +819,7 @@ const InvoiceDocumentSheet: React.FC<InvoiceDocumentSheetProps> = ({
   currencyName,
   selectedSize,
   isThermal,
+  forcePrintTable = false,
   batchPositionLabel,
 }) => {
   const companyName = settings.companyName || 'المنظومة المحاسبية';
@@ -898,7 +930,7 @@ const InvoiceDocumentSheet: React.FC<InvoiceDocumentSheetProps> = ({
         {renderDocumentMetaBox(payload, docSerial, printDate, printTime, isThermal)}
 
         {/* 3. Document Body Table */}
-        {renderDocumentBody(payload, currencySymbol, isThermal, isA4)}
+        {renderDocumentBody(payload, currencySymbol, isThermal, isA4, forcePrintTable)}
       </div>
 
       {/* 4. Totals, Payment & Copyright Footer */}
@@ -912,8 +944,10 @@ const BatchSummaryDocumentSheet: React.FC<{
   settings: Settings;
   currencySymbol: string;
   isThermal: boolean;
-}> = ({ summary, settings, isThermal }) => {
+  forcePrintTable?: boolean;
+}> = ({ summary, settings, isThermal, forcePrintTable = false }) => {
   const companyName = settings.companyName || 'المنظومة المحاسبية';
+  const showMobileCards = !isThermal && !forcePrintTable && (summary.columns?.length || 0) >= 5;
   return (
     <div className="flex flex-col justify-between flex-1 w-full">
       <div>
@@ -938,35 +972,54 @@ const BatchSummaryDocumentSheet: React.FC<{
         </div>
 
         {summary.columns && summary.rows && (
-          <div className="border border-slate-300 rounded-lg overflow-hidden my-2">
-            <table className="w-full table-fixed border-collapse text-[10px]">
-              <thead>
-                <tr className="bg-slate-100">
-                  {summary.columns.map((c, idx) => (
-                    <th key={idx} className="border-b border-l last:border-l-0 border-slate-200 px-1 py-1 font-semibold text-slate-800 text-center break-words">
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            {showMobileCards && (
+              <div className="block sm:hidden print:hidden space-y-2 my-2">
                 {summary.rows.map((row, rIdx) => (
-                  <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
-                    {row.map((cell, cIdx) => (
-                      <td
-                        key={cIdx}
-                        className={`border-b border-l last:border-l-0 border-slate-200 px-1 py-1 text-center break-words ${
-                          typeof cell === 'number' || cIdx >= 5 ? 'financial-num font-medium' : ''
-                        }`}
-                      >
-                        {cell !== null && cell !== undefined ? cell : '-'}
-                      </td>
+                  <div key={rIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/60 space-y-1 text-[11px]">
+                    {summary.columns!.map((col, cIdx) => (
+                      <div key={cIdx} className="flex justify-between items-start gap-2 border-b last:border-b-0 border-slate-200/70 pb-1 last:pb-0">
+                        <span className="text-slate-500 shrink-0">{col}:</span>
+                        <span className="font-semibold text-slate-900 text-left break-words">
+                          {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '-'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={`${showMobileCards ? 'hidden sm:block print:block' : 'block'} border border-slate-300 rounded-lg overflow-hidden my-2`}>
+              <table className="w-full border-collapse text-[10px] sm:text-[11px]">
+                <thead>
+                  <tr className="bg-slate-100">
+                    {summary.columns.map((c, idx) => (
+                      <th key={idx} className="border-b border-l last:border-l-0 border-slate-200 px-1.5 py-1.5 font-semibold text-slate-800 text-center [word-break:normal] [overflow-wrap:normal] leading-snug">
+                        {c}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {summary.rows.map((row, rIdx) => (
+                    <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
+                      {row.map((cell, cIdx) => (
+                        <td
+                          key={cIdx}
+                          className={`border-b border-l last:border-l-0 border-slate-200 px-1.5 py-1 text-center [word-break:normal] [overflow-wrap:break-word] ${
+                            typeof cell === 'number' || cIdx >= 5 ? 'financial-num font-medium whitespace-nowrap' : ''
+                          }`}
+                        >
+                          {cell !== null && cell !== undefined ? cell : '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -1007,13 +1060,16 @@ function renderDocumentMetaBox(
   printTime: string,
   isThermal: boolean
 ) {
+  const isInvoiceKind =
+    payload.kind === 'sales_invoice' ||
+    payload.kind === 'purchase_invoice' ||
+    payload.kind === 'sales_return' ||
+    payload.kind === 'purchase_return';
+  const isVoucherKind = payload.kind === 'receipt_voucher' || payload.kind === 'payment_voucher';
+  const isStatementKind = payload.kind === 'account_statement';
   const isPurchaseDoc = payload.kind.includes('purchase');
-  const isVoucherDoc = payload.kind === 'receipt_voucher' || payload.kind === 'payment_voucher';
-  const partyLabel = payload.partyLabel || (isPurchaseDoc ? 'اسم المورد' : isVoucherDoc ? 'الجهة / الطرف' : 'اسم العميل');
-  const partyCodeLabel = payload.partyCodeLabel || (isPurchaseDoc ? 'كود المورد' : 'كود العميل');
-  const partyName = payload.partyName || (isPurchaseDoc ? 'مورد عام' : 'عميل نقدي');
-  const partyCodeDisplay = payload.partyCode && payload.partyCode !== '-' ? payload.partyCode : '1';
 
+  // Thermal 80mm compact metadata header
   if (isThermal) {
     return (
       <div className="border border-dashed border-slate-400 rounded p-1.5 my-1.5 text-[10.5px] bg-slate-50/40 text-center space-y-0.5 print-avoid-break">
@@ -1026,12 +1082,23 @@ function renderDocumentMetaBox(
             {payload.returnKindLabel ? ` (${payload.returnKindLabel})` : ''}
           </div>
         )}
-        <div className="text-slate-800">
-          <span className="text-slate-500">{partyLabel}: </span>
-          <strong className="font-semibold">{partyName}</strong>
-        </div>
+        {(isInvoiceKind || isVoucherKind || isStatementKind || payload.partyName) && (
+          <div className="text-slate-800">
+            <span className="text-slate-500">
+              {payload.partyLabel || (isPurchaseDoc ? 'المورد' : isVoucherKind ? 'الجهة' : 'العميل')}:{' '}
+            </span>
+            <strong className="font-semibold">
+              {payload.partyName || (isPurchaseDoc ? 'مورد عام' : isInvoiceKind ? 'عميل نقدي' : '-')}
+            </strong>
+          </div>
+        )}
         {payload.partyPhone && payload.partyPhone !== '-' && (
           <div className="text-slate-700 financial-num">هاتف: {payload.partyPhone}</div>
+        )}
+        {payload.period && (payload.period.from || payload.period.to) && (
+          <div className="text-[10px] text-slate-700 financial-num">
+            الفترة: {payload.period.from || '-'} إلى {payload.period.to || '-'}
+          </div>
         )}
         <div className="text-[10px] text-slate-600 financial-num">
           {printDate} · {printTime}
@@ -1040,63 +1107,190 @@ function renderDocumentMetaBox(
     );
   }
 
-  return (
-    <div className="border border-slate-300 rounded-lg my-2 px-2 py-1.5 bg-slate-50/40 text-slate-900 print-avoid-break grid grid-cols-3 gap-1.5 items-center divide-x divide-x-reverse divide-slate-200 text-[10px] sm:text-xs">
-      {/* Right Column: Party Code & Name */}
-      <div className="pl-1.5 text-right space-y-0.5 min-w-0">
-        <div className="truncate">
-          <span className="text-slate-500">{partyCodeLabel}: </span>
-          <span className="font-semibold financial-num text-slate-900">{partyCodeDisplay}</span>
-        </div>
-        <div className="break-words leading-snug">
-          <span className="text-slate-500">{partyLabel}: </span>
-          <span className="font-semibold text-slate-900">{partyName}</span>
-        </div>
-        {payload.partyPhone && payload.partyPhone !== '-' && (
+  // A. Sales / Purchase Invoices & Returns Metadata Box (Preserves exact 3-column invoice structure)
+  if (isInvoiceKind) {
+    const partyLabel = payload.partyLabel || (isPurchaseDoc ? 'اسم المورد' : 'اسم العميل');
+    const partyCodeLabel = payload.partyCodeLabel || (isPurchaseDoc ? 'كود المورد' : 'كود العميل');
+    const partyName = payload.partyName || (isPurchaseDoc ? 'مورد عام' : 'عميل نقدي');
+    const partyCodeDisplay = payload.partyCode && payload.partyCode !== '-' ? payload.partyCode : '1';
+
+    return (
+      <div className="border border-slate-300 rounded-lg my-2 px-2 py-1.5 bg-slate-50/40 text-slate-900 print-avoid-break grid grid-cols-3 gap-1.5 items-center divide-x divide-x-reverse divide-slate-200 text-[10px] sm:text-xs">
+        <div className="pl-1.5 text-right space-y-0.5 min-w-0">
           <div className="truncate">
-            <span className="text-slate-500">هاتف: </span>
-            <span className="font-medium financial-num" dir="ltr">
-              {payload.partyPhone}
+            <span className="text-slate-500">{partyCodeLabel}: </span>
+            <span className="font-semibold financial-num text-slate-900">{partyCodeDisplay}</span>
+          </div>
+          <div className="[word-break:normal] [overflow-wrap:break-word] leading-snug">
+            <span className="text-slate-500">{partyLabel}: </span>
+            <span className="font-semibold text-slate-900">{partyName}</span>
+          </div>
+          {payload.partyPhone && payload.partyPhone !== '-' && (
+            <div className="truncate">
+              <span className="text-slate-500">هاتف: </span>
+              <span className="font-medium financial-num" dir="ltr">
+                {payload.partyPhone}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="px-1.5 text-center space-y-0.5 min-w-0">
+          <div className="font-semibold text-slate-900 leading-tight [word-break:normal] [overflow-wrap:break-word]">
+            {payload.title}
+          </div>
+          <div className="font-bold text-slate-900 financial-num">رقم: {docSerial}</div>
+          {payload.paymentStatus && (
+            <div className="pt-0.5">
+              <span className="inline-block border border-slate-300 rounded px-2 py-0.5 text-[9.5px] font-semibold text-slate-700 bg-white">
+                {payload.paymentStatus}
+              </span>
+            </div>
+          )}
+          {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
+            <div className="text-[9.5px] font-medium text-rose-700 financial-num leading-tight">
+              أصل #{payload.originalInvoiceNumber}
+              {payload.returnKindLabel ? ` · ${payload.returnKindLabel}` : ''}
+            </div>
+          )}
+          {!payload.originalInvoiceNumber && payload.returnKindLabel && (
+            <div className="text-[9.5px] font-medium text-rose-700 leading-tight">{payload.returnKindLabel}</div>
+          )}
+        </div>
+
+        <div className="pr-1.5 text-left space-y-0.5 min-w-0">
+          <div>
+            <span className="text-slate-500">التاريخ: </span>
+            <span className="font-semibold financial-num text-slate-900" dir="ltr">
+              {printDate}
             </span>
           </div>
+          <div>
+            <span className="text-slate-500">الوقت: </span>
+            <span className="font-medium financial-num text-slate-800" dir="ltr">
+              {printTime}
+            </span>
+          </div>
+          {payload.pricingTierLabel === 'تسعيرة الجملة' && (
+            <div className="text-[9.5px] font-semibold text-indigo-700">تسعيرة جملة</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // B. Cash Vouchers (Receipt / Payment) & Account Statements Metadata Box
+  if (isVoucherKind || isStatementKind) {
+    const partyLabel =
+      payload.partyLabel ||
+      (payload.kind === 'receipt_voucher'
+        ? 'استلمنا من'
+        : payload.kind === 'payment_voucher'
+        ? 'اصرفوا إلى'
+        : 'الحساب المعني');
+    const partyName = payload.partyName || '-';
+    const codeVal = payload.partyCode && payload.partyCode !== '-' ? payload.partyCode : null;
+
+    return (
+      <div className="border border-slate-300 rounded-lg my-2 px-2.5 py-2 bg-slate-50/50 text-slate-900 print-avoid-break grid grid-cols-1 sm:grid-cols-3 gap-2 items-center sm:divide-x sm:divide-x-reverse divide-slate-200 text-[11px] sm:text-xs">
+        <div className="sm:pl-2 text-right space-y-0.5 min-w-0">
+          <div className="[word-break:normal] [overflow-wrap:break-word]">
+            <span className="text-slate-500">{partyLabel}: </span>
+            <span className="font-bold text-slate-900">{partyName}</span>
+          </div>
+          {codeVal && (
+            <div>
+              <span className="text-slate-500">{payload.partyCodeLabel || 'كود الحساب'}: </span>
+              <span className="font-semibold financial-num">{codeVal}</span>
+            </div>
+          )}
+          {payload.partyPhone && payload.partyPhone !== '-' && (
+            <div>
+              <span className="text-slate-500">الهاتف: </span>
+              <span className="font-medium financial-num" dir="ltr">{payload.partyPhone}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="sm:px-2 text-right sm:text-center space-y-0.5 min-w-0">
+          <div className="font-bold text-slate-900 leading-snug">{payload.title}</div>
+          <div className="font-semibold text-slate-800 financial-num">مرجع: #{docSerial}</div>
+          {payload.period && (payload.period.from || payload.period.to) && (
+            <div className="text-[10px] text-slate-600 financial-num">
+              من {payload.period.from || '-'} إلى {payload.period.to || '-'}
+            </div>
+          )}
+        </div>
+
+        <div className="sm:pr-2 text-right sm:text-left space-y-0.5 min-w-0">
+          <div>
+            <span className="text-slate-500">التاريخ: </span>
+            <span className="font-semibold financial-num" dir="ltr">{printDate}</span>
+          </div>
+          <div>
+            <span className="text-slate-500">الوقت: </span>
+            <span className="font-medium financial-num" dir="ltr">{printTime}</span>
+          </div>
+          {payload.paymentMethod && (
+            <div className="text-[10.5px] text-slate-700 font-medium">الوسيلة: {payload.paymentMethod}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // C. Tailored Report / Directory / Inventory / Treasury / Audit / Financial Statements Metadata Box
+  const recordsCount = payload.rows ? payload.rows.length : payload.items ? payload.items.length : undefined;
+  const scopeText = payload.branch || 'الإدارة العامة والفرع الرئيسي';
+  const responsibleText = payload.user || payload.authorizedBy;
+
+  return (
+    <div className="border border-slate-300 rounded-lg my-2 px-2.5 py-2 bg-slate-50/50 text-slate-900 print-avoid-break grid grid-cols-1 sm:grid-cols-3 gap-2 items-center sm:divide-x sm:divide-x-reverse divide-slate-200 text-[11px] sm:text-xs">
+      <div className="sm:pl-2 text-right space-y-0.5 min-w-0">
+        <div className="font-bold text-slate-900 leading-snug">{payload.title}</div>
+        {payload.subTitle && payload.subTitle !== payload.title && (
+          <div className="text-[10.5px] text-slate-600 leading-snug">{payload.subTitle}</div>
         )}
+        <div className="text-[10.5px] text-slate-700 financial-num">مرجع المستند: #{docSerial}</div>
       </div>
 
-      {/* Center Column: Document Classification & Number */}
-      <div className="px-1.5 text-center space-y-0.5 min-w-0">
-        <div className="font-semibold text-slate-900 leading-tight break-words">
-          {payload.title}
+      <div className="sm:px-2 text-right sm:text-center space-y-0.5 min-w-0">
+        <div>
+          <span className="text-slate-500">النطاق / الفرع: </span>
+          <span className="font-semibold text-slate-900">{scopeText}</span>
         </div>
-        <div className="font-bold text-slate-900 financial-num">
-          رقم: {docSerial}
-        </div>
-        {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
-          <div className="text-[9.5px] font-medium text-rose-700 financial-num leading-tight">
-            أصل #{payload.originalInvoiceNumber}
-            {payload.returnKindLabel ? ` · ${payload.returnKindLabel}` : ''}
+        {payload.partyName && (
+          <div>
+            <span className="text-slate-500">{payload.partyLabel || 'البيان'}: </span>
+            <span className="font-semibold text-slate-900">{payload.partyName}</span>
           </div>
         )}
-        {!payload.originalInvoiceNumber && payload.returnKindLabel && (
-          <div className="text-[9.5px] font-medium text-rose-700 leading-tight">{payload.returnKindLabel}</div>
+        {payload.period && (payload.period.from || payload.period.to) && (
+          <div className="text-[10.5px] text-slate-700 financial-num">
+            الفترة: {payload.period.from || '-'} إلى {payload.period.to || '-'}
+          </div>
+        )}
+        {responsibleText && (
+          <div className="text-[10.5px] text-slate-700">
+            <span className="text-slate-500">المسؤول: </span>
+            <span className="font-medium">{responsibleText}</span>
+          </div>
         )}
       </div>
 
-      {/* Left Column: Date & Time */}
-      <div className="pr-1.5 text-left space-y-0.5 min-w-0">
+      <div className="sm:pr-2 text-right sm:text-left space-y-0.5 min-w-0">
         <div>
-          <span className="text-slate-500">التاريخ: </span>
-          <span className="font-semibold financial-num text-slate-900" dir="ltr">
-            {printDate}
-          </span>
+          <span className="text-slate-500">تاريخ الطباعة: </span>
+          <span className="font-semibold financial-num" dir="ltr">{printDate}</span>
         </div>
         <div>
           <span className="text-slate-500">الوقت: </span>
-          <span className="font-medium financial-num text-slate-800" dir="ltr">
-            {printTime}
-          </span>
+          <span className="font-medium financial-num" dir="ltr">{printTime}</span>
         </div>
-        {payload.pricingTierLabel === 'تسعيرة الجملة' && (
-          <div className="text-[9.5px] font-semibold text-indigo-700">تسعيرة جملة</div>
+        {recordsCount !== undefined && (
+          <div className="text-[10.5px] font-semibold text-slate-700 financial-num">
+            عدد السجلات: {recordsCount}
+          </div>
         )}
       </div>
     </div>
@@ -1107,9 +1301,25 @@ function renderDocumentBody(
   payload: UniversalPrintPayload,
   curSymbol: string,
   isThermal: boolean,
-  isA4: boolean
+  isA4: boolean,
+  forcePrintTable: boolean = false
 ) {
   const kind = payload.kind;
+
+  // Optional KPI Strip above tables / vouchers
+  const kpiStrip =
+    payload.kpis && payload.kpis.length > 0 ? (
+      <div className={`grid ${isThermal ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-1.5 my-2 print-avoid-break`}>
+        {payload.kpis.map((k, idx) => (
+          <div key={idx} className="border border-slate-200 rounded-lg p-1.5 bg-slate-50 text-center">
+            <div className="text-[10px] text-slate-500 leading-tight">{k.title}</div>
+            <div className="text-[11px] sm:text-xs font-bold text-slate-900 mt-0.5 financial-num break-words">
+              {k.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : null;
 
   // 1. Voucher Layout (Receipt / Payment)
   if (kind === 'receipt_voucher' || kind === 'payment_voucher') {
@@ -1119,98 +1329,133 @@ function renderDocumentBody(
     const partyName = payload.partyName || (isReceipt ? 'عميل نقدي عام' : 'مورد عام');
 
     return (
-      <div className="border border-slate-300 rounded-lg p-3 my-2 text-xs print-avoid-break">
-        <div className="flex flex-wrap justify-between items-center gap-2 border-b border-dashed border-slate-300 pb-2 mb-2">
-          <span className="font-medium text-slate-900">
-            {actionText} <strong className="font-bold text-slate-950">{partyName}</strong>
-          </span>
-          <span className="font-bold text-sm border border-slate-300 rounded-lg px-2.5 py-1 bg-slate-50 financial-num">
-            {amountVal} {curSymbol}
-          </span>
-        </div>
-
-        <div className="space-y-1.5 mb-2 leading-relaxed">
-          <div>
-            <span className="text-slate-500">مبلغاً وقدره: </span>
-            <span className="font-medium text-slate-900">{payload.amountInWords || '-'}</span>
-          </div>
-          <div>
-            <span className="text-slate-500">وذلك عن: </span>
-            <span className="text-slate-900">
-              {payload.statementOrReason || payload.notes || 'معاملة مالية معتمدة بالنظام'}
+      <>
+        {kpiStrip}
+        <div className="border border-slate-300 rounded-lg p-3 my-2 text-xs print-avoid-break">
+          <div className="flex flex-wrap justify-between items-center gap-2 border-b border-dashed border-slate-300 pb-2 mb-2">
+            <span className="font-medium text-slate-900">
+              {actionText} <strong className="font-bold text-slate-950">{partyName}</strong>
+            </span>
+            <span className="font-bold text-sm border border-slate-300 rounded-lg px-2.5 py-1 bg-slate-50 financial-num">
+              {amountVal} {curSymbol}
             </span>
           </div>
-        </div>
 
-        <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-wrap justify-between gap-2 text-[11px]">
-          <div>
-            <span className="text-slate-500">طريقة السداد: </span>
-            <span className="font-semibold">{payload.paymentMethod || 'كاش / نقدي'}</span>
-          </div>
-          <div>
-            <span className="text-slate-500">الخزينة / الحساب: </span>
-            <span className="font-semibold">{payload.treasuryOrBank || 'الخزينة الرئيسية'}</span>
-          </div>
-          {payload.referenceNumber && (
+          <div className="space-y-1.5 mb-2 leading-relaxed">
             <div>
-              <span className="text-slate-500">رقم المرجع: </span>
-              <span className="font-semibold financial-num">{payload.referenceNumber}</span>
+              <span className="text-slate-500">مبلغاً وقدره: </span>
+              <span className="font-medium text-slate-900">{payload.amountInWords || '-'}</span>
             </div>
-          )}
+            <div>
+              <span className="text-slate-500">وذلك عن: </span>
+              <span className="text-slate-900">
+                {payload.statementOrReason || payload.notes || 'معاملة مالية معتمدة بالنظام'}
+              </span>
+            </div>
+          </div>
+
+          <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-wrap justify-between gap-2 text-[11px]">
+            <div>
+              <span className="text-slate-500">طريقة السداد: </span>
+              <span className="font-semibold">{payload.paymentMethod || 'كاش / نقدي'}</span>
+            </div>
+            <div>
+              <span className="text-slate-500">الخزينة / الحساب: </span>
+              <span className="font-semibold">{payload.treasuryOrBank || 'الخزينة الرئيسية'}</span>
+            </div>
+            {payload.referenceNumber && (
+              <div>
+                <span className="text-slate-500">رقم المرجع: </span>
+                <span className="font-semibold financial-num">{payload.referenceNumber}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  // 2. Custom Columns / Rows (Reports & Statements)
+  // 2. Custom Columns / Rows (Reports, Ledgers, Directories, Inventory, Financial Statements)
   if (payload.columns && payload.rows) {
+    const showMobileCards = !isThermal && !forcePrintTable && payload.columns.length >= 5;
+
     return (
-      <div className="border border-slate-300 rounded-lg overflow-hidden my-2">
-        <table className="w-full table-fixed border-collapse text-[10px] sm:text-xs">
-          <thead>
-            <tr className="bg-slate-100">
-              {payload.columns.map((c, idx) => (
-                <th
-                  key={idx}
-                  className="border-b border-l last:border-l-0 border-slate-200 px-1 sm:px-2 py-1.5 font-semibold text-slate-800 text-center break-words"
-                >
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+      <>
+        {kpiStrip}
+        {showMobileCards && (
+          <div className="block sm:hidden print:hidden space-y-2 my-2">
             {payload.rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={payload.columns.length}
-                  className="text-center text-slate-500 py-4 border-b border-slate-200"
-                >
-                  لا توجد بيانات متاحة لهذا المستند
-                </td>
-              </tr>
+              <div className="border border-slate-200 rounded-lg p-4 text-center text-xs text-slate-500 bg-slate-50">
+                لا توجد سجلات مطابقة في هذا المستند
+              </div>
             ) : (
               payload.rows.map((row, rIdx) => (
-                <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
-                  {row.map((cell, cIdx) => {
-                    const isNum = typeof cell === 'number';
-                    return (
-                      <td
-                        key={cIdx}
-                        className={`border-b border-l last:border-l-0 border-slate-200 px-1 sm:px-2 py-1.5 break-words ${
-                          isNum ? 'text-center font-medium financial-num' : cIdx === 0 ? 'text-center' : 'text-right'
-                        }`}
-                      >
-                        {cell !== null && cell !== undefined ? cell : '-'}
-                      </td>
-                    );
-                  })}
-                </tr>
+                <div key={rIdx} className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/60 space-y-1 text-[11px]">
+                  {payload.columns!.map((col, cIdx) => (
+                    <div key={cIdx} className="flex justify-between items-start gap-2 border-b last:border-b-0 border-slate-200/70 pb-1 last:pb-0">
+                      <span className="text-slate-500 font-medium shrink-0">{col}:</span>
+                      <span className="font-semibold text-slate-900 text-left [word-break:normal] [overflow-wrap:break-word]">
+                        {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '-'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )}
+
+        <div className={`${showMobileCards ? 'hidden sm:block print:block' : 'block'} border border-slate-300 rounded-lg overflow-hidden my-2`}>
+          <table className={`w-full border-collapse ${isThermal ? 'text-[9.5px]' : 'text-[10px] sm:text-xs'}`}>
+            <thead>
+              <tr className="bg-slate-100">
+                {payload.columns.map((c, idx) => (
+                  <th
+                    key={idx}
+                    className="border-b border-l last:border-l-0 border-slate-200 px-1.5 sm:px-2 py-1.5 font-semibold text-slate-800 text-center [word-break:normal] [overflow-wrap:normal] leading-snug"
+                  >
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {payload.rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={payload.columns.length}
+                    className="text-center text-slate-500 py-4 border-b border-slate-200"
+                  >
+                    لا توجد سجلات مطابقة في هذا المستند
+                  </td>
+                </tr>
+              ) : (
+                payload.rows.map((row, rIdx) => (
+                  <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
+                    {row.map((cell, cIdx) => {
+                      const isNum = typeof cell === 'number';
+                      return (
+                        <td
+                          key={cIdx}
+                          className={`border-b border-l last:border-l-0 border-slate-200 px-1.5 sm:px-2 py-1.5 [word-break:normal] [overflow-wrap:break-word] leading-snug ${
+                            isNum
+                              ? 'text-center font-medium financial-num whitespace-nowrap'
+                              : cIdx === 0
+                              ? 'text-center'
+                              : 'text-right'
+                          }`}
+                        >
+                          {cell !== null && cell !== undefined ? cell : '-'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
     );
   }
 
@@ -1473,10 +1718,25 @@ function renderDocumentFooterSummary(
         </div>
       )}
 
+      {/* Signatures strip when provided on formal non-invoice A4 reports */}
+      {isA4 && !isInvoiceDoc && payload.signatures && payload.signatures.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 mt-3 pt-2 border-t border-slate-200 text-center text-[10.5px] text-slate-700">
+          {payload.signatures.slice(0, 3).map((sig, i) => (
+            <div key={i} className="space-y-2">
+              <div className="font-semibold">{sig}</div>
+              <div className="border-b border-dotted border-slate-400 mx-4 h-3" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Footer Policy & Developer Copyright */}
       <div className="mt-2.5 pt-2 border-t border-dashed border-slate-300 text-center space-y-0.5">
         <div className="text-[10px] sm:text-[11px] font-medium text-slate-700">
-          {payload.footerTermsNote || settings.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية'}
+          {payload.footerTermsNote ||
+            (isInvoiceDoc
+              ? settings.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية'
+              : 'تم استخراج هذا المستند آلياً من السجلات المحاسبية المعتمدة بالنظام')}
         </div>
         <div className="text-[9.5px] sm:text-[10px] text-slate-500">
           جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615

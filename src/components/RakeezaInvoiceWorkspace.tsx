@@ -30,6 +30,12 @@ export interface WorkspaceItemRow {
   qty: number;
   price: number;
   total: number;
+  discVal?: number;
+  discType?: 'val' | 'percent';
+  actualDisc?: number;
+  taxVal?: number;
+  taxType?: 'val' | 'percent';
+  actualTax?: number;
   itemId?: string;
   costPrice?: number;
   cashPrice?: number;
@@ -342,12 +348,50 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         qty: Number(i.qty || (i as any).quantity || 1),
         price: Number(i.price || 0),
         total: Number(i.total || (Number(i.qty || 1) * Number(i.price || 0))),
+        discVal: Number((i as any).discountValue ?? (i as any).discVal ?? 0),
+        discType: ((i as any).discType === 'val' || (i as any).discountType === 'fixed') ? 'val' : 'percent',
+        actualDisc: Number((i as any).actualDisc ?? (i as any).discount ?? 0),
+        taxVal: Number((i as any).taxValue ?? (i as any).taxVal ?? 0),
+        taxType: ((i as any).taxType === 'val' || (i as any).taxType === 'fixed') ? 'val' : 'percent',
+        actualTax: Number((i as any).actualTax ?? (i as any).tax ?? 0),
         itemId: i.itemId,
         costPrice: i.costPrice,
       }));
     }
     return [];
   });
+
+  // Creator & Active Editor Display State
+  const loggedInUserName =
+    appData.users?.find((u) => u.id === appData.currentUser)?.name ||
+    appData.users?.[0]?.name ||
+    'مدير النظام';
+  const creatorName = editingInvoice?.createdBy || loggedInUserName;
+  const [activeEditorName, setActiveEditorName] = useState<string>(loggedInUserName);
+
+  // Payment Mode & Treasury Quick Bar State
+  const resolveInitialTreasury = (): string => {
+    const pm = String(editingInvoice?.paymentMethod || 'drawer').toLowerCase();
+    if (pm.includes('vodafone') || pm.includes('فودافون')) return 'فودافون كاش';
+    if (pm.includes('instapay') || pm.includes('انستاباي') || pm.includes('إنستاباي')) return 'انستاباي';
+    if (pm.includes('visa') || pm.includes('فيزا') || pm.includes('pos')) return 'فيزا';
+    if (pm.includes('bank') || pm.includes('بنك') || pm.includes('تحويل')) return 'بنك';
+    return 'نقدي';
+  };
+  const [selectedTreasuryMethod, setSelectedTreasuryMethod] = useState<string>(resolveInitialTreasury);
+  const [paymentStatusMode, setPaymentStatusMode] = useState<'paid' | 'credit' | 'partial'>(() => {
+    if (editingInvoice) {
+      if (editingInvoice.type === 'nagdi' || editingInvoice.type === 'return_nagdi') return 'paid';
+      if (Number(editingInvoice.paidAmount || 0) > 0.01) return 'partial';
+      return 'credit';
+    }
+    return initialInvoiceType === 'ajel' || initialInvoiceType === 'return_ajel' ? 'credit' : 'paid';
+  });
+  const [partialPaidInput, setPartialPaidInput] = useState<string>(() =>
+    editingInvoice && Number(editingInvoice.paidAmount || 0) > 0 && (editingInvoice.type === 'ajel' || editingInvoice.type === 'return_ajel')
+      ? String(editingInvoice.paidAmount)
+      : ''
+  );
 
   // Helper to extract item price based on active pricing tier (zero fabricated margins)
   const getItemPriceForTier = (dbItem: any, tier: 'cash' | 'wholesale' | 'buy'): number => {
@@ -497,15 +541,30 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     selectedType: null,
   });
 
-  // Item Detail Card Modal State (Auto-Focus & Select on Quantity)
+  // Item Detail / Quick Add Card Modal State (7fca626a.png)
   const [isDetailCardOpen, setIsDetailCardOpen] = useState(false);
   const [cardItem, setCardItem] = useState<any>(null);
+  const [cardItemSearch, setCardItemSearch] = useState<string>('');
+  const [showCardDropdown, setShowCardDropdown] = useState<boolean>(false);
   const [cardQty, setCardQty] = useState<string>('1');
-  const [cardPrice, setCardPrice] = useState<string>('0');
-  const [cardTotal, setCardTotal] = useState<string>('0');
+  const [cardPrice, setCardPrice] = useState<string>('');
+  const [cardDiscVal, setCardDiscVal] = useState<string>('');
+  const [cardDiscType, setCardDiscType] = useState<'val' | 'percent'>('val');
+  const [cardTaxVal, setCardTaxVal] = useState<string>('');
+  const [cardTaxType, setCardTaxType] = useState<'val' | 'percent'>('val');
+  const [cardTotal, setCardTotal] = useState<string>('');
   const [cardLastEdited, setCardLastEdited] = useState<'price' | 'total'>('price');
   const [cardSpec, setCardSpec] = useState<string>('');
+  const cardSearchInputRef = useRef<HTMLInputElement | null>(null);
   const cardQtyInputRef = useRef<HTMLInputElement | null>(null);
+
+  const cardSearchMatches = useMemo(() => {
+    const q = cardItemSearch.trim().toLowerCase();
+    if (!q) return localItemsDatabase.slice(0, 10);
+    return localItemsDatabase
+      .filter((i) => (i.name && i.name.toLowerCase().includes(q)) || (i.code && i.code.toLowerCase().includes(q)))
+      .slice(0, 12);
+  }, [cardItemSearch, localItemsDatabase]);
 
   // Modify Invoice Item Modal State
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
@@ -604,34 +663,79 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
   };
 
+  const computeQuickCardLine = (
+    qStr: string,
+    pStr: string,
+    dStr: string,
+    dType: 'val' | 'percent',
+    tStr: string,
+    tType: 'val' | 'percent'
+  ) => {
+    const q = Math.max(0, parseFloat(qStr) || 0);
+    const p = Math.max(0, parseFloat(pStr) || 0);
+    const d = Math.max(0, parseFloat(dStr) || 0);
+    const t = Math.max(0, parseFloat(tStr) || 0);
+    const gross = q * p;
+    const actualDisc = dType === 'val' ? d : (gross * d) / 100;
+    const afterDisc = Math.max(0, gross - actualDisc);
+    const actualTax = tType === 'val' ? t : (afterDisc * t) / 100;
+    const net = Math.max(0, afterDisc + actualTax);
+    return { q, p, d, t, actualDisc, actualTax, net };
+  };
+
+  const syncCardTotalForward = (
+    qStr: string,
+    pStr: string,
+    dStr: string,
+    dType: 'val' | 'percent',
+    tStr: string,
+    tType: 'val' | 'percent'
+  ) => {
+    const pNum = parseFloat(pStr);
+    const qNum = parseFloat(qStr) || 0;
+    if (!isNaN(pNum) && qNum > 0) {
+      const { net } = computeQuickCardLine(qStr, pStr, dStr, dType, tStr, tType);
+      setCardTotal(net % 1 === 0 ? net.toString() : net.toFixed(2));
+    } else if (pStr.trim() === '') {
+      setCardTotal('');
+    }
+  };
+
   const handleCardPriceChange = (val: string) => {
     setCardPrice(val);
     setCardLastEdited('price');
-    const p = parseFloat(val);
-    const q = parseFloat(cardQty) || 0;
-    if (!isNaN(p) && q > 0) {
-      setCardTotal((p * q).toFixed(2));
-    } else if (val.trim() === '') {
-      setCardTotal('');
-    }
+    syncCardTotalForward(cardQty, val, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
   };
 
   const handleCardQtyChange = (val: string) => {
     setCardQty(val);
     const q = parseFloat(val) || 0;
     if (cardLastEdited === 'total') {
-      const tot = parseFloat(cardTotal) || 0;
-      if (tot > 0 && q > 0) {
-        const unitP = tot / q;
+      const tot = parseFloat(cardTotal);
+      if (!isNaN(tot) && tot >= 0 && q > 0) {
+        const t = Math.max(0, parseFloat(cardTaxVal) || 0);
+        const d = Math.max(0, parseFloat(cardDiscVal) || 0);
+        const afterDisc = cardTaxType === 'val' ? Math.max(0, tot - t) : tot / (1 + t / 100);
+        const gross = cardDiscType === 'val' ? afterDisc + d : afterDisc / Math.max(0.0001, 1 - d / 100);
+        const unitP = gross / q;
         const cleanP = Number(unitP.toFixed(4));
         setCardPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
       }
     } else {
-      const p = parseFloat(cardPrice) || 0;
-      if (p > 0 && q > 0) {
-        setCardTotal((p * q).toFixed(2));
-      }
+      syncCardTotalForward(val, cardPrice, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
     }
+  };
+
+  const handleCardDiscChange = (val: string, nextType: 'val' | 'percent' = cardDiscType) => {
+    setCardDiscVal(val);
+    setCardDiscType(nextType);
+    syncCardTotalForward(cardQty, cardPrice, val, nextType, cardTaxVal, cardTaxType);
+  };
+
+  const handleCardTaxChange = (val: string, nextType: 'val' | 'percent' = cardTaxType) => {
+    setCardTaxVal(val);
+    setCardTaxType(nextType);
+    syncCardTotalForward(cardQty, cardPrice, cardDiscVal, cardDiscType, val, nextType);
   };
 
   const handleCardTotalChange = (val: string) => {
@@ -640,7 +744,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const tot = parseFloat(val);
     const q = parseFloat(cardQty) || 0;
     if (!isNaN(tot) && tot >= 0 && q > 0) {
-      const unitP = tot / q;
+      const t = Math.max(0, parseFloat(cardTaxVal) || 0);
+      const d = Math.max(0, parseFloat(cardDiscVal) || 0);
+      const afterDisc = cardTaxType === 'val' ? Math.max(0, tot - t) : tot / (1 + t / 100);
+      const gross = cardDiscType === 'val' ? afterDisc + d : afterDisc / Math.max(0.0001, 1 - d / 100);
+      const unitP = gross / q;
       const cleanP = Number(unitP.toFixed(4));
       setCardPrice(cleanP % 1 === 0 ? cleanP.toString() : cleanP.toFixed(2));
     } else if (val.trim() === '') {
@@ -648,25 +756,34 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
   };
 
+  const recalcRowTotal = (row: WorkspaceItemRow, nextQty: number, nextPrice: number): WorkspaceItemRow => {
+    const gross = nextQty * nextPrice;
+    const dVal = Number(row.discVal || 0);
+    const actualDisc = row.discType === 'val' ? dVal : (gross * dVal) / 100;
+    const afterDisc = Math.max(0, gross - actualDisc);
+    const tVal = Number(row.taxVal || 0);
+    const actualTax = row.taxType === 'val' ? tVal : (afterDisc * tVal) / 100;
+    return {
+      ...row,
+      qty: nextQty,
+      price: nextPrice,
+      actualDisc: Number(actualDisc.toFixed(2)),
+      actualTax: Number(actualTax.toFixed(2)),
+      total: Number(Math.max(0, afterDisc + actualTax).toFixed(2)),
+    };
+  };
+
   const updateTableRowQty = (index: number, val: string) => {
     const q = parseFloat(val) || 0;
     setCurrentInvoiceItems((prev) =>
-      prev.map((r, i) => {
-        if (i !== index) return r;
-        const tot = q * r.price;
-        return { ...r, qty: q, total: Number(tot.toFixed(2)) };
-      })
+      prev.map((r, i) => (i !== index ? r : recalcRowTotal(r, q, r.price)))
     );
   };
 
   const updateTableRowPrice = (index: number, val: string) => {
     const p = parseFloat(val) || 0;
     setCurrentInvoiceItems((prev) =>
-      prev.map((r, i) => {
-        if (i !== index) return r;
-        const tot = r.qty * p;
-        return { ...r, price: p, total: Number(tot.toFixed(2)) };
-      })
+      prev.map((r, i) => (i !== index ? r : recalcRowTotal(r, r.qty, p)))
     );
   };
 
@@ -681,13 +798,44 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     );
   };
 
-  // Open Item Detail Card and Auto-Focus & Select on Quantity
+  // Open Blank Quick-Add Card (+ إضافة صنف)
+  const openBlankQuickAddCard = () => {
+    setCardItem(null);
+    setCardItemSearch('');
+    setShowCardDropdown(false);
+    setCardQty('1');
+    setCardPrice('');
+    setCardDiscVal('');
+    setCardDiscType('val');
+    setCardTaxVal('');
+    setCardTaxType('val');
+    setCardTotal('');
+    setCardLastEdited('price');
+    setCardSpec('');
+    setIsDetailCardOpen(true);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (cardSearchInputRef.current) {
+          cardSearchInputRef.current.focus();
+        }
+      }, 60);
+    });
+  };
+
+  // Open Item Detail Card prefilled from search or catalog tree
   const openItemDetailCard = (item: any) => {
     setCardItem(item);
+    setCardItemSearch(item.name || '');
+    setShowCardDropdown(false);
     const calculatedP = getItemPriceForTier(item, activePricingTier);
-    const pStr = calculatedP > 0 ? calculatedP.toString() : '0';
+    const pStr = calculatedP > 0 ? calculatedP.toString() : '';
     setCardPrice(pStr);
     setCardQty('1');
+    setCardDiscVal('');
+    setCardDiscType('val');
+    setCardTaxVal('');
+    setCardTaxType('val');
     setCardTotal(pStr);
     setCardLastEdited('price');
     setCardSpec('');
@@ -704,102 +852,139 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     });
   };
 
-  // Confirm Adding Item from Detail Card
+  // Confirm Adding Item from Dark Quick-Add Card
   const confirmAddDetailedItem = () => {
-    if (!cardItem) return;
-    const q = parseFloat(cardQty) || 1;
+    const resolvedName = (cardItem?.name || cardItemSearch || '').trim();
+    if (!resolvedName) {
+      showToast('يرجى إدخال أو اختيار اسم الصنف أولاً', 'warning');
+      return;
+    }
+
+    const q = parseFloat(cardQty) || 0;
+    if (q <= 0) {
+      showToast('يرجى إدخال كمية صحيحة أكبر من صفر', 'warning');
+      return;
+    }
+
     let p = parseFloat(cardPrice) || 0;
     const totVal = parseFloat(cardTotal);
+    const { actualDisc, actualTax, net } = computeQuickCardLine(
+      cardQty,
+      p.toString(),
+      cardDiscVal,
+      cardDiscType,
+      cardTaxVal,
+      cardTaxType
+    );
+
     if ((p <= 0 || isNaN(p)) && !isNaN(totVal) && totVal > 0 && q > 0) {
       p = Number((totVal / q).toFixed(4));
     }
-    const finalItemTotal = cardLastEdited === 'total' && !isNaN(totVal) && totVal > 0 ? totVal : Number((q * p).toFixed(2));
-    const s = cardSpec.trim();
 
-    if (isSale) {
+    const finalItemTotal =
+      cardLastEdited === 'total' && !isNaN(totVal) && totVal >= 0
+        ? Number(totVal.toFixed(2))
+        : Number(net.toFixed(2));
+    const s = cardSpec.trim();
+    const dVal = parseFloat(cardDiscVal) || 0;
+    const tVal = parseFloat(cardTaxVal) || 0;
+
+    const matchedCatalog =
+      cardItem ||
+      localItemsDatabase.find((i) => i.name.trim().toLowerCase() === resolvedName.toLowerCase()) || {
+        code: `NEW-${String(Date.now()).slice(-4)}`,
+        name: resolvedName,
+        typeName: 'قطعة',
+        stock: 0,
+        buyPrice: isSale ? 0 : p,
+        cashPrice: isSale ? p : 0,
+        wholesalePrice: 0,
+        itemId: undefined,
+      };
+
+    if (isSale && matchedCatalog.itemId) {
       setLocalItemsDatabase((prev) =>
-        prev.map((i) => (i.code === cardItem.code ? { ...i, stock: Math.max(0, (i.stock || 0) - q) } : i))
+        prev.map((i) => (i.code === matchedCatalog.code ? { ...i, stock: Math.max(0, (i.stock || 0) - q) } : i))
       );
     }
 
-    // 🔍 فحص ما إذا كان البند مضافاً مسبقاً في الفاتورة:
-    // إذا لم يُكتب له وصف أو بيان جديد، يزيد العدد ولا ينزل بنداً منفرداً.
-    // وينزل بنداً منفرداً فقط في حالة كتابة وصف أو بيان محدد ومختلف طبقاً لطلب المستخدم بدقة.
     setCurrentInvoiceItems((prev) => {
       let targetIndex = -1;
+      const hasLineMods = dVal > 0 || tVal > 0;
 
-      if (s !== '') {
-        // إذا كتب المستخدم بياناً أو وصفاً: يبحث عن بند يحمل نفس هذا البيان تماماً، وإلا ينزل بنداً منفرداً
-        targetIndex = prev.findIndex((r) => {
-          const isSame =
-            (r.code && cardItem.code && r.code.trim().toLowerCase() === cardItem.code.trim().toLowerCase()) ||
-            (r.itemId && cardItem.itemId && String(r.itemId) === String(cardItem.itemId)) ||
-            (r.name && cardItem.name && r.name.trim().toLowerCase() === cardItem.name.trim().toLowerCase());
-          return isSame && (r.spec || '').trim() === s;
-        });
-      } else {
-        // إذا لم يكتب المستخدم أي بيان أو وصف: يزيد العدد على البند القائم (الخالي من الوصف، أو أول بند من الصنف)
-        targetIndex = prev.findIndex((r) => {
-          const isSame =
-            (r.code && cardItem.code && r.code.trim().toLowerCase() === cardItem.code.trim().toLowerCase()) ||
-            (r.itemId && cardItem.itemId && String(r.itemId) === String(cardItem.itemId)) ||
-            (r.name && cardItem.name && r.name.trim().toLowerCase() === cardItem.name.trim().toLowerCase());
-          return isSame && (r.spec || '').trim() === '';
-        });
+      if (!hasLineMods) {
+        if (s !== '') {
+          targetIndex = prev.findIndex((r) => {
+            const isSame =
+              (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
+              (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
+              (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
+            return isSame && (r.spec || '').trim() === s && !(r.actualDisc || 0) && !(r.actualTax || 0);
+          });
+        } else {
+          targetIndex = prev.findIndex((r) => {
+            const isSame =
+              (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
+              (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
+              (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
+            return isSame && (r.spec || '').trim() === '' && !(r.actualDisc || 0) && !(r.actualTax || 0);
+          });
 
-        if (targetIndex === -1) {
-          // إذا لم يجد بنداً بدون وصف، يبحث عن أي بند من هذا الصنف لزيادة عدده
-          targetIndex = prev.findIndex((r) =>
-            (r.code && cardItem.code && r.code.trim().toLowerCase() === cardItem.code.trim().toLowerCase()) ||
-            (r.itemId && cardItem.itemId && String(r.itemId) === String(cardItem.itemId)) ||
-            (r.name && cardItem.name && r.name.trim().toLowerCase() === cardItem.name.trim().toLowerCase())
-          );
+          if (targetIndex === -1) {
+            targetIndex = prev.findIndex((r) => {
+              const isSame =
+                (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
+                (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
+                (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
+              return isSame && !(r.actualDisc || 0) && !(r.actualTax || 0);
+            });
+          }
         }
       }
 
       if (targetIndex > -1) {
-        // زيادة العدد للبند القائم بدلاً من تكراره في سطر منفصل
         return prev.map((row, idx) => {
           if (idx === targetIndex) {
             const newQty = Number((row.qty + q).toFixed(2));
             const newPrice = p > 0 ? p : row.price;
-            return {
-              ...row,
-              qty: newQty,
-              price: newPrice,
-              total: Number((newQty * newPrice).toFixed(2)),
-            };
+            return recalcRowTotal(row, newQty, newPrice);
           }
           return row;
         });
       }
 
-      // إضافة بند جديد في سطر منفصل (في حال كان صنفاً جديداً أو كُتب له وصف/بيان خاص)
-      const cPrice = Number(cardItem.cashPrice || getItemPriceForTier(cardItem, 'cash'));
-      const wPrice = Number(cardItem.wholesalePrice || getItemPriceForTier(cardItem, 'wholesale'));
-      const bPrice = Number(cardItem.buyPrice || getItemPriceForTier(cardItem, 'buy'));
+      const cPrice = Number(matchedCatalog.cashPrice || getItemPriceForTier(matchedCatalog, 'cash'));
+      const wPrice = Number(matchedCatalog.wholesalePrice || getItemPriceForTier(matchedCatalog, 'wholesale'));
+      const bPrice = Number(matchedCatalog.buyPrice || getItemPriceForTier(matchedCatalog, 'buy'));
 
       const newRow: WorkspaceItemRow = {
         rowId: `row_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        code: cardItem.code,
-        name: cardItem.name,
-        unit: cardItem.typeName || 'قطعة',
+        code: matchedCatalog.code,
+        name: resolvedName,
+        unit: matchedCatalog.typeName || 'قطعة',
         spec: s,
         qty: q,
         price: p,
         total: finalItemTotal,
-        itemId: cardItem.itemId,
-        costPrice: cardItem.buyPrice || 0,
+        discVal: dVal,
+        discType: cardDiscType,
+        actualDisc: Number(actualDisc.toFixed(2)),
+        taxVal: tVal,
+        taxType: cardTaxType,
+        actualTax: Number(actualTax.toFixed(2)),
+        itemId: matchedCatalog.itemId,
+        costPrice: matchedCatalog.buyPrice || 0,
         cashPrice: cPrice > 0 ? cPrice : p,
-        wholesalePrice: wPrice > 0 ? wPrice : (cPrice > 0 ? cPrice : p),
+        wholesalePrice: wPrice > 0 ? wPrice : cPrice > 0 ? cPrice : p,
         buyPrice: bPrice > 0 ? bPrice : 0,
       };
       return [...prev, newRow];
     });
 
-    showToast(s ? `تم إدراج البند مع الوصف: ${cardItem.name}` : `تمت زيادة العدد للصنف: ${cardItem.name}`, 'info');
+    showToast(s ? `تم إدراج البند: ${resolvedName}` : `تمت إضافة الصنف: ${resolvedName}`, 'info');
     setIsDetailCardOpen(false);
     setCardItem(null);
+    setCardItemSearch('');
   };
 
   // Modify Row
@@ -829,7 +1014,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const s = modifyItemSpec.trim();
 
     if (q <= 0) {
-      alert('يرجى إدخال كمية صحيحة أكبر من صفر');
+      showToast('يرجى إدخال كمية صحيحة أكبر من صفر', 'warning');
       return;
     }
 
@@ -837,11 +1022,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       prev.map((item, idx) =>
         idx === modifyItemIndex
           ? {
-              ...item,
-              qty: q,
-              price: p,
+              ...recalcRowTotal(item, q, p),
               spec: s,
-              total: Number((q * p).toFixed(2)),
             }
           : item
       )
@@ -852,7 +1034,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
   const removeItem = (index: number) => {
     const removed = currentInvoiceItems[index];
-    if (removed && isSale) {
+    if (removed && isSale && removed.itemId) {
       setLocalItemsDatabase((prev) =>
         prev.map((i) => (i.code === removed.code ? { ...i, stock: (i.stock || 0) + Number(removed.qty || 0) } : i))
       );
@@ -872,31 +1054,68 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     setPaymentRows((prev) => prev.filter((r) => r.id !== id));
   };
 
+  // Payment Mode & Treasury Quick Helpers
+  const handleSelectPaymentStatusMode = (modeChoice: 'paid' | 'credit' | 'partial') => {
+    setPaymentStatusMode(modeChoice);
+    if (modeChoice === 'paid') {
+      setSelectedInvoiceType(isReturn ? 'return_nagdi' : 'nagdi');
+      setPaymentRows([]);
+      setPartialPaidInput('');
+    } else if (modeChoice === 'credit') {
+      setSelectedInvoiceType(isReturn ? 'return_ajel' : 'ajel');
+      setPaymentRows([]);
+      setPartialPaidInput('');
+    } else {
+      setSelectedInvoiceType(isReturn ? 'return_ajel' : 'ajel');
+      const existingPaid = paymentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      if (existingPaid > 0) {
+        setPartialPaidInput(String(existingPaid));
+      } else {
+        setPaymentRows([{ id: 'partial_1', method: selectedTreasuryMethod, amount: 0 }]);
+        setPartialPaidInput('');
+      }
+    }
+  };
+
+  const handleSelectTreasuryChip = (methodName: string) => {
+    setSelectedTreasuryMethod(methodName);
+    if (paymentRows.length > 0) {
+      setPaymentRows((prev) => prev.map((r, idx) => (idx === 0 ? { ...r, method: methodName } : r)));
+    }
+  };
+
   // Calculations
   const totals = useMemo(() => {
     let totalQtySum = 0;
     let itemsSubTotal = 0;
+    let itemDiscountsSum = 0;
+    let itemTaxesSum = 0;
 
     currentInvoiceItems.forEach((i) => {
       totalQtySum += Number(i.qty) || 0;
       itemsSubTotal += (Number(i.price) || 0) * (Number(i.qty) || 0);
+      itemDiscountsSum += Number(i.actualDisc) || 0;
+      itemTaxesSum += Number(i.actualTax) || 0;
     });
 
+    const afterItemDiscBase = Math.max(0, itemsSubTotal - itemDiscountsSum);
     const globalDiscInput = parseFloat(globalInvDisc) || 0;
     const globalDiscCalculated =
-      invDiscType === 'percent' ? itemsSubTotal * (globalDiscInput / 100) : globalDiscInput;
+      invDiscType === 'percent' ? afterItemDiscBase * (globalDiscInput / 100) : globalDiscInput;
 
     const globalTaxInput = parseFloat(globalInvTax) || 0;
-    const taxableBase = Math.max(0, itemsSubTotal - globalDiscCalculated);
+    const taxableBase = Math.max(0, afterItemDiscBase - globalDiscCalculated);
     const globalTaxCalculated =
       invTaxType === 'percent' ? taxableBase * (globalTaxInput / 100) : globalTaxInput;
 
+    const totalDiscount = itemDiscountsSum + globalDiscCalculated;
+    const totalTax = itemTaxesSum + globalTaxCalculated;
     const extraVal = parseFloat(extraIncomeVal) || 0;
-    const netTotal = Math.max(0, itemsSubTotal - globalDiscCalculated + globalTaxCalculated + extraVal);
+    const netTotal = Math.max(0, itemsSubTotal - totalDiscount + totalTax + extraVal);
 
     let paidTotal = 0;
     if (paymentRows.length === 0) {
-      paidTotal = (selectedInvoiceType === 'nagdi' || selectedInvoiceType === 'return_nagdi') ? netTotal : 0;
+      paidTotal = selectedInvoiceType === 'nagdi' || selectedInvoiceType === 'return_nagdi' ? netTotal : 0;
     } else {
       paymentRows.forEach((r) => {
         paidTotal += Math.max(0, Number(r.amount) || 0);
@@ -908,8 +1127,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return {
       qtySum: totalQtySum,
       subtotal: itemsSubTotal,
-      discount: globalDiscCalculated,
-      tax: globalTaxCalculated,
+      discount: totalDiscount,
+      tax: totalTax,
       extra: extraVal,
       net: netTotal,
       paid: paidTotal,
@@ -1089,7 +1308,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   // Save Invoice & Post to Ledger & Database
   const saveInvoice = () => {
     if (currentInvoiceItems.length === 0) {
-      alert('الفاتورة فارغة! يرجى إدراج صنف واحد على الأقل من دليل الأصناف.');
+      showToast('الفاتورة فارغة! يرجى إدراج صنف واحد على الأقل.', 'warning');
       return;
     }
 
@@ -1100,13 +1319,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     let finalPayments = [...paymentRows];
     if (finalPayments.length === 0) {
       if (selectedInvoiceType === 'nagdi' || selectedInvoiceType === 'return_nagdi') {
-        finalPayments = [{ id: '1', method: 'نقدي', amount: totals.net }];
+        finalPayments = [{ id: '1', method: selectedTreasuryMethod || 'نقدي', amount: totals.net }];
       }
     }
 
     const primaryMethodKey = finalPayments.length > 1
       ? 'split'
-      : mapPaymentMethodToKey(finalPayments[0]?.method);
+      : mapPaymentMethodToKey(finalPayments[0]?.method || selectedTreasuryMethod);
 
     const paymentSplits = finalPayments
       .filter((r) => (Number(r.amount) || 0) > 0)
@@ -1142,6 +1361,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           total: i.total,
           spec: i.spec,
           costPrice: i.costPrice || 0,
+          discount: i.actualDisc || 0,
+          discountType: i.discType === 'val' ? 'fixed' : 'percent',
+          discountValue: i.discVal || 0,
+          tax: i.actualTax || 0,
+          taxType: i.taxType === 'val' ? 'fixed' : 'percent',
+          taxValue: i.taxVal || 0,
         })),
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -1163,7 +1388,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         branchId: activeBranchId,
         branchName: activeBranchName,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
-        createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
+        createdBy: creatorName,
+        updatedBy: activeEditorName,
       };
 
       const isEditing = !!editingInvoice?.id;
@@ -1199,6 +1425,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           total: i.total,
           spec: i.spec,
           costPrice: i.price,
+          discount: i.actualDisc || 0,
+          discountType: i.discType === 'val' ? 'fixed' : 'percent',
+          discountValue: i.discVal || 0,
+          tax: i.actualTax || 0,
+          taxType: i.taxType === 'val' ? 'fixed' : 'percent',
+          taxValue: i.taxVal || 0,
         })),
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -1220,7 +1452,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         branchId: activeBranchId,
         branchName: activeBranchName,
         createdAt: editingInvoice?.createdAt || new Date().toISOString(),
-        createdBy: editingInvoice?.createdBy || (appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام'),
+        createdBy: creatorName,
+        updatedBy: activeEditorName,
       };
 
       const isEditing = !!editingInvoice?.id;
@@ -1273,6 +1506,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         price: i.price,
         total: i.total,
         spec: i.spec,
+        discount: i.actualDisc || 0,
+        tax: i.actualTax || 0,
       })),
       subtotal: totals.subtotal,
       discount: totals.discount,
@@ -1282,10 +1517,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       total: totals.net,
       paidAmount: totals.paid,
       remainingAmount: totals.remain,
-      paymentMethod: mapPaymentMethodToKey(paymentRows[0]?.method || 'نقدي'),
+      paymentMethod: mapPaymentMethodToKey(paymentRows[0]?.method || selectedTreasuryMethod || 'نقدي'),
       branchId: activeBranchId,
       branchName: activeBranchName,
-      createdBy: appData.users?.find((u) => u.id === appData.currentUser)?.name || 'مدير النظام',
+      createdBy: creatorName,
+      updatedBy: activeEditorName,
     };
 
     printInvoiceWindow(tempInvoice, isSale, appData.settings, showToast, 'A5', appData);
@@ -1371,32 +1607,31 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .invoice-card {
           background: #ffffff;
           border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          padding: 10px;
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
+          border-radius: 10px;
+          padding: 8px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
         }
         @media (min-width: 640px) {
           .invoice-card {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-            padding: 12px;
+            gap: 9px;
+            padding: 11px 12px;
           }
         }
         .field-inline {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 3px;
           min-width: 0;
           position: relative;
           box-sizing: border-box;
         }
         .field-inline label {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 600;
           color: #475569;
           white-space: nowrap;
@@ -1404,19 +1639,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           text-overflow: ellipsis;
         }
         .field-inline input, .field-inline select {
-          padding: 6px 10px;
+          padding: 5px 8px;
           border: 1px solid #cbd5e1;
-          border-radius: 6px;
-          font-size: 16px;
-          font-weight: 500;
+          border-radius: 7px;
+          font-size: 13px;
+          font-weight: 600;
           color: #0f172a;
           outline: none;
-          background: #ffffff;
+          background: #f8fafc;
           width: 100%;
-          min-height: 40px;
+          min-height: 36px;
           box-sizing: border-box;
           font-family: inherit;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
         }
         @media (min-width: 768px) {
           .field-inline input, .field-inline select {
@@ -1427,6 +1662,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
         .field-inline input:focus, .field-inline select:focus {
           border-color: #2563eb;
+          background: #ffffff;
           box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
         }
         .span-2 { grid-column: span 2; }
@@ -1434,95 +1670,37 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
         /* شريط حالة الحساب والدائن/المدين */
         .account-status-bar {
-          background: #fffbeb;
-          border: 1px solid #fde68a;
+          background: #fef9c3;
+          border: 1px solid #fde047;
           border-radius: 8px;
-          padding: 8px 12px;
+          padding: 7px 10px;
           display: flex;
           flex-wrap: wrap;
           justify-content: space-between;
           align-items: center;
-          gap: 6px 12px;
-          font-size: 12.5px;
+          gap: 6px 10px;
+          font-size: 12px;
           font-weight: 600;
           flex-shrink: 0;
           width: 100%;
           box-sizing: border-box;
         }
 
-        /* نظام تسعير الفاتورة */
-        .pricing-tier-bar {
-          background: #ffffff;
-          border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          padding: 8px 10px;
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: space-between;
-          align-items: center;
-          flex-shrink: 0;
-          width: 100%;
-          box-sizing: border-box;
-          gap: 8px;
-        }
-        .pricing-tier-btn {
-          flex: 1;
-          min-height: 38px;
-          padding: 6px 10px;
-          font-size: 12.5px;
-          font-weight: 600;
-          border-radius: 6px;
-          cursor: pointer;
-          border: 1px solid #cbd5e1;
-          background: #f8fafc;
-          color: #334155;
-          text-align: center;
-          white-space: nowrap;
-          box-sizing: border-box;
-          transition: all 0.15s ease;
-        }
-        .pricing-tier-btn:hover {
-          background: #f1f5f9;
-        }
-        .pricing-tier-btn.active-cash {
-          background: #16a34a !important;
-          color: #ffffff !important;
-          border-color: #15803d !important;
-        }
-        .pricing-tier-btn.active-wholesale {
-          background: #2563eb !important;
-          color: #ffffff !important;
-          border-color: #1d4ed8 !important;
-        }
-        .pricing-tier-btn.active-buy {
-          background: #d97706 !important;
-          color: #ffffff !important;
-          border-color: #b45309 !important;
-        }
-
-        .top-actions-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          flex-shrink: 0;
-          box-sizing: border-box;
-          width: 100%;
-        }
         .btn-action-top {
           width: 100%;
-          min-height: 42px;
-          padding: 8px 12px;
+          min-height: 40px;
+          padding: 8px 10px;
           background: #2563eb;
           color: #ffffff;
           border: none;
-          border-radius: 7px;
-          font-size: 13px;
+          border-radius: 8px;
+          font-size: 12.5px;
           font-weight: 600;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap: 5px;
           box-sizing: border-box;
           white-space: nowrap;
           transition: background 0.15s ease;
@@ -1531,10 +1709,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           background: #1d4ed8;
         }
         .btn-action-alt {
-          background: #475569;
+          background: #1e293b;
         }
         .btn-action-alt:hover {
-          background: #334155;
+          background: #0f172a;
         }
         .table-responsive {
           width: 100%;
@@ -1613,78 +1791,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           flex-shrink: 0;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 7px;
           background: #ffffff;
-          padding: 10px;
+          padding: 8px 10px;
           border-top: 1px solid #cbd5e1;
           box-sizing: border-box;
           width: 100%;
         }
-        .summary-bar {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 6px;
-          background: #ffffff;
-          color: #0f172a;
-          box-sizing: border-box;
-          width: 100%;
-          font-variant-numeric: tabular-nums;
-        }
-        @media (min-width: 768px) {
-          .summary-bar {
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-          }
-        }
-        .summary-item {
-          font-size: 11.5px;
-          font-weight: 500;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          padding: 6px 8px;
-          border-radius: 6px;
-          text-align: center;
-          box-sizing: border-box;
-        }
-        .summary-item span {
-          font-weight: 700;
-          color: #16a34a;
-          display: block;
-          font-size: 13px;
-          margin-top: 2px;
-        }
-        .summary-net {
-          grid-column: 1 / -1;
-          background: #f0fdf4 !important;
-          border: 1px solid #86efac !important;
-          color: #166534 !important;
-          font-size: 13px !important;
-          font-weight: 600 !important;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 8px 14px;
-        }
-        .summary-net span {
-          color: #15803d !important;
-          font-size: 16px !important;
-          font-weight: 700 !important;
-          margin-top: 0;
-        }
-        .btn-action-bar {
-          display: flex;
-          gap: 8px;
-          width: 100%;
-          box-sizing: border-box;
-        }
         .btn-action {
-          flex: 1;
-          min-height: 44px;
-          padding: 10px 14px;
+          min-height: 42px;
+          padding: 8px 6px;
           border: none;
           border-radius: 8px;
           font-weight: 600;
-          font-size: 13.5px;
+          font-size: 12px;
           color: #ffffff;
           cursor: pointer;
           text-align: center;
@@ -1692,8 +1812,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap: 5px;
+          white-space: nowrap;
           transition: filter 0.15s ease;
+        }
+        @media (min-width: 640px) {
+          .btn-action {
+            font-size: 13px;
+            padding: 10px 12px;
+          }
         }
         .btn-action:hover {
           filter: brightness(0.95);
@@ -1882,129 +2009,196 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         {/* 🏷️ Header Bar */}
         <div className="header-title" style={{ background: invoiceTheme.bg, borderBottom: `1px solid ${invoiceTheme.border}` }}>
           <div className="flex items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 hover:text-rose-200 transition cursor-pointer shrink-0"
-              title="إغلاق"
-            >
-              <i className="fa-solid fa-xmark text-sm"></i>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMaximized(!isMaximized)}
-              className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 transition cursor-pointer shrink-0"
-              title={isMaximized ? 'تصغير' : 'تكبير'}
-            >
-              <i className={`fa-solid ${isMaximized ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
-            </button>
             <span className="font-semibold text-sm truncate">
               <i className={`fa-solid ${invoiceTheme.icon} ml-1.5`}></i>
               {invoiceTheme.badgeText}
             </span>
           </div>
-          <span id="liveTime" className="shrink-0">{liveTime}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span id="liveTime" className="bg-black/25 px-2.5 py-0.5 rounded-full text-xs">
+              {liveTime}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md text-white hover:bg-white/15 transition cursor-pointer shrink-0"
+              title={isMaximized ? 'تصغير' : 'تكبير'}
+            >
+              <i className={`fa-solid ${isMaximized ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-white hover:bg-white/15 hover:text-rose-200 transition cursor-pointer shrink-0"
+              title="إغلاق"
+            >
+              <i className="fa-solid fa-xmark text-sm"></i>
+            </button>
+          </div>
         </div>
 
         {/* 📑 Main Content Area */}
         <div className="main-content">
-          {/* 1. Header Information Card */}
-          <div className="invoice-card">
-            <div className="field-inline">
-              <label>رقم الفاتورة</label>
-              <input type="text" value={invNum} readOnly className="tabular-nums bg-slate-50" />
+          {/* 0. Active Branch + Creator + Editor Metadata Strip (27f5081e.png) */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold">
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-md px-2 py-0.5 truncate max-w-full">
+                <i className="fa-solid fa-building text-[10px]"></i>
+                <span className="truncate">
+                  {appData.branches?.find((b) => b.id === activeBranchId)?.name || 'الفرع الرئيسي'}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md px-2 py-0.5 truncate">
+                <span>المنشئ:</span>
+                <span>{creatorName}</span>
+              </span>
             </div>
-            <div className="field-inline">
-              <label>التاريخ</label>
-              <input
-                type="date"
-                value={invDate}
-                onChange={(e) => setInvDate(e.target.value)}
-                className="tabular-nums"
-              />
-            </div>
-            <div className="field-inline">
-              <label>الوقت</label>
-              <input
-                type="time"
-                value={invTime}
-                onChange={(e) => setInvTime(e.target.value)}
-                className="tabular-nums"
-              />
-            </div>
-            <div className="field-inline">
-              <label>{isSale ? 'كود العميل' : 'كود المورد'}</label>
-              <input
-                type="text"
-                value={custCode}
-                onChange={(e) => setCustCode(e.target.value)}
-                placeholder="الكود..."
-                className="tabular-nums"
-              />
-            </div>
-            <div className="field-inline">
-              <label>{isSale ? 'اسم العميل (بحث)' : 'اسم المورد (بحث)'}</label>
-              <input
-                type="text"
-                value={custName}
-                onFocus={() => setShowCustDropdown(true)}
-                onChange={(e) => {
-                  setCustName(e.target.value);
-                  setShowCustDropdown(true);
-                }}
-                placeholder="اكتب للبحث..."
-              />
-              {showCustDropdown && partySuggestions.length > 0 && (
-                <div className="absolute top-full mt-1 right-0 left-0 bg-white border border-slate-300 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto text-xs">
-                  {partySuggestions.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => {
-                        setCustName(p.name);
-                        setCustCode(p.code || p.id);
-                        if (p.phone) setCustPhone(p.phone);
-                        setShowCustDropdown(false);
-                      }}
-                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center gap-2"
-                    >
-                      <span className="font-semibold text-slate-800 truncate">{p.name}</span>
-                      <span className="text-slate-500 font-mono text-[11px] tabular-nums shrink-0">
-                        {p.phone || p.code || p.id}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="field-inline">
-              <label>رقم الهاتف (بحث)</label>
-              <input
-                type="text"
-                value={custPhone}
-                onChange={(e) => setCustPhone(e.target.value)}
-                placeholder="ابحث برقم الهاتف..."
-                className="tabular-nums"
-              />
-            </div>
-            <div className="field-inline span-3">
-              <label>البيان / جهة العمل</label>
-              <input
-                type="text"
-                value={jobSite}
-                onChange={(e) => setJobSite(e.target.value)}
-                placeholder="البيان..."
-              />
+            <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 rounded-md px-2 py-0.5">
+              <span className="shrink-0">المحرر:</span>
+              <select
+                value={activeEditorName}
+                onChange={(e) => setActiveEditorName(e.target.value)}
+                className="bg-transparent text-amber-950 font-bold text-[11px] focus:outline-none cursor-pointer max-w-[140px]"
+              >
+                {!(appData.users || []).some((u) => u.name === activeEditorName) && (
+                  <option value={activeEditorName}>{activeEditorName}</option>
+                )}
+                {(appData.users || []).map((u) => (
+                  <option key={u.id} value={u.name}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* 🟡 2. شريط حالة الحساب والدائن/المدين */}
+          {/* 1. Header Information Card (9e11f2f6.png & 27f5081e.png) */}
+          <div className="invoice-card">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div className="field-inline">
+                <label>رقم الفاتورة</label>
+                <input
+                  type="text"
+                  value={invNum}
+                  readOnly
+                  className="tabular-nums text-center !bg-slate-100 !font-bold"
+                />
+              </div>
+              <div className="field-inline">
+                <label>التاريخ</label>
+                <input
+                  type="date"
+                  value={invDate}
+                  onChange={(e) => setInvDate(e.target.value)}
+                  className="tabular-nums !text-xs sm:!text-[13px] !px-1.5 sm:!px-2"
+                />
+              </div>
+              <div className="field-inline">
+                <label>الوقت</label>
+                <input
+                  type="time"
+                  value={invTime}
+                  onChange={(e) => setInvTime(e.target.value)}
+                  className="tabular-nums !text-xs sm:!text-[13px] !px-1.5 sm:!px-2"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              <div className="field-inline col-span-1">
+                <label>{isSale ? 'كود العميل' : 'كود المورد'}</label>
+                <input
+                  type="text"
+                  value={custCode}
+                  onChange={(e) => setCustCode(e.target.value)}
+                  placeholder="1"
+                  className="tabular-nums text-center"
+                />
+              </div>
+              <div className="field-inline col-span-2">
+                <label>{isSale ? 'اسم العميل / الشركة (بحث وتزامن)' : 'اسم المورد / الشركة (بحث وتزامن)'}</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={custName}
+                    onFocus={() => setShowCustDropdown(true)}
+                    onChange={(e) => {
+                      setCustName(e.target.value);
+                      setShowCustDropdown(true);
+                    }}
+                    placeholder="اكتب للبحث..."
+                    className="pl-7"
+                  />
+                  {custName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustName('');
+                        setCustCode('');
+                        setShowCustDropdown(true);
+                      }}
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 text-sm cursor-pointer"
+                      title="مسح"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {showCustDropdown && partySuggestions.length > 0 && (
+                  <div className="absolute top-full mt-1 right-0 left-0 bg-white border border-slate-300 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto text-xs">
+                    {partySuggestions.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setCustName(p.name);
+                          setCustCode(p.code || p.id);
+                          if (p.phone) setCustPhone(p.phone);
+                          setShowCustDropdown(false);
+                        }}
+                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center gap-2"
+                      >
+                        <span className="font-semibold text-slate-800 truncate">{p.name}</span>
+                        <span className="text-slate-500 font-mono text-[11px] tabular-nums shrink-0">
+                          {p.phone || p.code || p.id}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+              <div className="field-inline">
+                <label>رقم الهاتف</label>
+                <input
+                  type="text"
+                  value={custPhone}
+                  onChange={(e) => setCustPhone(e.target.value)}
+                  placeholder="ابحث برقم الهاتف..."
+                  className="tabular-nums"
+                />
+              </div>
+              <div className="field-inline">
+                <label>البيان / جهة العمل</label>
+                <input
+                  type="text"
+                  value={jobSite}
+                  onChange={(e) => setJobSite(e.target.value)}
+                  placeholder="جهة العمل أو ملاحظات الفاتورة..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 🟡 2. شريط حالة الحساب والرصيد الجاري */}
           <div className="account-status-bar">
             <div>
-              <span className="text-slate-600">حالة الحساب: </span>
+              <span className="text-slate-700">حالة الحساب: </span>
               <span
                 style={{
                   color:
-                    selectedInvoiceType === 'ajel'
+                    selectedInvoiceType === 'ajel' || selectedInvoiceType === 'return_ajel'
                       ? '#d97706'
                       : partyBalance > 0
                       ? '#dc2626'
@@ -2013,7 +2207,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       : '#16a34a',
                 }}
               >
-                {selectedInvoiceType === 'ajel'
+                {selectedInvoiceType === 'ajel' || selectedInvoiceType === 'return_ajel'
                   ? 'آجل'
                   : partyBalance > 0
                   ? (isSale ? 'مدين (عليه مديونية)' : 'دائن (له مستحقات)')
@@ -2023,7 +2217,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               </span>
             </div>
             <div>
-              <span className="text-amber-900">المبلغ (له / عليه): </span>
+              <span className="text-amber-950">الرصيد الجاري: </span>
               <span
                 className="tabular-nums"
                 style={{
@@ -2032,7 +2226,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       ? '#dc2626'
                       : partyBalance < 0
                       ? '#2563eb'
-                      : '#16a34a',
+                      : '#0f172a',
                 }}
               >
                 {partyBalance !== 0
@@ -2050,64 +2244,153 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 🏷️ 3. نظام تسعير الفاتورة ونوع السداد */}
-          <div className="pricing-tier-bar">
-            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-              <span className="text-xs font-semibold text-slate-700 shrink-0">
-                التسعير:
-              </span>
-              <div className="flex gap-1.5 flex-1 max-w-[300px]">
+          {/* 💳 3. لوحة السداد والخزينة والتسعير الداكنة (9e11f2f6.png & 27f5081e.png) */}
+          <div className="bg-[#0f172a] text-white rounded-xl p-2.5 sm:p-3 space-y-2.5 border border-slate-800 shadow-xs shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                <i className="fa-solid fa-wallet text-sm"></i>
+                <span>
+                  {paymentStatusMode === 'credit'
+                    ? isReturn
+                      ? 'مرتجع آجل / ذمم'
+                      : 'آجل / ذمم'
+                    : paymentStatusMode === 'partial'
+                    ? `سداد جزئي: ${selectedTreasuryMethod}`
+                    : `${isReturn ? 'مرتجع مسدد' : 'مسدد'}: ${selectedTreasuryMethod}`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => handleChangePricingTier('cash')}
-                  className={`pricing-tier-btn ${activePricingTier === 'cash' ? 'active-cash' : ''}`}
-                  title="سعر البيع النقدي (القطاعي)"
+                  onClick={() => handleSelectPaymentStatusMode('paid')}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                    paymentStatusMode === 'paid'
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
+                  }`}
                 >
-                  سعر نقدي
+                  <i className="fa-regular fa-circle-check"></i>
+                  <span>مسدد</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleChangePricingTier('wholesale')}
-                  className={`pricing-tier-btn ${activePricingTier === 'wholesale' ? 'active-wholesale' : ''}`}
-                  title="سعر بيع الجملة"
+                  onClick={() => handleSelectPaymentStatusMode('credit')}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                    paymentStatusMode === 'credit'
+                      ? 'bg-amber-600 border-amber-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
+                  }`}
                 >
-                  سعر جملة
+                  <i className="fa-solid fa-file-invoice"></i>
+                  <span>آجل</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleChangePricingTier('buy')}
-                  className={`pricing-tier-btn ${activePricingTier === 'buy' ? 'active-buy' : ''}`}
-                  title="سعر الشراء والتكلفة"
+                  onClick={() => handleSelectPaymentStatusMode('partial')}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                    paymentStatusMode === 'partial'
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
+                  }`}
                 >
-                  سعر شراء
+                  <i className="fa-regular fa-credit-card"></i>
+                  <span>جزئي</span>
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-xs font-semibold text-slate-700">الدفع:</span>
-              <button
-                type="button"
-                onClick={() => setSelectedInvoiceType(isReturn ? 'return_nagdi' : 'nagdi')}
-                className={`min-h-[36px] px-3 py-1 rounded-md text-xs font-semibold border cursor-pointer transition ${
-                  selectedInvoiceType === 'nagdi' || selectedInvoiceType === 'return_nagdi'
-                    ? 'bg-emerald-700 border-emerald-700 text-white'
-                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {isReturn ? 'مرتجع نقدي' : 'كاش / نقدي'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedInvoiceType(isReturn ? 'return_ajel' : 'ajel')}
-                className={`min-h-[36px] px-3 py-1 rounded-md text-xs font-semibold border cursor-pointer transition ${
-                  selectedInvoiceType === 'ajel' || selectedInvoiceType === 'return_ajel'
-                    ? 'bg-amber-700 border-amber-700 text-white'
-                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {isReturn ? 'مرتجع آجل' : 'آجل / ذمم'}
-              </button>
+            {paymentStatusMode === 'partial' && (
+              <div className="flex items-center gap-2 bg-[#162238] border border-blue-500/40 rounded-lg px-2.5 py-1.5">
+                <span className="text-[11px] font-semibold text-blue-300 shrink-0">المدفوع الآن (ج.م):</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={partialPaidInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPartialPaidInput(val);
+                    const amt = Math.max(0, parseFloat(val) || 0);
+                    setPaymentRows([{ id: 'partial_1', method: selectedTreasuryMethod, amount: amt }]);
+                  }}
+                  placeholder="أدخل المبلغ المسدد..."
+                  className="flex-1 min-w-0 bg-[#0f172a] border border-slate-700 rounded-md px-2.5 py-1 text-xs font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-emerald-400">الخزينة:</div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { key: 'نقدي', label: 'نقدي' },
+                  { key: 'فودافون كاش', label: 'فودافون كاش' },
+                  { key: 'انستاباي', label: 'إنستاباي' },
+                  { key: 'فيزا', label: 'فيزا POS' },
+                  { key: 'بنك', label: 'تحويل بنكي' },
+                ].map((ch) => (
+                  <button
+                    key={ch.key}
+                    type="button"
+                    onClick={() => handleSelectTreasuryChip(ch.key)}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition ${
+                      selectedTreasuryMethod === ch.key
+                        ? 'bg-emerald-600 border-emerald-500 text-white'
+                        : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    {ch.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setIsOptionsModalOpen(true)}
+                  className="min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-[#1e293b] text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                >
+                  + مقسم
+                </button>
+              </div>
+            </div>
+
+            {/* نظام تسعير الفاتورة */}
+            <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800">
+              <span className="text-[11px] font-semibold text-slate-400 shrink-0">التسعير:</span>
+              <div className="grid grid-cols-3 gap-1.5 flex-1">
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('cash')}
+                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
+                    activePricingTier === 'cash'
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  قطاعي
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('wholesale')}
+                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
+                    activePricingTier === 'wholesale'
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  جملة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChangePricingTier('buy')}
+                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
+                    activePricingTier === 'buy'
+                      ? 'bg-amber-600 border-amber-500 text-white'
+                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  شراء
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2194,67 +2477,70 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           )}
 
-          {/* 4. Top Action Buttons Grid */}
-          <div className="top-actions-grid">
+          {/* 4. Top Action Buttons Grid (3 columns: + إضافة صنف | الخصم والسداد | دليل الأصناف) */}
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
-              className="btn-action-top"
+              onClick={openBlankQuickAddCard}
+              className="min-h-[40px] px-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+              title="فتح كارت إضافة صنف سريع"
+            >
+              <i className="fa-solid fa-plus text-xs"></i>
+              <span>إضافة صنف</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsOptionsModalOpen(true)}
+              className="min-h-[40px] px-2 py-2 bg-[#1e293b] hover:bg-slate-800 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+              title="الخصم، الضريبة وإدارة المدفوعات"
+            >
+              <i className="fa-solid fa-sliders text-xs"></i>
+              <span>الخصم والسداد</span>
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setHierarchyState({ step: 'groups', selectedGroup: null, selectedCompany: null, selectedType: null });
                 setGlobalLookupSearch('');
                 setIsLookupModalOpen(true);
               }}
+              className="min-h-[40px] px-2 py-2 bg-[#1e293b] hover:bg-slate-800 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
               title="دليل الأصناف والتنقل الهرمي لاختيار صنف"
             >
-              <i className="fa-solid fa-boxes-stacked"></i>
+              <i className="fa-solid fa-cubes text-xs"></i>
               <span>دليل الأصناف</span>
-            </button>
-            <button
-              type="button"
-              className="btn-action-top btn-action-alt"
-              onClick={() => {
-                setIsOptionsModalOpen(true);
-              }}
-              title="الخصم، الضريبة وإدارة المدفوعات"
-            >
-              <i className="fa-solid fa-sliders"></i>
-              <span>الخصم والدفع</span>
             </button>
           </div>
 
           {/* 🔍 Quick Search Bar on-screen for direct mobile/desktop item addition */}
-          <div className="relative w-full">
-            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-300">
-              <div className="relative flex-1 min-w-0">
-                <input
-                  type="text"
-                  value={workspaceItemSearch}
-                  onChange={(e) => {
-                    setWorkspaceItemSearch(e.target.value);
-                    setShowWorkspaceItemDropdown(true);
+          <div className="relative w-full shrink-0">
+            <div className="relative flex items-center bg-white rounded-lg border border-blue-400 shadow-2xs">
+              <i className="fa-solid fa-magnifying-glass text-blue-600 text-sm pr-3 pl-2 shrink-0"></i>
+              <input
+                type="text"
+                value={workspaceItemSearch}
+                onChange={(e) => {
+                  setWorkspaceItemSearch(e.target.value);
+                  setShowWorkspaceItemDropdown(true);
+                }}
+                onFocus={() => {
+                  if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
+                }}
+                placeholder={`بحث ديناميكي لإضافة صنف فوراً بالاسم أو الكود (${localItemsDatabase.length} صنف)...`}
+                className="w-full text-xs sm:text-sm min-h-[38px] py-1.5 pl-8 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+              />
+              {workspaceItemSearch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceItemSearch('');
+                    setShowWorkspaceItemDropdown(false);
                   }}
-                  onFocus={() => {
-                    if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
-                  }}
-                  placeholder="اكتب اسم أو كود الصنف للإضافة المباشرة..."
-                  className="w-full text-base md:text-xs min-h-[38px] py-1.5 px-3 rounded-md bg-slate-50 border border-slate-300 focus:outline-none focus:bg-white focus:border-blue-600 text-slate-900"
-                />
-                {workspaceItemSearch && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWorkspaceItemSearch('');
-                      setShowWorkspaceItemDropdown(false);
-                    }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <span className="text-xs font-semibold text-slate-600 whitespace-nowrap shrink-0 tabular-nums px-1">
-                {localItemsDatabase.length} صنف
-              </span>
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5 cursor-pointer"
+                >
+                  ×
+                </button>
+              )}
             </div>
 
             {/* Quick Autocomplete Dropdown */}
@@ -2301,81 +2587,100 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             )}
           </div>
 
-          {/* 5. Items Mobile Cards (< md) */}
-          <div className="block md:hidden space-y-2.5">
+          {/* 5. Items List — Mobile Cards (< md) with 9e11f2f6.png empty header */}
+          <div className="block md:hidden">
             {currentInvoiceItems.length === 0 ? (
-              <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg py-8 px-4 text-center text-xs text-slate-500">
-                لم يتم إدراج أصناف بعد
+              <div className="bg-white border border-slate-300 rounded-lg overflow-hidden">
+                <div className="grid grid-cols-7 bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 text-center py-2 px-1">
+                  <span>م</span>
+                  <span>الصنف</span>
+                  <span>البيان</span>
+                  <span>الكمية</span>
+                  <span>السعر</span>
+                  <span>الإجمالي</span>
+                  <span>إجراء</span>
+                </div>
+                <div className="py-10 px-4 text-center text-xs text-slate-400">
+                  لم يتم إدراج أصناف بعد (اضغط على &quot;إضافة صنف&quot; أو &quot;دليل الأصناف&quot;)
+                </div>
               </div>
             ) : (
-              currentInvoiceItems.map((item, index) => (
-                <div
-                  key={item.rowId}
-                  className="bg-white border border-slate-200 rounded-xl p-3 space-y-2.5 shadow-2xs"
-                >
-                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-mono font-bold text-slate-500">#{index + 1}</span>
-                        <span className="font-semibold text-sm text-slate-900 break-words">{item.name}</span>
+              <div className="space-y-2">
+                {currentInvoiceItems.map((item, index) => (
+                  <div
+                    key={item.rowId}
+                    className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-2xs"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-mono font-bold text-slate-500">#{index + 1}</span>
+                          <span className="font-semibold text-sm text-slate-900 break-words">{item.name}</span>
+                        </div>
+                        {item.spec && <div className="text-[11px] text-slate-500 mt-0.5">{item.spec}</div>}
+                        {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
+                          <div className="text-[10px] text-blue-700 font-medium mt-0.5 tabular-nums">
+                            {(item.actualDisc || 0) > 0 ? `خصم: ${Number(item.actualDisc).toFixed(2)} ` : ''}
+                            {(item.actualTax || 0) > 0 ? `· ضريبة: ${Number(item.actualTax).toFixed(2)}` : ''}
+                          </div>
+                        )}
                       </div>
-                      {item.spec && <div className="text-[11px] text-slate-500 mt-0.5">{item.spec}</div>}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openModifyInvoiceItem(index)}
+                          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
+                          title="تعديل"
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 cursor-pointer"
+                          title="حذف"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openModifyInvoiceItem(index)}
-                        className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
-                        title="تعديل"
-                      >
-                        <i className="fa-solid fa-pen-to-square"></i>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 cursor-pointer"
-                        title="حذف"
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-500 mb-1">العدد</label>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="any"
-                        value={item.qty}
-                        onChange={(e) => updateTableRowQty(index, e.target.value)}
-                        className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 mb-1">السعر</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={item.price}
-                        onChange={(e) => updateTableRowPrice(index, e.target.value)}
-                        className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-emerald-700 font-semibold mb-1">الإجمالي</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={item.total}
-                        onChange={(e) => updateTableRowTotal(index, e.target.value)}
-                        className="w-full h-9 text-center text-sm font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
-                      />
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">الكمية</label>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="any"
+                          value={item.qty}
+                          onChange={(e) => updateTableRowQty(index, e.target.value)}
+                          className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 mb-1">السعر</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.price}
+                          onChange={(e) => updateTableRowPrice(index, e.target.value)}
+                          className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-emerald-700 font-semibold mb-1">الإجمالي</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={item.total}
+                          onChange={(e) => updateTableRowTotal(index, e.target.value)}
+                          className="w-full h-9 text-center text-sm font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
 
@@ -2386,18 +2691,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 <tr>
                   <th className="col-seq">م</th>
                   <th className="col-item">الصنف</th>
-                  <th className="col-desc">الوصف</th>
-                  <th className="col-qty">العدد</th>
-                  <th className="col-price">سعر</th>
-                  <th className="col-total">اجمالي</th>
+                  <th className="col-desc">البيان</th>
+                  <th className="col-qty">الكمية</th>
+                  <th className="col-price">السعر</th>
+                  <th className="col-total">الإجمالي</th>
                   <th className="col-action">إجراء</th>
                 </tr>
               </thead>
               <tbody id="invoiceItemsTable">
                 {currentInvoiceItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-slate-400 py-8 text-sm">
-                      لم يتم إدراج أصناف بعد
+                    <td colSpan={7} className="text-slate-400 py-10 text-xs sm:text-sm">
+                      لم يتم إدراج أصناف بعد (اضغط على &quot;إضافة صنف&quot; أو &quot;دليل الأصناف&quot;)
                     </td>
                   </tr>
                 ) : (
@@ -2406,10 +2711,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       <td className="col-seq tabular-nums">{index + 1}</td>
                       <td className="col-item">
                         <span className="font-semibold text-slate-900">{item.name}</span>
+                        {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
+                          <div className="text-[10px] text-blue-700 font-normal tabular-nums">
+                            {(item.actualDisc || 0) > 0 ? `خصم: ${Number(item.actualDisc).toFixed(2)} ` : ''}
+                            {(item.actualTax || 0) > 0 ? `· ضريبة: ${Number(item.actualTax).toFixed(2)}` : ''}
+                          </div>
+                        )}
                       </td>
-                      <td className="col-desc">
-                        {item.spec || '-'}
-                      </td>
+                      <td className="col-desc">{item.spec || '-'}</td>
                       <td className="col-qty">
                         <input
                           type="number"
@@ -2461,50 +2770,68 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           </div>
         </div>
 
-        {/* 6. Bottom Fixed Summary & Action Bar */}
+        {/* 6. Bottom Fixed Summary & Action Bar (9e11f2f6.png & 27f5081e.png) */}
         <div className="bottom-fixed-area">
-          <div className="summary-bar">
-            <div className="summary-item">
-              اجمالي العدد: <span id="lblItemsTotal">{totals.qtySum.toFixed(2)}</span>
+          <div className="bg-[#0f172a] text-white rounded-xl p-2 space-y-1.5 border border-slate-800">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-[11px] font-semibold tabular-nums">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">الكميات:</span>
+                <span id="lblItemsTotal" className="text-emerald-400">{totals.qtySum.toFixed(2)}</span>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">الخصم:</span>
+                <span id="lblDiscTotal" className="text-emerald-400">{totals.discount.toFixed(2)}</span>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">الضريبة:</span>
+                <span id="lblTaxTotal" className="text-emerald-400">{totals.tax.toFixed(2)}</span>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">إضافي:</span>
+                <span id="lblExtraTotal" className="text-emerald-400">{totals.extra.toFixed(2)}</span>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">المدفوع:</span>
+                <span id="lblPaidTotal" className="text-sky-400">{totals.paid.toFixed(2)}</span>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+                <span className="text-slate-300">المتبقي:</span>
+                <span id="lblRemainTotal" className="text-rose-400">{totals.remain.toFixed(2)}</span>
+              </div>
             </div>
-            <div className="summary-item">
-              الخصومات: <span id="lblDiscTotal">{totals.discount.toFixed(2)}</span>
-            </div>
-            <div className="summary-item">
-              الضرائب: <span id="lblTaxTotal">{totals.tax.toFixed(2)}</span>
-            </div>
-            <div className="summary-item">
-              الإيراد: <span id="lblExtraTotal">{totals.extra.toFixed(2)}</span>
-            </div>
-            <div className="summary-item">
-              المدفوع: <span id="lblPaidTotal" style={{ color: '#2563eb' }}>{totals.paid.toFixed(2)}</span>
-            </div>
-            <div className="summary-item">
-              المتبقي: <span id="lblRemainTotal" style={{ color: '#dc2626' }}>{totals.remain.toFixed(2)}</span>
-            </div>
-            <div className="summary-item summary-net">
-              اجمالي الصافي: <span id="lblNetTotal">{totals.net.toFixed(2)}</span>
+
+            <div className="bg-[#14532d] border border-emerald-700 rounded-lg px-3 py-1.5 flex items-center justify-between">
+              <span className="text-xs sm:text-sm font-bold text-white">الصافي النهائي:</span>
+              <span id="lblNetTotal" className="text-base sm:text-lg font-extrabold text-lime-300 tabular-nums">
+                {totals.net.toFixed(2)} ج.م
+              </span>
             </div>
           </div>
 
-          <div className="btn-action-bar">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full">
             <button
               type="button"
-              className="btn-action"
-              style={{ background: '#16a34a' }}
+              className="btn-action bg-emerald-600 hover:bg-emerald-700"
               onClick={saveInvoice}
             >
-              <i className="fa-solid fa-save"></i>
-              <span>حفظ وترحيل الحسابات</span>
+              <i className="fa-solid fa-floppy-disk"></i>
+              <span className="truncate">حفظ وترحيل الحسابات</span>
             </button>
             <button
               type="button"
-              className="btn-action"
-              style={{ background: '#2563eb' }}
+              className="btn-action !bg-white !text-slate-700 border !border-slate-300 hover:!bg-slate-50"
+              onClick={onClose}
+            >
+              <i className="fa-solid fa-xmark"></i>
+              <span>إلغاء وخروج</span>
+            </button>
+            <button
+              type="button"
+              className="btn-action bg-blue-600 hover:bg-blue-700"
               onClick={handlePrintCurrentInvoice}
             >
               <i className="fa-solid fa-print"></i>
-              <span>طباعة</span>
+              <span>معاينة وطباعة</span>
             </button>
           </div>
         </div>
@@ -2680,121 +3007,176 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         </div>
       )}
 
-      {/* 📇 كارت الصنف التفصيلي */}
-      {isDetailCardOpen && cardItem && (
+      {/* 📇 كارت إضافة صنف سريع (7fca626a.png Dark-Navy Modal) */}
+      {isDetailCardOpen && (
         <div className="modal-overlay" id="itemDetailCardModal">
-          <div className="modal-box">
-            <div className="modal-header">
-              <span>
-                <i className="fa-solid fa-pen-to-square ml-1.5"></i> كارت الصنف التفصيلي
-              </span>
+          <div className="modal-box !bg-[#0f172a] !text-white !border !border-slate-700/80 !rounded-2xl !max-w-md w-full !shadow-2xl overflow-hidden">
+            <div className="bg-[#0f172a] border-b border-slate-700/70 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <i className="fa-solid fa-cubes text-blue-400"></i>
+                <span>كارت إضافة صنف سريع (Enter)</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsDetailCardOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-md text-white hover:bg-white/15 text-lg cursor-pointer"
+                onClick={() => {
+                  setIsDetailCardOpen(false);
+                  setShowCardDropdown(false);
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white text-lg cursor-pointer transition"
               >
                 &times;
               </button>
             </div>
-            <div className="modal-body">
-              <input type="hidden" value={cardItem.code} />
-              <div className="field-inline">
-                <label>اسم الصنف:</label>
-                <input
-                  type="text"
-                  readOnly
-                  value={cardItem.name}
-                  className="!bg-slate-100 !font-semibold"
-                />
-              </div>
-              <div className="edit-card-grid">
-                <div className="field-inline">
-                  <label>المتاح بالمخزن:</label>
+
+            <div className="p-4 space-y-3 max-h-[84vh] overflow-y-auto">
+              {/* 1. اسم الصنف (بحث بدليل الأصناف أو جديد) */}
+              <div className="relative space-y-1.5">
+                <label className="block text-[11px] font-semibold text-slate-300">
+                  اسم الصنف (بحث بدليل الأصناف أو جديد) <span className="text-rose-400">*</span>
+                </label>
+                <div className="relative flex items-center bg-[#162238] border border-blue-500 rounded-xl px-3">
+                  <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs ml-2 shrink-0"></i>
                   <input
+                    ref={cardSearchInputRef}
                     type="text"
-                    readOnly
-                    value={cardItem.stock}
-                    className="!bg-slate-100 !font-semibold !text-blue-700 text-center tabular-nums"
+                    value={cardItemSearch}
+                    onFocus={() => setShowCardDropdown(true)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCardItemSearch(val);
+                      setShowCardDropdown(true);
+                      if (cardItem && cardItem.name !== val) {
+                        setCardItem(null);
+                      }
+                    }}
+                    placeholder="ابحث باسم الصنف أو الكود..."
+                    className="w-full py-2.5 bg-transparent text-sm font-semibold text-white placeholder:text-slate-400 focus:outline-none"
                   />
+                  {cardItemSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardItemSearch('');
+                        setCardItem(null);
+                        setShowCardDropdown(true);
+                      }}
+                      className="text-slate-400 hover:text-white px-1 text-base cursor-pointer"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
-                <div className="field-inline">
-                  <label>سعر الشراء:</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${Number(cardItem.buyPrice || 0).toFixed(2)} ج.م`}
-                    className="!bg-slate-100 !font-semibold !text-rose-700 text-center tabular-nums"
-                  />
-                </div>
-              </div>
-              {/* أزرار التسعير السريعة داخل كارت الصنف */}
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = getItemPriceForTier(cardItem, 'cash');
-                    setCardPrice(p.toString());
-                    setCardLastEdited('price');
-                    const q = parseFloat(cardQty) || 1;
-                    setCardTotal((p * q).toFixed(2));
-                  }}
-                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md cursor-pointer tabular-nums hover:bg-emerald-100"
-                >
-                  نقدي ({getItemPriceForTier(cardItem, 'cash').toFixed(2)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = getItemPriceForTier(cardItem, 'wholesale');
-                    setCardPrice(p.toString());
-                    setCardLastEdited('price');
-                    const q = parseFloat(cardQty) || 1;
-                    setCardTotal((p * q).toFixed(2));
-                  }}
-                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-800 border border-indigo-300 rounded-md cursor-pointer tabular-nums hover:bg-indigo-100"
-                >
-                  جملة ({getItemPriceForTier(cardItem, 'wholesale').toFixed(2)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = getItemPriceForTier(cardItem, 'buy');
-                    setCardPrice(p.toString());
-                    setCardLastEdited('price');
-                    const q = parseFloat(cardQty) || 1;
-                    setCardTotal((p * q).toFixed(2));
-                  }}
-                  className="min-h-[36px] px-2 py-1.5 text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-300 rounded-md cursor-pointer tabular-nums hover:bg-rose-100"
-                >
-                  شراء ({getItemPriceForTier(cardItem, 'buy').toFixed(2)})
-                </button>
+
+                {showCardDropdown && cardSearchMatches.length > 0 && (
+                  <div className="absolute top-full right-0 left-0 mt-1 bg-[#162238] border border-slate-600 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-700/70">
+                    {cardSearchMatches.map((m) => {
+                      const p = getItemPriceForTier(m, activePricingTier);
+                      return (
+                        <div
+                          key={m.itemId || m.code}
+                          onClick={() => {
+                            setCardItem(m);
+                            setCardItemSearch(m.name);
+                            setShowCardDropdown(false);
+                            const tierPrice = getItemPriceForTier(m, activePricingTier);
+                            const pStr = tierPrice > 0 ? tierPrice.toString() : '';
+                            setCardPrice(pStr);
+                            setCardLastEdited('price');
+                            syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                            setTimeout(() => {
+                              if (cardQtyInputRef.current) {
+                                cardQtyInputRef.current.focus();
+                                cardQtyInputRef.current.select();
+                              }
+                            }, 50);
+                          }}
+                          className="px-3 py-2 hover:bg-blue-600/25 cursor-pointer flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-semibold text-white truncate">{m.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono tabular-nums">
+                              {m.code} · مخزون: {m.stock}
+                            </div>
+                          </div>
+                          <span className="text-emerald-400 font-bold tabular-nums shrink-0">
+                            {p > 0 ? `${p.toFixed(2)} ج.م` : 'بدون سعر'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {cardItem && (
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 bg-[#132038] border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[10px]">
+                    <span className="text-slate-300 tabular-nums">
+                      المتاح: <strong className="text-sky-400">{cardItem.stock}</strong>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const p = getItemPriceForTier(cardItem, 'cash');
+                          const pStr = p.toString();
+                          setCardPrice(pStr);
+                          setCardLastEdited('price');
+                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/35 cursor-pointer tabular-nums"
+                      >
+                        نقدي ({getItemPriceForTier(cardItem, 'cash').toFixed(2)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const p = getItemPriceForTier(cardItem, 'wholesale');
+                          const pStr = p.toString();
+                          setCardPrice(pStr);
+                          setCardLastEdited('price');
+                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/35 cursor-pointer tabular-nums"
+                      >
+                        جملة ({getItemPriceForTier(cardItem, 'wholesale').toFixed(2)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const p = getItemPriceForTier(cardItem, 'buy');
+                          const pStr = p.toString();
+                          setCardPrice(pStr);
+                          setCardLastEdited('price');
+                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-amber-600/20 border border-amber-500/40 text-amber-300 hover:bg-amber-600/35 cursor-pointer tabular-nums"
+                      >
+                        شراء ({getItemPriceForTier(cardItem, 'buy').toFixed(2)})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="edit-card-grid">
-                <div className="field-inline">
-                  <label>سعر الحركة (الوحدة):</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={cardPrice}
-                    onChange={(e) => handleCardPriceChange(e.target.value)}
-                    placeholder="سعر الوحدة..."
-                    className="!font-semibold !text-emerald-700 text-center tabular-nums"
-                  />
-                </div>
-                <div className="field-inline">
-                  <label>سعر الجملة الإضافي:</label>
-                  <input
-                    type="number"
-                    readOnly
-                    value={cardItem.wholesalePrice || 0}
-                    className="!bg-slate-100 !font-semibold !text-amber-700 text-center tabular-nums"
-                  />
-                </div>
+              {/* 2. بيان الصنف (وصف اختياري) */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-semibold text-slate-300">
+                  بيان الصنف (وصف اختياري)
+                </label>
+                <input
+                  type="text"
+                  value={cardSpec}
+                  onChange={(e) => setCardSpec(e.target.value)}
+                  placeholder="بيان / مواصفة / وصف الصنف..."
+                  className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                />
               </div>
-              <div className="edit-card-grid">
-                <div className="field-inline">
-                  <label>العدد المطلوب:</label>
+
+              {/* 3. الكمية (العدد) و السعر (للقطعة) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-300">
+                    الكمية (العدد) <span className="text-rose-400">*</span>
+                  </label>
                   <input
                     ref={cardQtyInputRef}
                     id="input-card-qty"
@@ -2803,48 +3185,123 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={cardQty}
                     onChange={(e) => handleCardQtyChange(e.target.value)}
-                    className="text-center !font-semibold tabular-nums"
+                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-sm font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
-                <div className="field-inline">
-                  <label className="!text-emerald-800">
-                    الإجمالي (حساب عكسي للسعر):
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-300">
+                    السعر (للقطعة) <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="number"
                     step="any"
-                    min="0"
-                    value={cardTotal}
-                    onChange={(e) => handleCardTotalChange(e.target.value)}
-                    placeholder="اكتب الإجمالي..."
-                    title="أدخل الإجمالي هنا ليتم تقسيم السعر على الكمية تلقائياً"
-                    className="!bg-emerald-50 !border-emerald-400 !font-semibold !text-emerald-800 text-center tabular-nums"
+                    value={cardPrice}
+                    onChange={(e) => handleCardPriceChange(e.target.value)}
+                    placeholder="السعر..."
+                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
-              {/* شريط توضيح ميزة الحساب العكسي التلقائي */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs text-emerald-800 flex flex-wrap items-center justify-between gap-1 font-medium">
-                <span>الحساب العكسي:</span>
-                <span>اكتب الإجمالي ليتم ضبط سعر الوحدة تلقائياً (السعر = الإجمالي ÷ الكمية)</span>
+              {/* 4. الخصم والضريبة */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="bg-[#132038] border border-slate-700/80 rounded-xl p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-slate-300">الخصم</span>
+                    <div className="inline-flex bg-[#0f172a] border border-slate-700 rounded-lg p-0.5 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => handleCardDiscChange(cardDiscVal, 'val')}
+                        className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
+                          cardDiscType === 'val' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ج.م
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCardDiscChange(cardDiscVal, 'percent')}
+                        className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
+                          cardDiscType === 'percent' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={cardDiscVal}
+                    onChange={(e) => handleCardDiscChange(e.target.value)}
+                    placeholder={cardDiscType === 'val' ? 'المبلغ ج.م' : 'النسبة %'}
+                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="bg-[#132038] border border-slate-700/80 rounded-xl p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-slate-300">الضريبة</span>
+                    <div className="inline-flex bg-[#0f172a] border border-slate-700 rounded-lg p-0.5 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => handleCardTaxChange(cardTaxVal, 'val')}
+                        className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
+                          cardTaxType === 'val' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ج.م
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCardTaxChange(cardTaxVal, 'percent')}
+                        className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
+                          cardTaxType === 'percent' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={cardTaxVal}
+                    onChange={(e) => handleCardTaxChange(e.target.value)}
+                    placeholder={cardTaxType === 'val' ? 'المبلغ ج.م' : 'النسبة %'}
+                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
+                  />
+                </div>
               </div>
-              <div className="field-inline">
-                <label>الوصف / البيان / ملاحظات البند:</label>
+
+              {/* 5. إجمالي الصنف (يعدل السعر تلقائياً) عكسي */}
+              <div className="bg-[#132038] border border-blue-600/60 rounded-xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-semibold text-blue-300">إجمالي الصنف (يعدل السعر تلقائياً)</span>
+                  <span className="text-slate-400 font-medium">عكسي</span>
+                </div>
                 <input
-                  type="text"
-                  value={cardSpec}
-                  onChange={(e) => setCardSpec(e.target.value)}
-                  placeholder="ملاحظات..."
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={cardTotal}
+                  onChange={(e) => handleCardTotalChange(e.target.value)}
+                  placeholder="إجمالي الصنف..."
+                  title="أدخل الإجمالي هنا ليتم ضبط سعر الوحدة تلقائياً"
+                  className="w-full bg-[#162238] border border-blue-500 rounded-lg px-3 py-2 text-center text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-400"
                 />
               </div>
+
+              {/* 6. زر الإضافة */}
               <button
                 type="button"
-                className="btn-action-top mt-1"
-                style={{ background: '#16a34a' }}
                 onClick={confirmAddDetailedItem}
+                className="w-full min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition shadow-md"
               >
                 <i className="fa-solid fa-check"></i>
-                <span>إضافة للفاتورة</span>
+                <span>إضافة الصنف للفاتورة (Enter)</span>
               </button>
             </div>
           </div>

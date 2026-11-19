@@ -410,16 +410,21 @@ export function printDailyTransactionsReportWindow(
     ]);
 
     openUniversalPrint({
-      kind: 'generic_report',
+      kind: 'treasury_movement',
       title: 'تقرير حركة العمليات اليومية',
+      subTitle: 'المحاسبة العامة والحركة اليومية',
       docNumber: targetDate || new Date().toISOString().split('T')[0],
       date: targetDate || new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
       branch: branchName || 'جميع الفروع',
-      partyName: 'المحاسبة العامة',
-      partyLabel: 'القسم المسؤول',
       columns: ['م', 'الوقت', 'رقم الحركة', 'الطرف والعميل', 'طريقة الدفع', 'إيرادات (+)', 'مصروفات (-)', 'البيان'],
       rows,
+      kpis: [
+        { title: 'عدد العمليات', value: `${data.totalCount} حركة` },
+        { title: 'إجمالي المقبوضات', value: `${data.totalIncome.toFixed(2)} ${curSymbol}` },
+        { title: 'إجمالي المدفوعات', value: `${data.totalExpense.toFixed(2)} ${curSymbol}` },
+        { title: 'صافي الحركة اليومية', value: `${data.netMovement.toFixed(2)} ${curSymbol}` },
+      ],
       amount: Math.abs(data.netMovement),
       summaries: [
         { label: 'عدد العمليات', value: `${data.totalCount} حركة` },
@@ -427,23 +432,10 @@ export function printDailyTransactionsReportWindow(
         { label: 'إجمالي المدفوعات', value: `${data.totalExpense.toFixed(2)} ${curSymbol}`, color: '#dc2626' },
         { label: 'صافي الحركة اليومية', value: `${data.netMovement.toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
+      signatures: ['مسؤول الخزينة', 'المراجع المحاسبي', 'المدير المالي'],
       settings: appData.settings,
       preferredPaperSize: 'a4-portrait',
     });
-
-    let printWindow: Window | null = null;
-    try {
-      printWindow = window.open('', '_blank', 'width=1100,height=850,menubar=no,toolbar=no,location=no,status=no');
-    } catch {
-      printWindow = null;
-    }
-
-    if (printWindow) {
-      const htmlContent = generateDailyTransactionsReportHtml(appData, targetDate, branchName);
-      printWindow.document.open();
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-    }
 
     if (showToast) {
       showToast('تم تجهيز وفتح تقرير حركة العمليات بنجاح للطباعة والمعاينة', 'success');
