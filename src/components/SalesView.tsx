@@ -277,7 +277,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     setEditingInvoiceId(inv.id);
     setSelectedBranchId(inv.branchId || appData.activeBranchId || appData.branches?.[0]?.id || 'main');
     setModalType(inv.type);
-    setSalesPricingType((inv.salesType as any) || (inv.type === 'ajel' ? 'wholesale' : 'cash'));
+    setSalesPricingType('cash');
     setSelectedItemId('');
     setIsPriceAutoFetched(false);
     setPriceWarning(null);
@@ -884,13 +884,9 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
               ? 'مرتجع نقدي'
               : item.type === 'return_ajel'
               ? 'مرتجع آجل'
-              : item.salesType === 'wholesale'
-              ? item.type === 'ajel'
-                ? 'جملة آجل'
-                : 'جملة نقدي'
               : item.type === 'nagdi'
-              ? 'نقدي'
-              : 'آجل',
+              ? 'بيع نقدي'
+              : 'بيع آجل',
           width: 16,
         },
         { header: 'طريقة الدفع', key: 'paymentMethod', width: 14 },
@@ -1006,7 +1002,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
             type="button"
             onClick={() => openCreateModal('nagdi', 'cash')}
             className="w-full min-h-[46px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-            title="فاتورة بيع نقدي قطاعي بسداد فوري"
+            title="فاتورة بيع نقدي بسداد فوري"
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span>إنشاء فاتورة بيع نقدي</span>
@@ -1014,17 +1010,17 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
 
           <button
             type="button"
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
+            onClick={() => openCreateModal('ajel', 'cash')}
             className="w-full min-h-[46px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-            title="فاتورة بيع جملة بسداد نقدي أو آجل"
+            title="فاتورة بيع آجل على حساب العميل"
           >
-            <Tag className="w-4 h-4 shrink-0" />
-            <span>+ فاتورة بيع جملة</span>
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>إنشاء فاتورة بيع آجل</span>
           </button>
         </div>
 
-        {/* Explicit 4 Core Sales Movements + Wholesale Quick Modes */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-100 w-full">
+        {/* Explicit 4 Core Sales Movements */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 w-full">
           <button
             type="button"
             onClick={() => openCreateModal('nagdi', 'cash')}
@@ -1059,33 +1055,6 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
           >
             <RotateCcw className="w-3.5 h-3.5 shrink-0" />
             <span>مرتجع آجل</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[42px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Tag className="w-3.5 h-3.5 shrink-0" />
-            <span>جملة نقدي</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCreateModal('ajel', 'wholesale')}
-            className="min-h-[42px] bg-violet-50 hover:bg-violet-100 text-violet-900 border border-violet-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Tag className="w-3.5 h-3.5 shrink-0" />
-            <span>جملة آجل</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="col-span-2 sm:col-span-1 min-h-[42px] bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            <span>مرتجع جملة</span>
           </button>
         </div>
       </div>
@@ -1720,7 +1689,7 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
           }}
           mode="sale"
           invoiceType={modalType}
-          pricingType={salesPricingType}
+          pricingType="cash"
           editingInvoice={editingInvoiceId !== null ? appData.salesInvoices.find((i) => i.id === editingInvoiceId) || null : null}
           appData={appData}
           onUpdateData={onUpdateData}

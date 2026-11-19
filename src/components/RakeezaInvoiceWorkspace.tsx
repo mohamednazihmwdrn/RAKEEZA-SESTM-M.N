@@ -83,15 +83,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
   const isSale = currentDept === 'sale';
 
-  // 🏷️ نظام تسعير الفاتورة: 'cash' (سعر نقدي), 'wholesale' (سعر جملة), 'buy' (سعر شراء)
+  // 🏷️ نظام تسعير الفاتورة الموحد: 'cash' (سعر البيع) أو 'buy' (آخر سعر شراء)
   const [activePricingTier, setActivePricingTier] = useState<'cash' | 'wholesale' | 'buy'>(() => {
     if (editingInvoice) {
-      const sType = (editingInvoice as any).salesType;
-      if (sType === 'wholesale') return 'wholesale';
       if ((editingInvoice as any).supplierName) return 'buy';
       return 'cash';
     }
-    if (initialPricingType === 'wholesale') return 'wholesale';
     if (initialPricingType === 'buy') return 'buy';
     return isSale ? 'cash' : 'buy';
   });
@@ -129,14 +126,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           icon: 'fa-clock',
         };
       }
-      if (activePricingTier === 'wholesale') {
-        return {
-          bg: 'linear-gradient(135deg, #1e1b4b 0%, #3730a3 100%)',
-          border: '#4f46e5',
-          badgeText: '🏷️ فاتورة مبيعات جملة',
-          icon: 'fa-tags',
-        };
-      }
       return {
         bg: 'linear-gradient(135deg, #064e3b 0%, #047857 100%)',
         border: '#059669',
@@ -161,14 +150,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           icon: 'fa-file-invoice-dollar',
         };
       }
-      if (activePricingTier === 'wholesale') {
-        return {
-          bg: 'linear-gradient(135deg, #164e63 0%, #0e7490 100%)',
-          border: '#0891b2',
-          badgeText: '📦 فاتورة توريد / مشتريات جملة',
-          icon: 'fa-boxes-packing',
-        };
-      }
       return {
         bg: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)',
         border: '#0d9488',
@@ -176,7 +157,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         icon: 'fa-cart-shopping',
       };
     }
-  }, [isSale, selectedInvoiceType, activePricingTier]);
+  }, [isSale, selectedInvoiceType]);
 
   // Window Maximize Toggle
   const [isMaximized, setIsMaximized] = useState(false);
@@ -288,11 +269,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return getBranchItems(appData.items, activeBranchId, mainBranchId);
   }, [appData.items, activeBranchId, mainBranchId]);
 
-  // Map raw Item array into Workspace DB format (no fabricated fallback multipliers)
+  // Map raw Item array into Workspace DB format (prioritize last purchasePrice & latest salePrice)
   const mapRawItemsToDb = (itemsList: Item[]) => {
     return itemsList.map((i, idx) => {
-      const bPrice = Number(i.avgCost || i.purchasePrice || i.costPrice || 0);
-      const cPrice = Number(i.salePrice || i.price || 0);
+      const bPrice = Number(i.purchasePrice || i.costPrice || i.avgCost || 0);
+      const cPrice = Number(i.normalSellingPrice || i.salePrice || i.price || 0);
       const wPrice = Number(i.wholesalePrice || i.wholesaleSellingPrice || 0);
       const wbPrice = Number((i as any).wholesalePurchasePrice || (i as any).wholesaleBuyPrice || bPrice || 0);
       return {
@@ -393,20 +374,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       : ''
   );
 
-  // Helper to extract item price based on active pricing tier (zero fabricated margins)
+  // Helper to extract sticky last sale price or last purchase price
   const getItemPriceForTier = (dbItem: any, tier: 'cash' | 'wholesale' | 'buy'): number => {
     if (!dbItem) return 0;
-    const cPrice = Number(dbItem.cashPrice || dbItem.salePrice || dbItem.normalSellingPrice || dbItem.price || 0);
-    const bPrice = Number(dbItem.buyPrice || dbItem.avgCost || dbItem.purchasePrice || dbItem.costPrice || 0);
-    const wPrice = Number(dbItem.wholesalePrice || dbItem.wholesaleSellingPrice || 0);
-
-    if (tier === 'cash') {
-      return cPrice;
-    }
-
-    if (tier === 'wholesale') {
-      return wPrice > 0 ? wPrice : cPrice;
-    }
+    const cPrice = Number(dbItem.cashPrice || dbItem.normalSellingPrice || dbItem.salePrice || dbItem.price || 0);
+    const bPrice = Number(dbItem.buyPrice || dbItem.purchasePrice || dbItem.costPrice || dbItem.avgCost || 0);
 
     if (tier === 'buy') {
       return bPrice;
@@ -415,85 +387,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     return cPrice;
   };
 
-  // 🔄 تغيير نظام التسعير (سعر نقدي / سعر جملة / سعر شراء) يُحدث أسعار كافة الأصناف فوراً
-  const handleChangePricingTier = (newTier: 'cash' | 'wholesale' | 'buy') => {
-    setActivePricingTier(newTier);
-
-    // تحديث السعر فوراً داخل كارت الصنف إذا كان الكارت مفتوحاً حالياً
-    if (cardItem) {
-      const updatedCardPrice = getItemPriceForTier(cardItem, newTier);
-      if (updatedCardPrice > 0) {
-        setCardPrice(updatedCardPrice.toString());
-      }
-    }
-
-    setCurrentInvoiceItems((prev) => {
-      if (prev.length === 0) return prev;
-      return prev.map((invItem) => {
-        let newPrice = 0;
-
-        // 1. الاسترجاع من الأسعار المحفوظة مسبقاً في السطر
-        if (newTier === 'cash' && invItem.cashPrice && invItem.cashPrice > 0) {
-          newPrice = invItem.cashPrice;
-        } else if (newTier === 'wholesale' && invItem.wholesalePrice && invItem.wholesalePrice > 0) {
-          newPrice = invItem.wholesalePrice;
-        } else if (newTier === 'buy' && (invItem.buyPrice || invItem.costPrice)) {
-          newPrice = Number(invItem.buyPrice || invItem.costPrice || 0);
-        }
-
-        // 2. البحث في قاعدة الأصناف المحلية أو أصناف التطبيق
-        if (newPrice <= 0) {
-          const dbItem =
-            localItemsDatabase.find(
-              (i) =>
-                (i.code && invItem.code && i.code.trim().toLowerCase() === invItem.code.trim().toLowerCase()) ||
-                (invItem.itemId && (String(i.itemId) === String(invItem.itemId) || String((i as any).id) === String(invItem.itemId))) ||
-                (i.name && invItem.name && i.name.trim().toLowerCase() === invItem.name.trim().toLowerCase())
-            ) ||
-            appData.items?.find(
-              (i) =>
-                (i.code && invItem.code && i.code.trim().toLowerCase() === invItem.code.trim().toLowerCase()) ||
-                (invItem.itemId && String(i.id) === String(invItem.itemId)) ||
-                (i.name && invItem.name && i.name.trim().toLowerCase() === invItem.name.trim().toLowerCase())
-            );
-
-          if (dbItem) {
-            newPrice = getItemPriceForTier(dbItem, newTier);
-          }
-        }
-
-        // 3. الحفاظ على السعر الحالي أو الفعلي المسجل بدون نسب مصطنعة
-        if (newPrice <= 0) {
-          const baseP = Number(invItem.cashPrice || invItem.price || 0);
-          if (newTier === 'buy') {
-            newPrice = Number(invItem.costPrice || invItem.buyPrice || 0);
-          } else {
-            newPrice = baseP;
-          }
-        }
-
-        if (newPrice <= 0) {
-          newPrice = invItem.price;
-        }
-
-        return {
-          ...invItem,
-          price: newPrice,
-          total: Number((invItem.qty * newPrice).toFixed(2)),
-        };
-      });
-    });
-
-    const tierName = newTier === 'cash' ? 'النقدي' : newTier === 'wholesale' ? 'الجملة' : 'الشراء';
-    showToast(`تم تطبيق سعر ${tierName} على كافة بنود الفاتورة بنجاح`, 'info');
-  };
-
-  // Sync pricing tier when initialPricingType prop changes
   useEffect(() => {
-    if (initialPricingType && (initialPricingType === 'cash' || initialPricingType === 'wholesale' || initialPricingType === 'buy')) {
-      handleChangePricingTier(initialPricingType);
-    }
-  }, [initialPricingType]);
+    setActivePricingTier(isSale ? 'cash' : 'buy');
+  }, [isSale]);
 
   // Options & Payments Modal State
   const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
@@ -892,7 +788,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const matchedCatalog =
       cardItem ||
       localItemsDatabase.find((i) => i.name.trim().toLowerCase() === resolvedName.toLowerCase()) || {
-        code: `NEW-${String(Date.now()).slice(-4)}`,
+        code: `ITM-${String(localItemsDatabase.length + 1).padStart(3, '0')}`,
         name: resolvedName,
         typeName: 'قطعة',
         stock: 0,
@@ -904,7 +800,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
     if (isSale && matchedCatalog.itemId) {
       setLocalItemsDatabase((prev) =>
-        prev.map((i) => (i.code === matchedCatalog.code ? { ...i, stock: Math.max(0, (i.stock || 0) - q) } : i))
+        prev.map((i) => (i.code === matchedCatalog.code ? { ...i, stock: Number(((i.stock || 0) - q).toFixed(2)) } : i))
       );
     }
 
@@ -1345,14 +1241,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         date: invDate,
         time: invTime,
         type: selectedInvoiceType,
-        salesType: activePricingTier === 'wholesale' ? 'wholesale' : 'cash',
+        salesType: 'cash',
         customerId: matchedParty?.id,
         customerCode: resolvedPartyCode,
         customerName: defaultPartyName,
-        phone: custPhone,
+        phone: custPhone.trim(),
         notes: jobSite,
         items: currentInvoiceItems.map((i) => ({
-          itemId: i.itemId || i.code,
+          itemId: i.itemId || undefined,
           code: i.code,
           name: i.name,
           unit: i.unit || 'قطعة',
@@ -1401,7 +1297,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         details: `فاتورة مبيعات #${invNum} - العميل: ${defaultPartyName} - الصافي: ${totals.net.toFixed(2)} ج.م`,
       });
 
-      showToast(`✅ تم حفظ وترحيل فاتورة المبيعات #${invNum} وتحديث الحسابات والمخزن بنجاح`, 'success');
+      showToast(`✅ تم حفظ وترحيل فاتورة المبيعات #${invNum} وتحديث الحسابات والمخزن والأسعار بنجاح`, 'success');
       onClose();
     } else {
       const invoiceData: PurchaseInvoice = {
@@ -1409,14 +1305,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         date: invDate,
         time: invTime,
         type: selectedInvoiceType,
-        purchaseType: activePricingTier === 'wholesale' ? 'wholesale' : 'cash',
+        purchaseType: 'cash',
         supplierId: matchedParty?.id,
         supplierCode: resolvedPartyCode,
         supplierName: defaultPartyName,
-        phone: custPhone,
+        phone: custPhone.trim(),
         notes: jobSite,
         items: currentInvoiceItems.map((i) => ({
-          itemId: i.itemId || i.code,
+          itemId: i.itemId || undefined,
           code: i.code,
           name: i.name,
           unit: i.unit || 'قطعة',
@@ -1485,8 +1381,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       date: invDate,
       time: invTime,
       type: selectedInvoiceType,
-      salesType: isSale ? (activePricingTier === 'wholesale' ? 'wholesale' : 'cash') : undefined,
-      purchaseType: !isSale ? (activePricingTier === 'wholesale' ? 'wholesale' : 'cash') : undefined,
+      salesType: isSale ? 'cash' : undefined,
+      purchaseType: !isSale ? 'cash' : undefined,
       customerId: isSale ? matchedParty?.id : undefined,
       customerCode: isSale ? resolvedPartyCode : undefined,
       supplierId: !isSale ? matchedParty?.id : undefined,
@@ -2111,22 +2007,26 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   type="text"
                   value={custCode}
                   onChange={(e) => setCustCode(e.target.value)}
-                  placeholder="1"
+                  placeholder="تلقائي"
                   className="tabular-nums text-center"
                 />
               </div>
               <div className="field-inline col-span-2">
-                <label>{isSale ? 'اسم العميل / الشركة (بحث وتزامن)' : 'اسم المورد / الشركة (بحث وتزامن)'}</label>
+                <label>{isSale ? 'اسم العميل (بحث أو تسجيل جديد)' : 'اسم المورد (بحث أو تسجيل جديد)'}</label>
                 <div className="relative">
                   <input
                     type="text"
                     value={custName}
                     onFocus={() => setShowCustDropdown(true)}
                     onChange={(e) => {
-                      setCustName(e.target.value);
+                      const val = e.target.value;
+                      setCustName(val);
+                      if (matchedParty && matchedParty.name.trim().toLowerCase() !== val.trim().toLowerCase()) {
+                        setCustCode('');
+                      }
                       setShowCustDropdown(true);
                     }}
-                    placeholder="اكتب للبحث..."
+                    placeholder={isSale ? 'اكتب اسم العميل (جديد أو مسجل)...' : 'اكتب اسم المورد (جديد أو مسجل)...'}
                     className="pl-7"
                   />
                   {custName && (
@@ -2152,7 +2052,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         onClick={() => {
                           setCustName(p.name);
                           setCustCode(p.code || p.id);
-                          if (p.phone) setCustPhone(p.phone);
+                          setCustPhone(p.phone || '');
                           setShowCustDropdown(false);
                         }}
                         className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center gap-2"
@@ -2175,7 +2075,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   type="text"
                   value={custPhone}
                   onChange={(e) => setCustPhone(e.target.value)}
-                  placeholder="ابحث برقم الهاتف..."
+                  placeholder="رقم الهاتف (يُثبّت تلقائياً)..."
                   className="tabular-nums"
                 />
               </div>
@@ -2189,6 +2089,18 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 />
               </div>
             </div>
+
+            {custName.trim() &&
+              custName.trim() !== 'عميل نقدي' &&
+              custName.trim() !== 'مورد عام' &&
+              !matchedParty && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1 text-[11px] font-semibold text-emerald-800 flex items-center gap-1.5">
+                  <i className="fa-solid fa-user-plus text-emerald-600"></i>
+                  <span>
+                    سيتم تثبيت &quot;{custName.trim()}&quot;{custPhone.trim() ? ` (${custPhone.trim()})` : ''} تلقائياً في قسم {isSale ? 'العملاء' : 'الموردين'} عند الحفظ
+                  </span>
+                </div>
+              )}
           </div>
 
           {/* 🟡 2. شريط حالة الحساب والرصيد الجاري */}
@@ -2353,45 +2265,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               </div>
             </div>
 
-            {/* نظام تسعير الفاتورة */}
-            <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800">
-              <span className="text-[11px] font-semibold text-slate-400 shrink-0">التسعير:</span>
-              <div className="grid grid-cols-3 gap-1.5 flex-1">
-                <button
-                  type="button"
-                  onClick={() => handleChangePricingTier('cash')}
-                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
-                    activePricingTier === 'cash'
-                      ? 'bg-emerald-600 border-emerald-500 text-white'
-                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  قطاعي
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleChangePricingTier('wholesale')}
-                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
-                    activePricingTier === 'wholesale'
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  جملة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleChangePricingTier('buy')}
-                  className={`min-h-[30px] px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer transition ${
-                    activePricingTier === 'buy'
-                      ? 'bg-amber-600 border-amber-500 text-white'
-                      : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  شراء
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* ↩ ربط المرتجع بالفاتورة الأصلية وتحديد نوع المرتجع */}
@@ -2411,9 +2284,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         const pName = isSale ? (orig as SaleInvoice).customerName : (orig as PurchaseInvoice).supplierName;
                         if (pName) setCustName(pName);
                         if (orig.phone) setCustPhone(orig.phone);
-                        if (isSale && (orig as SaleInvoice).salesType === 'wholesale') {
-                          setActivePricingTier('wholesale');
-                        }
                         if (currentInvoiceItems.length === 0 && orig.items && orig.items.length > 0) {
                           setCurrentInvoiceItems(
                             orig.items.map((it, idx) => ({
@@ -2543,8 +2413,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               )}
             </div>
 
-            {/* Quick Autocomplete Dropdown */}
-            {showWorkspaceItemDropdown && filteredWorkspaceItems.length > 0 && (
+            {/* Quick Autocomplete Dropdown + Direct New Item Option */}
+            {showWorkspaceItemDropdown && workspaceItemSearch.trim() !== '' && (
               <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-slate-300 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
                 {filteredWorkspaceItems.map((item) => {
                   const itemPrice = getItemPriceForTier(item, activePricingTier);
@@ -2569,7 +2439,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           <span className="text-xs font-semibold text-emerald-700">
                             {itemPrice > 0 ? `${itemPrice.toFixed(2)} ج.م` : 'بدون سعر'}
                           </span>
-                          <span className="text-[11px] text-slate-500">
+                          <span className={`text-[11px] ${item.stock < 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
                             مخزون: {item.stock}
                           </span>
                         </div>
@@ -2583,6 +2453,51 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     </div>
                   );
                 })}
+                {!filteredWorkspaceItems.some(
+                  (i) => i.name.trim().toLowerCase() === workspaceItemSearch.trim().toLowerCase()
+                ) && (
+                  <div
+                    onClick={() => {
+                      const typedName = workspaceItemSearch.trim();
+                      setCardItem(null);
+                      setCardItemSearch(typedName);
+                      setShowCardDropdown(false);
+                      setCardQty('1');
+                      setCardPrice('');
+                      setCardDiscVal('');
+                      setCardTaxVal('');
+                      setCardTotal('');
+                      setCardLastEdited('price');
+                      setCardSpec('');
+                      setWorkspaceItemSearch('');
+                      setShowWorkspaceItemDropdown(false);
+                      setIsDetailCardOpen(true);
+                      requestAnimationFrame(() => {
+                        setTimeout(() => {
+                          if (cardQtyInputRef.current) {
+                            cardQtyInputRef.current.focus();
+                            cardQtyInputRef.current.select();
+                          }
+                        }, 60);
+                      });
+                    }}
+                    className="p-2.5 bg-emerald-50/70 hover:bg-emerald-100 cursor-pointer flex items-center justify-between gap-2"
+                  >
+                    <div className="flex flex-col text-right min-w-0">
+                      <span className="font-bold text-xs sm:text-sm text-emerald-900 truncate">
+                        + إضافة صنف جديد: &quot;{workspaceItemSearch.trim()}&quot;
+                      </span>
+                      <span className="text-[10px] text-emerald-700">
+                        {isSale
+                          ? 'صنف غير مضاف للمخزون — سيتم بيعه وتثبيته بالسالب تلقائياً حتى الشراء'
+                          : 'صنف جديد — سيُضاف للمخزون بهذه الكمية وسعر الشراء'}
+                      </span>
+                    </div>
+                    <span className="bg-emerald-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md whitespace-nowrap shrink-0">
+                      إدراج جديد
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3095,7 +3010,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           <div className="min-w-0">
                             <div className="font-semibold text-white truncate">{m.name}</div>
                             <div className="text-[10px] text-slate-400 font-mono tabular-nums">
-                              {m.code} · مخزون: {m.stock}
+                              {m.code} · مخزون:{' '}
+                              <span className={m.stock < 0 ? 'text-rose-400 font-bold' : ''}>{m.stock}</span>
                             </div>
                           </div>
                           <span className="text-emerald-400 font-bold tabular-nums shrink-0">
@@ -3107,51 +3023,62 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   </div>
                 )}
 
+                {!cardItem && cardItemSearch.trim() !== '' && (
+                  <div className="bg-amber-950/50 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-[11px] text-amber-200 flex items-center gap-1.5">
+                    <i className="fa-solid fa-box-open text-amber-400"></i>
+                    <span>
+                      {isSale
+                        ? 'صنف جديد غير مسجل بالمخزون — سيُضاف للفاتورة ويُثبّت بالسالب حتى الشراء'
+                        : 'صنف جديد — سيُضاف للمخزون تلقائياً بهذه الكمية وسعر الشراء'}
+                    </span>
+                  </div>
+                )}
+
                 {cardItem && (
                   <div className="flex flex-wrap items-center justify-between gap-1.5 bg-[#132038] border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[10px]">
                     <span className="text-slate-300 tabular-nums">
-                      المتاح: <strong className="text-sky-400">{cardItem.stock}</strong>
+                      المتاح:{' '}
+                      <strong className={cardItem.stock < 0 ? 'text-rose-400' : 'text-sky-400'}>
+                        {cardItem.stock}
+                      </strong>
+                      {isSale &&
+                        !isReturn &&
+                        Number(cardItem.stock || 0) - (parseFloat(cardQty) || 0) < 0 && (
+                          <span className="mr-1.5 text-amber-300">
+                            ← بعد البيع: {Number(((cardItem.stock || 0) - (parseFloat(cardQty) || 0)).toFixed(2))} (بالسالب)
+                          </span>
+                        )}
                     </span>
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const p = getItemPriceForTier(cardItem, 'cash');
-                          const pStr = p.toString();
-                          setCardPrice(pStr);
-                          setCardLastEdited('price');
-                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
-                        }}
-                        className="px-1.5 py-0.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/35 cursor-pointer tabular-nums"
-                      >
-                        نقدي ({getItemPriceForTier(cardItem, 'cash').toFixed(2)})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const p = getItemPriceForTier(cardItem, 'wholesale');
-                          const pStr = p.toString();
-                          setCardPrice(pStr);
-                          setCardLastEdited('price');
-                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
-                        }}
-                        className="px-1.5 py-0.5 rounded bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/35 cursor-pointer tabular-nums"
-                      >
-                        جملة ({getItemPriceForTier(cardItem, 'wholesale').toFixed(2)})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const p = getItemPriceForTier(cardItem, 'buy');
-                          const pStr = p.toString();
-                          setCardPrice(pStr);
-                          setCardLastEdited('price');
-                          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
-                        }}
-                        className="px-1.5 py-0.5 rounded bg-amber-600/20 border border-amber-500/40 text-amber-300 hover:bg-amber-600/35 cursor-pointer tabular-nums"
-                      >
-                        شراء ({getItemPriceForTier(cardItem, 'buy').toFixed(2)})
-                      </button>
+                      {isSale ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const p = getItemPriceForTier(cardItem, 'cash');
+                            const pStr = p > 0 ? p.toString() : '';
+                            setCardPrice(pStr);
+                            setCardLastEdited('price');
+                            syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/35 cursor-pointer tabular-nums"
+                        >
+                          سعر البيع ({getItemPriceForTier(cardItem, 'cash').toFixed(2)})
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const p = getItemPriceForTier(cardItem, 'buy');
+                            const pStr = p > 0 ? p.toString() : '';
+                            setCardPrice(pStr);
+                            setCardLastEdited('price');
+                            syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+                          }}
+                          className="px-1.5 py-0.5 rounded bg-amber-600/20 border border-amber-500/40 text-amber-300 hover:bg-amber-600/35 cursor-pointer tabular-nums"
+                        >
+                          آخر سعر شراء ({getItemPriceForTier(cardItem, 'buy').toFixed(2)})
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -3430,11 +3357,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         <span>{item.name}</span>
                         <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
-                        <div>المخزون: <strong className="text-blue-600">{item.stock}</strong></div>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                        <div>المخزون: <strong className={item.stock < 0 ? 'text-rose-600' : 'text-blue-600'}>{item.stock}</strong></div>
                         <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
-                        <div>قطاعي: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
-                        <div>جملة: <strong className="text-amber-600">{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
+                        <div>بيع: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
                   ));
@@ -3534,11 +3460,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         <span>{item.name}</span>
                         <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
-                        <div>المخزون: <strong className="text-blue-600">{item.stock}</strong></div>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                        <div>المخزون: <strong className={item.stock < 0 ? 'text-rose-600' : 'text-blue-600'}>{item.stock}</strong></div>
                         <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
-                        <div>قطاعي: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
-                        <div>جملة: <strong className="text-amber-600">{Number(item.wholesalePrice || 0).toFixed(2)}</strong></div>
+                        <div>بيع: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
                   ));
@@ -3607,7 +3532,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   </select>
                 </div>
                 <div className="field-inline">
-                  <label>سعر القطاعي</label>
+                  <label>سعر البيع</label>
                   <input
                     type="number"
                     min="0"
@@ -3618,21 +3543,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   />
                 </div>
                 <div className="field-inline">
-                  <label>سعر الجملة</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={editWholesalePriceManual}
-                    onChange={(e) => setEditWholesalePriceManual(e.target.value)}
-                    className="tabular-nums"
-                  />
-                </div>
-                <div className="field-inline span-2">
                   <label>العدد بالمخزون</label>
                   <input
                     type="number"
-                    min="0"
                     step="any"
                     value={editQty}
                     onChange={(e) => setEditQty(e.target.value)}
@@ -3755,26 +3668,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 </div>
 
                 <div className="field-inline">
-                  <label>سعر القطاعي (نقدي)</label>
+                  <label>سعر البيع</label>
                   <input
                     type="number"
                     min="0"
                     step="any"
                     value={hierCashPrice}
                     onChange={(e) => setHierCashPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="text-center tabular-nums"
-                  />
-                </div>
-
-                <div className="field-inline span-2">
-                  <label>سعر بيع الجملة</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={hierWholesalePrice}
-                    onChange={(e) => setHierWholesalePrice(e.target.value)}
                     placeholder="0.00"
                     className="text-center tabular-nums"
                   />

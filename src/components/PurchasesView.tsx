@@ -731,10 +731,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
               ? 'مرتجع شراء نقدي'
               : item.type === 'return_ajel'
               ? 'مرتجع شراء آجل'
-              : item.purchaseType === 'wholesale'
-              ? item.type === 'ajel'
-                ? 'شراء جملة آجل'
-                : 'شراء جملة نقدي'
               : item.type === 'nagdi'
               ? 'شراء نقدي'
               : 'شراء آجل',
@@ -881,17 +877,17 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
 
           <button
             type="button"
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="w-full min-h-[46px] bg-cyan-800 hover:bg-cyan-900 active:bg-cyan-950 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
-            title="فاتورة توريد وشراء كميات جملة"
+            onClick={() => openCreateModal('ajel', 'buy')}
+            className="w-full min-h-[46px] bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+            title="فاتورة شراء آجل على حساب المورد"
           >
-            <Tag className="w-4 h-4 shrink-0" />
-            <span>+ شراء جملة / توريد</span>
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>إنشاء فاتورة شراء آجل</span>
           </button>
         </div>
 
-        {/* Explicit 4 Core Purchase Movements + Wholesale Quick Modes */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-slate-100 w-full">
+        {/* Explicit 4 Core Purchase Movements */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 w-full">
           <button
             type="button"
             onClick={() => openCreateModal('nagdi', 'buy')}
@@ -926,24 +922,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
           >
             <RotateCcw className="w-3.5 h-3.5 shrink-0" />
             <span>مرتجع آجل</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCreateModal('nagdi', 'wholesale')}
-            className="min-h-[42px] bg-cyan-50 hover:bg-cyan-100 text-cyan-900 border border-cyan-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Tag className="w-3.5 h-3.5 shrink-0" />
-            <span>شراء جملة</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCreateModal('return_nagdi', 'wholesale')}
-            className="min-h-[42px] bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 px-2 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            <span>مرتجع جملة</span>
           </button>
         </div>
       </div>
@@ -1539,7 +1517,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
           }}
           mode="purchase"
           invoiceType={modalType}
-          pricingType={purchasesPricingType}
+          pricingType="buy"
           editingInvoice={editingInvoiceId !== null ? appData.purchaseInvoices.find((i) => i.id === editingInvoiceId) || null : null}
           appData={appData}
           onUpdateData={onUpdateData}

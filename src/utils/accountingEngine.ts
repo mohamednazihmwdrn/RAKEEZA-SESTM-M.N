@@ -463,6 +463,7 @@ export function processPurchaseInvoice(
       fifoLayers: [...(i.fifoLayers || []).map((l) => ({ ...l }))],
     })),
     suppliers: (appData.suppliers || []).map((s) => ({ ...s, transactions: [...(s.transactions || [])] })),
+    productPrices: (appData.productPrices || []).map((p) => ({ ...p })),
     cashTransactions: [...(appData.cashTransactions || [])],
     journalEntries: [...(appData.journalEntries || [])],
     purchaseInvoices: [...(appData.purchaseInvoices || [])],
@@ -486,12 +487,17 @@ export function processPurchaseInvoice(
         const stockItm = data.items.find(
           (i) =>
             (itm.itemId && i.id === itm.itemId) ||
+            (itm.code && i.code && i.code.trim().toLowerCase() === itm.code.trim().toLowerCase() &&
+              (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId))) ||
             (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
         );
         if (stockItm) {
           const qtyDiff = wasReturn ? itm.qty : -itm.qty;
-          stockItm.quantity = Math.max(0, round2((stockItm.quantity || 0) + qtyDiff));
+          stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
+          if (stockItm.branchStock) {
+            stockItm.branchStock = { ...stockItm.branchStock, [oldBr]: stockItm.quantity };
+          }
 
           // Revert FIFO layers from old purchase invoice
           if (!wasReturn) {
@@ -566,63 +572,111 @@ export function processPurchaseInvoice(
   const effectiveRemaining = round2(Math.max(0, totalNet - effectivePaidTotal));
   const creditAddedByInvoice = round2(Math.max(0, totalNet - effectiveInitialPaid));
 
-  // 2. Store normalized invoice
-  const normalizedInvoice: PurchaseInvoice = {
-    ...invoice,
-    branchId: invBranchId,
-    paidAmount: effectivePaidTotal,
-    remainingAmount: effectiveRemaining,
-  };
-  data.purchaseInvoices = [normalizedInvoice, ...data.purchaseInvoices];
-  if (!isEditing && invoice.id >= data.nextPurchaseNumber) {
-    data.nextPurchaseNumber = invoice.id + 1;
+  // 2. Supplier auto-registration & phone sync BEFORE finalizing invoice metadata
+  const cleanSuppName = (invoice.supplierName || '').trim() || 'مورد عام';
+  const cleanSuppPhone = (invoice.phone || '').trim();
+  let supp = data.suppliers.find(
+    (s) =>
+      (invoice.supplierId && s.id === invoice.supplierId) ||
+      (invoice.supplierCode && s.code && s.code === invoice.supplierCode) ||
+      s.name.trim().toLowerCase() === cleanSuppName.toLowerCase()
+  );
+  if (!supp) {
+    const existingNums = data.suppliers
+      .map((s) => parseInt((s.code || s.id || '').replace(/\D/g, '') || '0', 10))
+      .filter((n) => !isNaN(n) && n > 0);
+    const nextSuppNum = (existingNums.length > 0 ? Math.max(...existingNums) : data.suppliers.length) + 1;
+    const generatedCode = invoice.supplierCode?.trim() || `SUP-${String(nextSuppNum).padStart(3, '0')}`;
+    supp = {
+      id: 's' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+      code: generatedCode,
+      companyId: invoice.companyId || data.companyId || 'COMP-000001',
+      branchId: invBranchId,
+      name: cleanSuppName,
+      phone: cleanSuppPhone,
+      balance: 0,
+      transactions: [],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      createdBy: invoice.createdBy || 'مدير النظام',
+    };
+    data.suppliers.push(supp);
+  } else {
+    if (!supp.code) {
+      const existingNums = data.suppliers
+        .map((s) => parseInt((s.code || s.id || '').replace(/\D/g, '') || '0', 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextSuppNum = (existingNums.length > 0 ? Math.max(...existingNums) : data.suppliers.length) + 1;
+      supp.code = `SUP-${String(nextSuppNum).padStart(3, '0')}`;
+    }
+    if (cleanSuppPhone && cleanSuppPhone !== supp.phone) {
+      supp.phone = cleanSuppPhone;
+    }
+    supp.updatedAt = now.toISOString();
   }
 
-  // 3. 📦 Inventory & FIFO / Weighted Average Costing
-  invoice.items.forEach((item, idx) => {
+  // 3. 📦 Inventory & FIFO / Negative-Stock Settlement / Sticky Last Purchase Price
+  const enrichedPurItems = (invoice.items || []).map((item, idx) => {
     let stockItem = data.items.find(
       (i) =>
         (item.itemId && i.id === item.itemId) ||
+        (item.code && i.code && i.code.trim().toLowerCase() === item.code.trim().toLowerCase() &&
+          (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId))) ||
         (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
     );
     if (!stockItem) {
+      const fallbackCode = item.code?.trim() || `ITM-${String(data.items.length + 1).padStart(3, '0')}`;
       stockItem = {
         id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         companyId: invoice.companyId || data.companyId || 'COMP-000001',
         branchId: invBranchId,
-        code: item.code,
+        code: fallbackCode,
         name: item.name,
         category: item.category,
+        unit: item.unit || 'قطعة',
         quantity: 0,
+        branchStock: { [invBranchId]: 0 },
         purchasePrice: round2(item.price || 0),
         costPrice: round2(item.price || 0),
         avgCost: round2(item.price || 0),
-        // Preserve explicit salePrice if supplied; do NOT fabricate * 1.25
         salePrice: item.salePrice && item.salePrice > 0 ? round2(item.salePrice) : 0,
         fifoLayers: [],
         movements: [],
+        createdAt: now.toISOString(),
+        createdBy: invoice.createdBy || 'مدير النظام',
       };
       data.items.push(stockItem);
     }
 
     ensureBaselineFifoLayerIfNeeded(stockItem, dateStr);
 
+    const prevQty = Number(stockItem.quantity || 0);
     const qtyChange = isReturn ? -item.qty : item.qty;
     const unitPurchaseCost = round2(
       item.qty > 0 && item.total > 0 ? item.total / item.qty : (item.price || 0)
     );
+    const lastBuyPrice = round2(Number(item.price || 0) > 0 ? Number(item.price) : unitPurchaseCost);
 
     if (!isReturn) {
-      stockItem.quantity = round2((stockItem.quantity || 0) + item.qty);
-      if (unitPurchaseCost > 0) {
+      const newQty = round2(prevQty + item.qty);
+      stockItem.quantity = newQty;
+      if (stockItem.branchStock) {
+        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: newQty };
+      }
+
+      // If previous stock was negative (sold before buying), settle negative deficit first;
+      // only any positive remainder stays in FIFO inventory layers!
+      const settledAvailableQty = round2(Math.min(item.qty, Math.max(0, newQty)));
+
+      if (unitPurchaseCost > 0 && settledAvailableQty > 0) {
         stockItem.fifoLayers = [
           ...(stockItem.fifoLayers || []),
           {
             id: `layer_pur_${invoice.id}_${idx}_${Date.now()}`,
             invoiceId: invoice.id,
             date: dateStr,
-            remainingQty: item.qty,
+            remainingQty: settledAvailableQty,
             unitCost: unitPurchaseCost,
           },
         ].sort((a, b) => {
@@ -631,21 +685,43 @@ export function processPurchaseInvoice(
           if (da !== db) return da.localeCompare(db);
           return Number(a.invoiceId || 0) - Number(b.invoiceId || 0);
         });
-        stockItem.purchasePrice = round2(item.price || unitPurchaseCost);
-        stockItem.costPrice = unitPurchaseCost;
-        stockItem.avgCost = recomputeItemAvgCost(stockItem);
-        stockItem.lastPriceUpdate = dateStr;
-        stockItem.lastPurchaseDate = dateStr;
-        if (item.salePrice && item.salePrice > 0) {
-          stockItem.salePrice = round2(item.salePrice);
-        }
+      }
+
+      // Always keep last purchase price sticky on the item until user changes it again
+      if (lastBuyPrice > 0) {
+        stockItem.purchasePrice = lastBuyPrice;
+        stockItem.costPrice = unitPurchaseCost > 0 ? unitPurchaseCost : lastBuyPrice;
+      }
+      const computedAvg = recomputeItemAvgCost(stockItem);
+      stockItem.avgCost = computedAvg > 0 ? computedAvg : round2(unitPurchaseCost || lastBuyPrice);
+      stockItem.lastPriceUpdate = dateStr;
+      stockItem.lastPurchaseDate = dateStr;
+      stockItem.updatedAt = now.toISOString();
+
+      if (item.salePrice && item.salePrice > 0) {
+        stockItem.salePrice = round2(item.salePrice);
+        stockItem.normalSellingPrice = round2(item.salePrice);
       }
       if (item.category && item.category.trim() && item.category !== 'بدون تصنيف') {
         stockItem.category = item.category.trim();
       }
+      if (data.productPrices && lastBuyPrice > 0) {
+        const pIdx = data.productPrices.findIndex((p) => p.productId === stockItem!.id);
+        if (pIdx >= 0) {
+          data.productPrices[pIdx] = {
+            ...data.productPrices[pIdx],
+            purchaseCost: lastBuyPrice,
+            updatedAt: dateStr,
+          };
+        }
+      }
     } else {
-      // Purchase return: reduce quantity and remove from newest/matching FIFO layers
-      stockItem.quantity = Math.max(0, round2((stockItem.quantity || 0) - item.qty));
+      // Purchase return: reduce quantity algebraically and remove from newest/matching FIFO layers
+      const newQty = round2(prevQty - item.qty);
+      stockItem.quantity = newQty;
+      if (stockItem.branchStock) {
+        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: newQty };
+      }
       let remToDeduct = item.qty;
       const layers = [...(stockItem.fifoLayers || [])];
       for (let li = layers.length - 1; li >= 0 && remToDeduct > 0; li--) {
@@ -659,9 +735,15 @@ export function processPurchaseInvoice(
     }
 
     const moveType: ItemMovement['type'] = isReturn ? 'return_purchase' : 'purchase';
+    const negSettleNote =
+      !isReturn && prevQty < 0
+        ? stockItem.quantity >= 0
+          ? ` [تسوية رصيد سالب (${prevQty} → متاح ${stockItem.quantity})]`
+          : ` [سداد جزئي للرصيد السالب (${prevQty} → ${stockItem.quantity})]`
+        : '';
     const noteText = isReturn
-      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للمورد ${invoice.supplierName} - فاتورة #${invoice.id}`
-      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من المورد ${invoice.supplierName} - فاتورة #${invoice.id}`;
+      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للمورد ${cleanSuppName} - فاتورة #${invoice.id}`
+      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من المورد ${cleanSuppName} - فاتورة #${invoice.id}${negSettleNote}`;
 
     stockItem.movements.push({
       date: dateStr,
@@ -671,22 +753,32 @@ export function processPurchaseInvoice(
       total: round2(Math.abs(qtyChange) * item.price),
       note: noteText,
     });
+
+    return {
+      ...item,
+      itemId: stockItem.id,
+      code: stockItem.code || item.code,
+    };
   });
 
-  // 4. Supplier account posting
-  let supp = data.suppliers.find((s) => s.name.trim().toLowerCase() === invoice.supplierName.trim().toLowerCase());
-  if (!supp) {
-    supp = {
-      id: 's' + Date.now(),
-      companyId: invoice.companyId || data.companyId || 'COMP-000001',
-      branchId: invBranchId,
-      name: invoice.supplierName,
-      phone: invoice.phone || '',
-      balance: 0,
-      transactions: [],
-    };
-    data.suppliers.push(supp);
+  // 4. Store normalized invoice
+  const normalizedInvoice: PurchaseInvoice = {
+    ...invoice,
+    supplierId: supp.id,
+    supplierCode: supp.code || supp.id,
+    supplierName: cleanSuppName,
+    phone: cleanSuppPhone || supp.phone || '',
+    branchId: invBranchId,
+    items: enrichedPurItems,
+    paidAmount: effectivePaidTotal,
+    remainingAmount: effectiveRemaining,
+  };
+  data.purchaseInvoices = [normalizedInvoice, ...data.purchaseInvoices];
+  if (!isEditing && invoice.id >= data.nextPurchaseNumber) {
+    data.nextPurchaseNumber = invoice.id + 1;
   }
+
+  // 5. Supplier account posting
 
   if (invoice.type === 'ajel' || (!isReturn && creditAddedByInvoice > 0)) {
     supp.balance = round2((supp.balance || 0) + creditAddedByInvoice);
@@ -897,6 +989,7 @@ export function processSaleInvoice(
       fifoLayers: [...(i.fifoLayers || []).map((l) => ({ ...l }))],
     })),
     customers: (appData.customers || []).map((c) => ({ ...c, transactions: [...(c.transactions || [])] })),
+    productPrices: (appData.productPrices || []).map((p) => ({ ...p })),
     cashTransactions: [...(appData.cashTransactions || [])],
     journalEntries: [...(appData.journalEntries || [])],
     salesInvoices: [...(appData.salesInvoices || [])],
@@ -921,12 +1014,17 @@ export function processSaleInvoice(
         const stockItm = data.items.find(
           (i) =>
             (itm.itemId && i.id === itm.itemId) ||
+            (itm.code && i.code && i.code.trim().toLowerCase() === itm.code.trim().toLowerCase() &&
+              (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId))) ||
             (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
         );
         if (stockItm) {
           const qtyDiff = wasReturn ? -itm.qty : itm.qty;
           stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
+          if (stockItm.branchStock) {
+            stockItm.branchStock = { ...stockItm.branchStock, [oldBr]: stockItm.quantity };
+          }
 
           if (!wasReturn) {
             const restoreCost = round2(Number(itm.costPrice || stockItm.avgCost || stockItm.purchasePrice || 0));
@@ -1000,34 +1098,68 @@ export function processSaleInvoice(
   const effectiveRemaining = round2(Math.max(0, totalNet - effectivePaidTotal));
   const debtAddedByInvoice = round2(Math.max(0, totalNet - effectiveInitialPaid));
 
-  // 2. 📦 Inventory Posting & Real FIFO / Avg Cost COGS Calculation
+  // 2. 📦 Inventory Posting, Auto-Creating New Items (Negative Stock Allowed), Sticky Sale Price & Real FIFO/Avg COGS
   let totalInvoiceCogs = 0;
   const enrichedItems = (invoice.items || []).map((item, idx) => {
     let stockItem = data.items.find(
       (i) =>
         (item.itemId && i.id === item.itemId) ||
+        (item.code && i.code && i.code.trim().toLowerCase() === item.code.trim().toLowerCase() &&
+          (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId))) ||
         (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
     );
     if (!stockItem) {
-      // Never fabricate purchasePrice = item.price * 0.75
+      // Brand-new unpurchased item sold directly: create in inventory cleanly (quantity starts at 0 then goes negative)
       const explicitCost = round2(Number(item.costPrice || 0));
+      const cleanSalePrice = round2(Number(item.price || 0));
+      const fallbackCode = item.code?.trim() || `ITM-${String(data.items.length + 1).padStart(3, '0')}`;
       stockItem = {
         id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         companyId: invoice.companyId || data.companyId || 'COMP-000001',
         branchId: invBranchId,
-        code: item.code,
+        code: fallbackCode,
         name: item.name,
-        category: item.category,
+        category: item.category || 'عام',
+        unit: item.unit || 'قطعة',
         quantity: 0,
+        branchStock: { [invBranchId]: 0 },
         purchasePrice: explicitCost,
         costPrice: explicitCost,
         avgCost: explicitCost,
-        salePrice: round2(item.price || 0),
+        salePrice: cleanSalePrice,
+        normalSellingPrice: cleanSalePrice,
+        lastPriceUpdate: dateStr,
+        lastPriceUpdatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
         fifoLayers: [],
         movements: [],
+        createdAt: now.toISOString(),
+        createdBy: invoice.createdBy || 'مدير النظام',
       };
       data.items.push(stockItem);
+    }
+
+    // Sticky Sale Price: always update the item's sale price to the latest price sold at until changed again
+    const soldUnitPrice = round2(Number(item.price || 0));
+    if (!isReturn && soldUnitPrice > 0) {
+      stockItem.salePrice = soldUnitPrice;
+      stockItem.normalSellingPrice = soldUnitPrice;
+      (stockItem as any).price = soldUnitPrice;
+      stockItem.lastPriceUpdate = dateStr;
+      stockItem.lastPriceUpdatedBy = invoice.updatedBy || invoice.createdBy || 'مدير النظام';
+      stockItem.updatedAt = now.toISOString();
+
+      if (data.productPrices) {
+        const pIdx = data.productPrices.findIndex((p) => p.productId === stockItem!.id);
+        if (pIdx >= 0) {
+          data.productPrices[pIdx] = {
+            ...data.productPrices[pIdx],
+            normalSellingPrice: soldUnitPrice,
+            updatedAt: dateStr,
+            updatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
+          };
+        }
+      }
     }
 
     ensureBaselineFifoLayerIfNeeded(stockItem, dateStr);
@@ -1037,8 +1169,11 @@ export function processSaleInvoice(
     let costMissing = false;
 
     if (!isReturn) {
-      // Sale deduction + FIFO/Avg cost consumption
+      // Sale deduction (allows going negative when unpurchased / out of stock) + FIFO/Avg cost consumption
       stockItem.quantity = round2((stockItem.quantity || 0) - lineQty);
+      if (stockItem.branchStock) {
+        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: stockItem.quantity };
+      }
 
       const currentAvg = round2(Number(stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || item.costPrice || 0));
       let remainingNeed = lineQty;
@@ -1071,6 +1206,9 @@ export function processSaleInvoice(
     } else {
       // Sales return: restore stock & FIFO layer
       stockItem.quantity = round2((stockItem.quantity || 0) + lineQty);
+      if (stockItem.branchStock) {
+        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: stockItem.quantity };
+      }
       const returnUnitCost = round2(
         Number(item.costPrice || stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || 0)
       );
@@ -1114,14 +1252,62 @@ export function processSaleInvoice(
     return {
       ...item,
       itemId: stockItem.id,
+      code: stockItem.code || item.code,
       costPrice: unitCostOut,
       costMissing,
     };
   });
 
-  // Store normalized invoice with enriched real FIFO costPrice / costMissing flags
+  // 3. 📋 Customer Auto-Registration & Phone Sync BEFORE storing invoice
+  const cleanCustName = (invoice.customerName || '').trim() || 'عميل نقدي';
+  const cleanCustPhone = (invoice.phone || '').trim();
+  let cust = data.customers.find(
+    (c) =>
+      (invoice.customerId && c.id === invoice.customerId) ||
+      (invoice.customerCode && c.code && c.code === invoice.customerCode) ||
+      c.name.trim().toLowerCase() === cleanCustName.toLowerCase()
+  );
+  if (!cust) {
+    const existingNums = data.customers
+      .map((c) => parseInt((c.code || c.id || '').replace(/\D/g, '') || '0', 10))
+      .filter((n) => !isNaN(n) && n > 0);
+    const nextCustNum = (existingNums.length > 0 ? Math.max(...existingNums) : data.customers.length) + 1;
+    const generatedCode = invoice.customerCode?.trim() || `CUST-${String(nextCustNum).padStart(3, '0')}`;
+    cust = {
+      id: 'c' + Date.now() + '_' + Math.random().toString(36).substring(2, 5),
+      code: generatedCode,
+      companyId: invoice.companyId || data.companyId || 'COMP-000001',
+      branchId: invBranchId,
+      name: cleanCustName,
+      phone: cleanCustPhone,
+      balance: 0,
+      transactions: [],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      createdBy: invoice.createdBy || 'مدير النظام',
+    };
+    data.customers.push(cust);
+  } else {
+    if (!cust.code) {
+      const existingNums = data.customers
+        .map((c) => parseInt((c.code || c.id || '').replace(/\D/g, '') || '0', 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      const nextCustNum = (existingNums.length > 0 ? Math.max(...existingNums) : data.customers.length) + 1;
+      cust.code = `CUST-${String(nextCustNum).padStart(3, '0')}`;
+    }
+    if (cleanCustPhone && cleanCustPhone !== cust.phone) {
+      cust.phone = cleanCustPhone;
+    }
+    cust.updatedAt = now.toISOString();
+  }
+
+  // Store normalized invoice with enriched real FIFO costPrice, customer ID/code, and flags
   const normalizedInvoice: SaleInvoice = {
     ...invoice,
+    customerId: cust.id,
+    customerCode: cust.code || cust.id,
+    customerName: cleanCustName,
+    phone: cleanCustPhone || cust.phone || '',
     branchId: invBranchId,
     items: enrichedItems,
     paidAmount: effectivePaidTotal,
@@ -1130,21 +1316,6 @@ export function processSaleInvoice(
   data.salesInvoices = [normalizedInvoice, ...data.salesInvoices];
   if (!isEditing && invoice.id >= data.nextInvoiceNumber) {
     data.nextInvoiceNumber = invoice.id + 1;
-  }
-
-  // 3. 📋 Customer Account Posting
-  let cust = data.customers.find((c) => c.name.trim().toLowerCase() === invoice.customerName.trim().toLowerCase());
-  if (!cust) {
-    cust = {
-      id: 'c' + Date.now(),
-      companyId: invoice.companyId || data.companyId || 'COMP-000001',
-      branchId: invBranchId,
-      name: invoice.customerName,
-      phone: invoice.phone || '',
-      balance: 0,
-      transactions: [],
-    };
-    data.customers.push(cust);
   }
 
   if (invoice.type === 'ajel' || (!isReturn && debtAddedByInvoice > 0)) {
@@ -2313,12 +2484,17 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
     const stockItm = data.items.find(
       (i) =>
         (itm.itemId && i.id === itm.itemId) ||
+        (itm.code && i.code && i.code.trim().toLowerCase() === itm.code.trim().toLowerCase() &&
+          (i.branchId === invBr || (!i.branchId && invBr === mainBranchId))) ||
         (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
           (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
     );
     if (stockItm) {
       const qtyDiff = isReturn ? itm.qty : -itm.qty;
-      stockItm.quantity = Math.max(0, round2((stockItm.quantity || 0) + qtyDiff));
+      stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
+      if (stockItm.branchStock) {
+        stockItm.branchStock = { ...stockItm.branchStock, [invBr]: stockItm.quantity };
+      }
       if (!isReturn) {
         stockItm.fifoLayers = (stockItm.fifoLayers || []).filter((l) => l.invoiceId !== inv.id);
       } else {
@@ -2396,12 +2572,17 @@ export function deleteSaleInvoice(appData: AppData, invoiceId: number | string):
     const stockItm = data.items.find(
       (i) =>
         (itm.itemId && i.id === itm.itemId) ||
+        (itm.code && i.code && i.code.trim().toLowerCase() === itm.code.trim().toLowerCase() &&
+          (i.branchId === invBr || (!i.branchId && invBr === mainBranchId))) ||
         (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
           (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
     );
     if (stockItm) {
       const qtyDiff = isReturn ? -itm.qty : itm.qty;
-      stockItm.quantity = Math.max(0, round2((stockItm.quantity || 0) + qtyDiff));
+      stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
+      if (stockItm.branchStock) {
+        stockItm.branchStock = { ...stockItm.branchStock, [invBr]: stockItm.quantity };
+      }
       if (!isReturn) {
         const restoreCost = round2(Number(itm.costPrice || stockItm.avgCost || stockItm.purchasePrice || 0));
         if (restoreCost > 0) {
