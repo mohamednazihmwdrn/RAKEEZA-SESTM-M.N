@@ -30,6 +30,7 @@ import {
 } from '../utils/accounting';
 import { exportIncomeStatementToExcel } from '../utils/excelExport';
 import { getScopedAppDataForBranch } from '../utils/branchIsolation';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 interface HomeViewProps {
   appData: AppData;
@@ -383,7 +384,38 @@ export const HomeView: React.FC<HomeViewProps> = ({ appData, onNavigate }) => {
   };
 
   const handlePrintPnl = () => {
-    window.print();
+    const fmt = (n: number) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencySymbol}`;
+    openUniversalPrint({
+      kind: 'income_statement',
+      title: 'ملخص الأرباح والخسائر التشغيلية للفترة',
+      docNumber: `PNL-${startDate}`,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      period: { from: startDate, to: endDate },
+      branch: currentBranch?.name || 'الفرع الرئيسي',
+      columns: ['البند التحليلي', 'القيمة'],
+      rows: [
+        ['إجمالي المبيعات', fmt(periodAnalysis.grossSales)],
+        ['مردودات المبيعات', fmt(periodAnalysis.salesReturns)],
+        ['صافي المبيعات', fmt(periodAnalysis.netSales)],
+        ['تكلفة البضاعة المباعة (COGS)', fmt(periodAnalysis.cogs)],
+        ['مجمل الربح التجاري', fmt(periodAnalysis.grossProfit)],
+        ['المصروفات التشغيلية للفترة', fmt(periodAnalysis.periodExpenses)],
+        ['صافي الربح التشغيلي', fmt(periodAnalysis.netOperatingProfit)],
+      ],
+      kpis: [
+        { title: 'صافي المبيعات', value: fmt(periodAnalysis.netSales) },
+        { title: 'مجمل الربح', value: fmt(periodAnalysis.grossProfit) },
+        { title: 'صافي الربح', value: fmt(periodAnalysis.netOperatingProfit) },
+      ],
+      summaries: [
+        { label: 'صافي المبيعات', value: fmt(periodAnalysis.netSales) },
+        { label: 'التكلفة والمصروفات', value: fmt(periodAnalysis.cogs + periodAnalysis.periodExpenses) },
+        { label: 'صافي الربح التشغيلي', value: fmt(periodAnalysis.netOperatingProfit), isTotal: true },
+      ],
+      preferredPaperSize: 'a4-portrait',
+      settings: appData.settings,
+    });
   };
 
   return (

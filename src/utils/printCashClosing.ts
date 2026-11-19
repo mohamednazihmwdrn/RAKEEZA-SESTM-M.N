@@ -553,44 +553,78 @@ export function printCashClosingWindow(
 ) {
   const compiled = compileCashClosingData(appData, filterDate, customActualCash, customOpenBalance);
 
-  // 🖨️ Dispatch to Centralized Universal Print Modal
+  // 🖨️ Dispatch to Centralized Universal Print Modal using dedicated shift_closing layout
   try {
     const curSymbol = appData.settings?.currencySymbol || 'ج.م';
     const totalIn = compiled.transactions.reduce((sum, t) => sum + (t.amountIn || 0), 0);
     const totalOut = compiled.transactions.reduce((sum, t) => sum + (t.amountOut || 0), 0);
-    const netCash = compiled.openBalance + totalIn - totalOut;
+    const expectedCash = compiled.openBalance + totalIn - totalOut;
+    const actualCash = compiled.actualCash !== undefined ? Number(compiled.actualCash) : expectedCash;
+    const variance = actualCash - expectedCash;
+
+    const cashSales = compiled.transactions
+      .filter((t) => t.no.startsWith('SAL-'))
+      .reduce((sum, t) => sum + (t.amountIn || 0), 0);
+    const receipts = compiled.transactions
+      .filter((t) => !t.no.startsWith('SAL-'))
+      .reduce((sum, t) => sum + (t.amountIn || 0), 0);
+
+    const targetDate = compiled.date;
+    let daySalesNet = 0;
+    let dayCogs = 0;
+    (appData.salesInvoices || []).forEach((inv) => {
+      if ((inv.date || '').split('T')[0] === targetDate) {
+        const isRet = inv.type?.startsWith('return_');
+        const net = Number(inv.total || 0);
+        daySalesNet += isRet ? -net : net;
+        (inv.items || []).forEach((it) => {
+          const catItem = appData.items.find((i) => i.name === it.name || i.id === it.itemId);
+          const c = Number(it.costPrice || catItem?.purchasePrice || 0) * Number((it as any).quantity ?? it.qty ?? 1);
+          dayCogs += isRet ? -c : c;
+        });
+      }
+    });
+    const dayExpenses = (appData.cashTransactions || [])
+      .filter((tx) => (tx.date || '').split('T')[0] === targetDate && (tx.type === 'pay' || tx.type === 'withdraw') && !tx.supplierName)
+      .reduce((s, tx) => s + Number(tx.amount || 0), 0);
+    const dayProfit = daySalesNet - dayCogs - dayExpenses;
 
     const rows = compiled.transactions.map((t) => [
       t.no,
-      t.desc,
+      `${t.type} — ${t.desc}`,
       t.amountIn > 0 ? t.amountIn.toFixed(2) : '-',
       t.amountOut > 0 ? t.amountOut.toFixed(2) : '-',
       t.method || 'نقداً',
     ]);
 
     openUniversalPrint({
-      kind: 'treasury_balances',
-      title: 'محضر إغلاق الخزينة والوردية',
+      kind: 'shift_closing',
+      title: 'محضر إغلاق الخزينة واليومية',
       docNumber: compiled.serialNo,
       date: compiled.date,
       time: compiled.time,
       branch: compiled.branch,
+      user: compiled.cashierName,
       partyName: compiled.cashierName,
       partyLabel: 'مسؤول الخزينة',
-      columns: ['م', 'البيان والحركة', 'وارد (+)', 'منصرف (-)', 'طريقة الدفع'],
+      columns: ['المرجع', 'الحركة والبيان', 'وارد (+)', 'منصرف (-)', 'الوسيلة'],
       rows,
-      kpis: [
-        { title: 'الرصيد الافتتاحي', value: `${compiled.openBalance.toFixed(2)} ${curSymbol}` },
-        { title: 'إجمالي المقبوضات', value: `${totalIn.toFixed(2)} ${curSymbol}` },
-        { title: 'إجمالي المدفوعات', value: `${totalOut.toFixed(2)} ${curSymbol}` },
-        { title: 'الرصيد الدفتري الحالي', value: `${netCash.toFixed(2)} ${curSymbol}` },
-      ],
-      amount: netCash,
+      shiftMetrics: {
+        opening: compiled.openBalance,
+        cashSales,
+        receipts,
+        payments: totalOut,
+        expenses: dayExpenses,
+        profit: dayProfit,
+        expected: expectedCash,
+        actual: actualCash,
+        variance,
+      },
+      amount: expectedCash,
       summaries: [
-        { label: 'الرصيد الافتتاحي', value: `${compiled.openBalance.toFixed(2)} ${curSymbol}` },
-        { label: 'إجمالي المقبوضات', value: `${totalIn.toFixed(2)} ${curSymbol}`, color: '#16a34a' },
-        { label: 'إجمالي المدفوعات', value: `${totalOut.toFixed(2)} ${curSymbol}`, color: '#dc2626' },
-        { label: 'الرصيد الدفتري الحالي', value: `${netCash.toFixed(2)} ${curSymbol}`, isTotal: true },
+        { label: 'الرصيد المتوقع', value: `${expectedCash.toFixed(2)} ${curSymbol}` },
+        { label: 'الرصيد الفعلي', value: `${actualCash.toFixed(2)} ${curSymbol}` },
+        { label: 'العجز / الزيادة', value: `${variance.toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
       signatures: ['أمين الخزينة', 'المراجع المالي', 'اعتماد الإدارة'],
       settings: appData.settings,

@@ -614,19 +614,33 @@ export function printCashVoucherWindow(
     const curName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
     const amountNum = Number(trans.amount || 0);
 
+    const appObj = appDataOrSettings as AppData;
+    const matchedCust = appObj?.customers?.find((c) => c.name === partyName);
+    const matchedSupp = appObj?.suppliers?.find((s) => s.name === partyName);
+    const partyPhone = (trans as any).phone || matchedCust?.phone || matchedSupp?.phone || '';
+    const partyCode = (trans as any).partyCode || matchedCust?.code || matchedSupp?.code || '';
+    const currentUser = appObj?.users?.find((u) => u.id === appObj.currentUser)?.name || '';
+    const branchName = appObj?.branches?.find((b) => b.id === ((trans as any).branchId || appObj.activeBranchId))?.name || 'الفرع الرئيسي';
+
     openUniversalPrint({
       kind: isReceive ? 'receipt_voucher' : 'payment_voucher',
       title: isReceive ? 'سند قبض نقدي' : 'سند صرف نقدي',
       docNumber: (trans as any).id || (trans as any).serialNo || 1,
       date: (trans as any).date || new Date().toISOString().split('T')[0],
       time: (trans as any).time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: branchName,
+      user: (trans as any).createdBy || currentUser,
       partyName,
+      partyCode,
+      partyPhone,
       partyLabel: isReceive ? 'استلمنا من' : 'اصرفوا إلى',
       paymentMethod: (trans as any).method || (trans as any).paymentMethod || 'نقداً',
       treasuryOrBank: (trans as any).accountName || 'الخزينة الرئيسية',
+      referenceNumber: (trans as any).invoiceId ? String((trans as any).invoiceId) : (trans as any).referenceNumber,
       amount: amountNum,
       amountInWords: tafqeetNumber(amountNum, curName, 'قرش'),
       statementOrReason: (trans as any).reason || (trans as any).note || '',
+      signatures: ['المستلم', 'المحاسب', 'الاعتماد'],
       preferredPaperSize: 'a5-portrait',
       settings,
     });

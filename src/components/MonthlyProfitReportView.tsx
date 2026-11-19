@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { AppData, SaleInvoice } from '../types';
 import { exportToExcel, ExcelColumn } from '../utils/excelExport';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 interface MonthlyProfitReportViewProps {
   appData: AppData;
@@ -308,7 +309,38 @@ export const MonthlyProfitReportView: React.FC<MonthlyProfitReportViewProps> = (
 
   // Print Handler
   const handlePrint = () => {
-    window.print();
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const fmt = (n: number) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+    openUniversalPrint({
+      kind: 'income_statement',
+      title: `تقرير الأرباح الشهرية وتكلفة البضاعة المباعة - ${selectedYear}`,
+      docNumber: `MPR-${selectedYear}`,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي',
+      columns: ['الشهر', 'الفواتير', 'صافي المبيعات', 'التكلفة (COGS)', 'المصروفات', 'صافي الربح'],
+      rows: monthlyData.map((r) => [
+        r.monthName,
+        r.invoicesCount,
+        fmt(r.netSales),
+        fmt(r.cogs),
+        fmt(r.operatingExpenses),
+        fmt(r.netProfit),
+      ]),
+      kpis: [
+        { title: 'إجمالي صافي المبيعات', value: fmt(totals.netSales) },
+        { title: 'تكلفة البضاعة (COGS)', value: fmt(totals.cogs) },
+        { title: 'صافي الربح السنوي', value: fmt(totals.netProfit) },
+      ],
+      summaries: [
+        { label: 'إجمالي المبيعات السنوية', value: fmt(totals.netSales) },
+        { label: 'إجمالي المصروفات التشغيلية', value: fmt(totals.expenses) },
+        { label: 'صافي الربح السنوي', value: fmt(totals.netProfit), isTotal: true },
+      ],
+      signatures: ['المحاسب', 'المراجع المالي', 'الاعتماد'],
+      preferredPaperSize: 'a4-portrait',
+      settings: appData.settings,
+    });
   };
 
   // Chart data formatted

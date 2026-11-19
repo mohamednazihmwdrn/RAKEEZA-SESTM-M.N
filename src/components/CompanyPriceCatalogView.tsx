@@ -19,6 +19,7 @@ import {
 import { AppData, Item } from '../types';
 import { exportToExcel } from '../utils/excelExport';
 import { registerModalBackHandler } from '../utils/navigationHistory';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 interface CompanyPriceCatalogViewProps {
   appData: AppData;
@@ -506,9 +507,37 @@ export const CompanyPriceCatalogView: React.FC<CompanyPriceCatalogViewProps> = (
     showToast(`🚀 تم رفع وتحديث الأسعار بنسبة ${pct}% لـ (${affectedCount}) صنف بنجاح`, 'success');
   };
 
-  // 8. Direct Print
+  // 8. Unified Print Preview
   const handlePrintCatalog = () => {
-    window.print();
+    const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const fmt = (n: number) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+    openUniversalPrint({
+      kind: 'inventory_valuation',
+      title: filterCompany ? `قائمة أسعار أصناف — ${filterCompany}` : 'كتالوج وقوائم أسعار الشركات',
+      docNumber: `CAT-${new Date().toISOString().split('T')[0]}`,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      branch: appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي',
+      columns: ['الكود', 'اسم الصنف', 'الشركة / التصنيف', 'سعر الشراء', 'سعر البيع', 'الربح'],
+      rows: filteredItems.map((i: any) => {
+        const buy = Number(i.costPrice ?? i.purchasePrice ?? 0);
+        const sell = Number(i.salePrice ?? i.price ?? 0);
+        return [
+          i.code || i.id || '-',
+          i.name,
+          `${i.company || i.material || '-'} · ${i.category || '-'}`,
+          fmt(buy),
+          fmt(sell),
+          fmt(sell - buy),
+        ];
+      }),
+      kpis: [
+        { title: 'عدد الأصناف بالكتالوج', value: `${filteredItems.length} صنف` },
+        { title: 'النطاق / الشركة', value: filterCompany || 'جميع الشركات' },
+      ],
+      preferredPaperSize: 'a4-portrait',
+      settings: appData.settings,
+    });
   };
 
   // 9. Export to Excel

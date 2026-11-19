@@ -829,8 +829,8 @@ export function printStatementWindow(
         runBal += (d - c);
         return [
           t.date,
-          t.refNo || '-',
           t.description || '-',
+          t.refNo || '-',
           d > 0 ? d.toFixed(2) : '-',
           c > 0 ? c.toFixed(2) : '-',
           runBal.toFixed(2),
@@ -840,38 +840,47 @@ export function printStatementWindow(
       const isCust = partyType !== 'supplier';
       const curSymbol = appData?.settings?.currencySymbol || 'ج.م';
       const curName = curSymbol === 'ج.م' ? 'جنيه مصري' : curSymbol;
+      const partyRecord = isCust
+        ? appData?.customers?.find((c) => c.name === compiled?.accountName)
+        : appData?.suppliers?.find((s) => s.name === compiled?.accountName);
+      const partyPhone = partyRecord?.phone || '';
 
       openUniversalPrint({
         kind: 'account_statement',
-        title: `كشف حساب ${isCust ? 'عميل' : 'مورد'} تفصيلي`,
+        title: `كشف حساب ${isCust ? 'عميل' : 'مورد'}`,
         subTitle: compiled.accountName,
+        docNumber: compiled.accountCode || '-',
         partyName: compiled.accountName,
         partyCode: compiled.accountCode,
+        partyPhone,
         partyLabel: isCust ? 'العميل' : 'المورد',
         period: { from: compiled.dateFrom, to: compiled.dateTo },
+        openingBalance: compiled.previousBalance || 0,
+        totalDebit: totalDeb,
+        totalCredit: totalCred,
+        closingBalance: runBal,
+        balanceStatus: runBal > 0.01 ? 'مدين' : runBal < -0.01 ? 'دائن' : 'متزن',
         amount: Math.abs(runBal),
         amountInWords: tafqeetNumber(Math.abs(runBal), curName, 'قرش'),
-        columns: ['التاريخ', 'رقم الحركة', 'نوع الحركة والبيان', 'مدين (+)', 'دائن (-)', 'الرصيد'],
+        columns: ['التاريخ', 'البيان', 'رقم المستند', 'مدين', 'دائن', 'الرصيد'],
         rows,
         kpis: [
-          { title: 'الرصيد السابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
-          { title: 'إجمالي المدين (+)', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
-          { title: 'إجمالي الدائن (-)', value: `${totalCred.toFixed(2)} ${curSymbol}` },
-          { title: 'الرصيد الختامي', value: `${runBal.toFixed(2)} ${curSymbol}` },
+          { title: 'رصيد سابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { title: 'إجمالي الحركة', value: `${(totalDeb + totalCred).toFixed(2)} ${curSymbol}` },
+          { title: 'الرصيد النهائي', value: `${runBal.toFixed(2)} ${curSymbol}` },
         ],
         summaries: [
-          { label: 'عدد الحركات', value: `${rows.length} حركة`, color: '#16a34a' },
-          { label: 'الرصيد السابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
-          { label: 'إجمالي المدين', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
-          { label: 'إجمالي الدائن', value: `${totalCred.toFixed(2)} ${curSymbol}` },
+          { label: 'رصيد سابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { label: 'إجمالي المدين (+)', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
+          { label: 'إجمالي الدائن (-)', value: `${totalCred.toFixed(2)} ${curSymbol}` },
           {
-            label: 'الرصيد الختامي',
-            value: `${runBal.toFixed(2)} ${curSymbol} (${runBal > 0 ? 'مدين له' : runBal < 0 ? 'دائن عليه' : 'متزن'})`,
-            isHighlight: true,
+            label: 'الرصيد النهائي',
+            value: `${runBal.toFixed(2)} ${curSymbol}${Math.abs(runBal) > 0.01 ? (runBal > 0 ? ' (مدين)' : ' (دائن)') : ''}`,
+            isHighlight: Math.abs(runBal) > 0.01,
             isTotal: true,
-            color: '#dc2626',
           },
         ],
+        signatures: ['المحاسب', 'المراجعة', 'الاعتماد'],
         preferredPaperSize: 'a4-portrait',
         settings: appData?.settings,
       });

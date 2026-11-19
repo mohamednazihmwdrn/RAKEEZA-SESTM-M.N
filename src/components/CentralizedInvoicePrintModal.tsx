@@ -15,7 +15,7 @@ import {
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
 import { tafqeetNumber } from '../utils/tafqeet';
-import { Printer, Download, X, Check, Eye, ShieldCheck, FileCheck, Layers } from 'lucide-react';
+import { Printer, Download, X, Check, Eye, ShieldCheck, FileCheck } from 'lucide-react';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -38,7 +38,13 @@ function normalizePaperSizeOption(pref?: string): UniversalPaperSize {
   return 'a5-portrait';
 }
 
-function fmtSmart(n: number): string {
+function fmtMoney(n: number | string | undefined | null, curSymbol = 'ج.م'): string {
+  const val = Number(n || 0);
+  if (!Number.isFinite(val)) return `0.00 ${curSymbol}`;
+  return `${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+}
+
+function fmtSmart(n: number | string | undefined | null): string {
   const val = Number(n || 0);
   if (!Number.isFinite(val)) return '0';
   if (Math.abs(val - Math.round(val)) < 0.005) {
@@ -46,6 +52,530 @@ function fmtSmart(n: number): string {
   }
   return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+function parseNumericValue(val: string | number | undefined): number {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function chunkRows<T>(items: T[], perPage: number): T[][] {
+  if (!items || items.length === 0) return [[]];
+  if (perPage <= 0 || items.length <= perPage) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += perPage) {
+    chunks.push(items.slice(i, i + perPage));
+  }
+  return chunks;
+}
+
+const SCOPED_PRINT_CSS = `
+.rp-root {
+  --rp-navy: #172536;
+  --rp-gold: #c7a15a;
+  --rp-line: #aeb8c2;
+  --rp-muted: #66717d;
+  --rp-paper: #ffffff;
+  --rp-font: 'Tajawal', Tahoma, Arial, sans-serif;
+  font-family: var(--rp-font);
+  color: #17212b;
+  direction: rtl;
+  width: 100%;
+}
+.rp-root * {
+  box-sizing: border-box;
+}
+.rp-page {
+  background: var(--rp-paper);
+  margin: 0 auto 14px;
+  position: relative;
+  box-shadow: 0 4px 18px rgba(21, 37, 54, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+}
+.rp-root.rp-a5 .rp-page {
+  width: 148mm;
+  min-height: 210mm;
+  padding: 6mm;
+}
+.rp-root.rp-a4 .rp-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 8mm;
+}
+.rp-root.rp-thermal .rp-page {
+  width: 80mm;
+  min-height: auto;
+  padding: 3mm;
+  box-shadow: 0 2px 10px rgba(21, 37, 54, 0.1);
+}
+.rp-frame {
+  border: 1.1px solid #273747;
+  flex: 1 1 auto;
+  padding: 4.5mm;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.rp-head {
+  direction: ltr;
+  display: grid;
+  grid-template-columns: 1fr 30mm 1fr;
+  grid-template-areas: 'phones logo company';
+  align-items: center;
+  gap: 3mm;
+  padding: 0 0 3.5mm;
+  border-bottom: 2px solid var(--rp-gold);
+  margin-bottom: 3.5mm;
+}
+.rp-phones {
+  grid-area: phones;
+  text-align: left;
+  direction: ltr;
+  font-size: 9pt;
+  line-height: 1.65;
+  color: #263544;
+}
+.rp-phones div {
+  white-space: nowrap;
+}
+.rp-logo {
+  grid-area: logo;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 20mm;
+}
+.rp-logo img {
+  max-width: 28mm;
+  max-height: 22mm;
+  object-fit: contain;
+}
+.rp-logo-placeholder {
+  width: 24mm;
+  height: 20mm;
+  border: 1px dashed #aab5c0;
+  color: #7a8794;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 8.5pt;
+  line-height: 1.35;
+  padding: 1mm;
+}
+.rp-company {
+  grid-area: company;
+  direction: rtl;
+  text-align: right;
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--rp-navy);
+  word-break: break-word;
+}
+.rp-branch {
+  font-size: 8.5pt;
+  color: var(--rp-muted);
+  font-weight: normal;
+  margin-top: 1mm;
+}
+.rp-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4mm;
+  margin: 0 0 3mm;
+}
+.rp-title-row h1 {
+  font-size: 14pt;
+  font-weight: 700;
+  margin: 0;
+  color: var(--rp-navy);
+}
+.rp-title-row .rp-date {
+  font-size: 8.8pt;
+  color: #344354;
+  font-variant-numeric: tabular-nums;
+}
+.rp-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border: 1px solid var(--rp-line);
+  border-radius: 2mm;
+  overflow: hidden;
+  margin-bottom: 3.5mm;
+}
+.rp-meta-col {
+  padding: 2.2mm 2.8mm;
+  font-size: 8.5pt;
+  line-height: 1.7;
+  border-left: 1px solid var(--rp-line);
+  min-width: 0;
+}
+.rp-meta-col:last-child {
+  border-left: 0;
+}
+.rp-meta-center {
+  text-align: center;
+  font-weight: 700;
+  font-size: 10.5pt;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.rp-pair {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+  flex-wrap: wrap;
+}
+.rp-pair b {
+  font-weight: 700;
+  color: #0f172a;
+}
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.6pt;
+  margin-bottom: 3mm;
+}
+.rp-table th,
+.rp-table td {
+  border: 1px solid #aeb9c3;
+  padding: 2mm 1.5mm;
+  text-align: center;
+  vertical-align: middle;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.rp-table th {
+  background: #e9eef3;
+  color: #152536;
+  font-weight: 700;
+  border-bottom: 2px solid #647384;
+}
+.rp-table td.rp-item-cell {
+  text-align: right;
+  font-weight: 600;
+}
+.rp-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+.rp-totals-area {
+  direction: ltr;
+  display: flex;
+  justify-content: flex-start;
+  margin: 2mm 0 3mm;
+}
+.rp-totals {
+  width: 65%;
+  border-top: 1px solid var(--rp-line);
+  font-size: 9.5pt;
+}
+.rp-total-line {
+  direction: rtl;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2.1mm 1mm;
+  border-bottom: 1px dashed #aab4be;
+  gap: 4mm;
+}
+.rp-total-line .rp-label {
+  text-align: right;
+  color: #334155;
+}
+.rp-total-line .rp-value {
+  direction: ltr;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.rp-total-line.rp-main {
+  font-size: 12pt;
+  font-weight: 700;
+  color: var(--rp-navy);
+}
+.rp-total-line.rp-due .rp-label,
+.rp-total-line.rp-due .rp-value {
+  color: #9b4b00;
+}
+.rp-total-line.rp-deficit .rp-label,
+.rp-total-line.rp-deficit .rp-value {
+  color: #b91c1c;
+}
+.rp-total-line.rp-surplus .rp-label,
+.rp-total-line.rp-surplus .rp-value {
+  color: #15803d;
+}
+.rp-data-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.2mm;
+  margin: 2.5mm 0;
+}
+.rp-card {
+  border: 1px solid var(--rp-line);
+  border-radius: 2mm;
+  padding: 2.4mm;
+  text-align: center;
+  background: #ffffff;
+}
+.rp-card .rp-k {
+  font-size: 8pt;
+  color: #65717e;
+  margin-bottom: 1.2mm;
+}
+.rp-card .rp-v {
+  font-size: 11.5pt;
+  font-weight: 700;
+  color: var(--rp-navy);
+  font-variant-numeric: tabular-nums;
+}
+.rp-section {
+  font-weight: 700;
+  font-size: 9.5pt;
+  color: var(--rp-navy);
+  padding: 2mm 2.5mm;
+  background: #eef2f6;
+  border: 1px solid var(--rp-line);
+  margin: 2.5mm 0 2mm;
+}
+.rp-notes {
+  border: 1px solid var(--rp-line);
+  padding: 2.5mm 3mm;
+  margin: 2mm 0;
+  font-size: 8.8pt;
+  line-height: 1.75;
+}
+.rp-signatures {
+  display: flex;
+  justify-content: space-around;
+  margin: 8mm 0 3mm;
+  gap: 4mm;
+}
+.rp-signatures span {
+  flex: 1;
+  max-width: 30%;
+  text-align: center;
+  border-top: 1px solid #65717e;
+  padding-top: 1.8mm;
+  font-size: 8.5pt;
+  color: #334155;
+}
+.rp-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--rp-line);
+  padding-top: 2.5mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 3mm;
+  font-size: 8pt;
+  color: #65717e;
+}
+.rp-terms {
+  text-align: center;
+  font-size: 8.2pt;
+  color: #334155;
+  margin-top: 1.5mm;
+}
+.rp-copyright {
+  text-align: center;
+  color: #65717e;
+  font-size: 7.8pt;
+  margin-top: 2mm;
+}
+
+/* Mobile viewport auto-scale fit (Zero Horizontal Scroll) */
+@media screen and (max-width: 640px) {
+  .rp-root.rp-a5 .rp-page,
+  .rp-root.rp-a4 .rp-page {
+    width: 100%;
+    min-height: auto;
+    padding: 3mm;
+  }
+  .rp-frame {
+    padding: 2.5mm;
+  }
+  .rp-head {
+    grid-template-columns: 1fr 18mm 1fr;
+    gap: 1.5mm;
+  }
+  .rp-company {
+    font-size: 10.5pt;
+  }
+  .rp-phones {
+    font-size: 7.5pt;
+  }
+  .rp-logo {
+    min-height: 14mm;
+  }
+  .rp-logo img {
+    max-width: 17mm;
+    max-height: 14mm;
+  }
+  .rp-logo-placeholder {
+    width: 16mm;
+    height: 14mm;
+    font-size: 6.5pt;
+  }
+  .rp-title-row h1 {
+    font-size: 11.5pt;
+  }
+  .rp-meta-col {
+    padding: 1.5mm;
+    font-size: 7.5pt;
+  }
+  .rp-meta-center {
+    font-size: 9pt;
+  }
+  .rp-root.rp-thermal .rp-page {
+    max-width: 100%;
+  }
+  .rp-phones div {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .rp-meta-col {
+    overflow-wrap: anywhere;
+  }
+  .rp-table {
+    font-size: 7.2pt;
+    width: 100%;
+  }
+  .rp-table th,
+  .rp-table td {
+    padding: 1mm 0.7mm;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .rp-totals {
+    width: 85%;
+    font-size: 8.5pt;
+  }
+  .rp-total-line.rp-main {
+    font-size: 10.5pt;
+  }
+  .rp-data-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Thermal 80mm overrides */
+.rp-root.rp-thermal .rp-frame {
+  padding: 2mm;
+  border-color: #222;
+}
+.rp-root.rp-thermal .rp-head {
+  grid-template-columns: 1fr;
+  grid-template-areas: 'company' 'logo' 'phones';
+  gap: 1mm;
+  text-align: center;
+  padding-bottom: 2mm;
+  margin-bottom: 2mm;
+}
+.rp-root.rp-thermal .rp-company {
+  text-align: center;
+  font-size: 11pt;
+}
+.rp-root.rp-thermal .rp-phones {
+  text-align: center;
+  font-size: 8pt;
+}
+.rp-root.rp-thermal .rp-logo {
+  min-height: 12mm;
+}
+.rp-root.rp-thermal .rp-logo-placeholder {
+  width: 18mm;
+  height: 11mm;
+  font-size: 7pt;
+}
+.rp-root.rp-thermal .rp-logo img {
+  max-width: 18mm;
+  max-height: 12mm;
+}
+.rp-root.rp-thermal .rp-title-row {
+  display: block;
+  text-align: center;
+  margin-bottom: 2mm;
+}
+.rp-root.rp-thermal .rp-title-row h1 {
+  font-size: 11pt;
+}
+.rp-root.rp-thermal .rp-title-row .rp-date {
+  font-size: 8pt;
+}
+.rp-root.rp-thermal .rp-meta {
+  grid-template-columns: 1fr;
+  margin-bottom: 2mm;
+}
+.rp-root.rp-thermal .rp-meta-col {
+  border-left: 0;
+  border-bottom: 1px solid #bbb;
+  padding: 1.5mm;
+  font-size: 8pt;
+}
+.rp-root.rp-thermal .rp-meta-col:last-child {
+  border-bottom: 0;
+}
+.rp-root.rp-thermal .rp-meta-center {
+  font-size: 9.5pt;
+}
+.rp-root.rp-thermal .rp-table {
+  font-size: 7.4pt;
+}
+.rp-root.rp-thermal .rp-table th,
+.rp-root.rp-thermal .rp-table td {
+  padding: 1.2mm 0.7mm;
+}
+.rp-root.rp-thermal .rp-totals {
+  width: 100%;
+  font-size: 8.5pt;
+}
+.rp-root.rp-thermal .rp-total-line {
+  padding: 1.5mm 0.5mm;
+}
+.rp-root.rp-thermal .rp-total-line.rp-main {
+  font-size: 10pt;
+}
+.rp-root.rp-thermal .rp-data-cards {
+  grid-template-columns: 1fr;
+  gap: 1.5mm;
+}
+.rp-root.rp-thermal .rp-card {
+  padding: 1.8mm;
+}
+.rp-root.rp-thermal .rp-card .rp-v {
+  font-size: 10pt;
+}
+.rp-root.rp-thermal .rp-foot {
+  font-size: 7pt;
+  flex-wrap: wrap;
+}
+.rp-root.rp-thermal .rp-copyright {
+  font-size: 7pt;
+}
+.rp-root.rp-thermal .rp-section {
+  padding: 1.5mm;
+  font-size: 8pt;
+}
+.rp-root.rp-thermal .rp-signatures {
+  margin: 5mm 0 2mm;
+}
+.rp-root.rp-thermal .rp-signatures span {
+  font-size: 7pt;
+}
+`;
 
 export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModalProps> = ({
   defaultSettings,
@@ -95,32 +625,28 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
       const summaries: UniversalPrintSummaryItem[] = [
         { label: 'عدد الأصناف', value: `${items.length} صنف` },
-        { label: 'المجموع الفرعي', value: `${fmtSmart(fin.subtotalVal)} ${curSymbol}` },
+        { label: 'المجموع الفرعي', value: fmtMoney(fin.subtotalVal, curSymbol) },
       ];
-      if (fin.discountVal > 0) summaries.push({ label: 'الخصم', value: `${fmtSmart(fin.discountVal)} ${curSymbol}` });
-      if (fin.taxVal > 0) summaries.push({ label: 'الضريبة', value: `${fmtSmart(fin.taxVal)} ${curSymbol}` });
-      if (fin.extraChargesVal > 0) summaries.push({ label: 'مصاريف إضافية', value: `${fmtSmart(fin.extraChargesVal)} ${curSymbol}` });
+      if (fin.discountVal > 0) summaries.push({ label: 'الخصم', value: fmtMoney(fin.discountVal, curSymbol) });
+      if (fin.taxVal > 0) summaries.push({ label: 'الضريبة', value: fmtMoney(fin.taxVal, curSymbol) });
+      if (fin.extraChargesVal > 0) summaries.push({ label: 'مصاريف إضافية', value: fmtMoney(fin.extraChargesVal, curSymbol) });
       summaries.push({
         label: 'الصافي المستحق',
-        value: `${fmtSmart(fin.grandTotal)} ${curSymbol}`,
+        value: fmtMoney(fin.grandTotal, curSymbol),
         isHighlight: true,
         isTotal: true,
       });
-      summaries.push({ label: 'المدفوع', value: `${fmtSmart(fin.paidVal)} ${curSymbol}` });
-      summaries.push({ label: 'المتبقي', value: `${fmtSmart(fin.remainingVal)} ${curSymbol}` });
+      summaries.push({ label: 'المدفوع', value: fmtMoney(fin.paidVal, curSymbol) });
+      if (fin.remainingVal > 0.01) {
+        summaries.push({ label: 'المتبقي', value: fmtMoney(fin.remainingVal, curSymbol), isHighlight: true });
+      }
 
       const prefSize = normalizePaperSizeOption(legacyPayload.preferredPaperSize);
-      const isWholesale = (inv as any).salesType === 'wholesale' || (inv as any).purchaseType === 'wholesale';
-
       const docTitle = isSale
         ? fin.isReturn
           ? inv.type === 'return_nagdi'
             ? 'سند مرتجع مبيعات نقدي'
             : 'سند مرتجع مبيعات آجل'
-          : isWholesale
-          ? inv.type === 'ajel'
-            ? 'فاتورة مبيعات جملة آجلة'
-            : 'فاتورة مبيعات جملة نقدية'
           : inv.type === 'nagdi'
           ? 'فاتورة مبيعات نقدية'
           : 'فاتورة مبيعات آجلة'
@@ -128,10 +654,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         ? inv.type === 'return_nagdi'
           ? 'سند مرتجع مشتريات نقدي'
           : 'سند مرتجع مشتريات آجل'
-        : isWholesale
-        ? inv.type === 'ajel'
-          ? 'فاتورة مشتريات جملة آجلة'
-          : 'فاتورة مشتريات جملة نقدية'
         : inv.type === 'nagdi'
         ? 'فاتورة مشتريات نقدية'
         : 'فاتورة مشتريات آجلة';
@@ -154,7 +676,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         time: inv.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
         branch: (inv as any).branchName || '',
         user: (inv as any).createdBy || (inv as any).cashierName || '',
-        pricingTierLabel: isWholesale ? 'تسعيرة الجملة' : undefined,
         partyName,
         partyCode: (inv as any).customerCode || (inv as any).supplierCode || (inv as any).customerId || (inv as any).supplierId || '-',
         partyPhone: inv.phone || (inv as any).customerPhone || (inv as any).supplierPhone || '-',
@@ -247,56 +768,34 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     const existingStyle = document.getElementById('rakeeza-print-page-style');
     if (existingStyle) existingStyle.remove();
 
-    let pageCss = '@page { size: A5 portrait; margin: 4mm; }';
+    let pageCss = '@page { size: A5 portrait; margin: 0; }';
     let docSizeCss = `
-      .rakeeza-print-doc-page {
-        width: 100% !important;
-        max-width: 140mm !important;
-        padding: 2.5mm 3.5mm !important;
-        font-size: 9.2pt !important;
-      }
-      .rakeeza-print-doc-page table {
-        font-size: 8.8pt !important;
-      }
-      .rakeeza-print-doc-page th,
-      .rakeeza-print-doc-page td {
-        padding: 3px 4px !important;
+      .rp-root.rp-a5 .rp-page {
+        width: 148mm !important;
+        min-height: 210mm !important;
+        padding: 5mm !important;
       }
     `;
 
     if (selectedSize === 'a4-portrait') {
-      pageCss = '@page { size: A4 portrait; margin: 6mm; }';
+      pageCss = '@page { size: A4 portrait; margin: 0; }';
       docSizeCss = `
-        .rakeeza-print-doc-page {
-          width: 100% !important;
-          max-width: 198mm !important;
-          padding: 4mm 5mm !important;
-          font-size: 10.5pt !important;
-        }
-        .rakeeza-print-doc-page table {
-          font-size: 10pt !important;
-        }
-        .rakeeza-print-doc-page th,
-        .rakeeza-print-doc-page td {
-          padding: 5px 7px !important;
+        .rp-root.rp-a4 .rp-page {
+          width: 210mm !important;
+          min-height: 297mm !important;
+          padding: 7mm !important;
         }
       `;
     } else if (selectedSize === 'thermal-80') {
-      pageCss = '@page { size: 80mm auto; margin: 2mm; }';
+      pageCss = '@page { size: 80mm auto; margin: 0; }';
       docSizeCss = `
-        .rakeeza-print-doc-page {
-          width: 76mm !important;
-          max-width: 76mm !important;
-          margin: 0 auto !important;
-          padding: 1.5mm 2mm !important;
-          font-size: 8.5pt !important;
+        .rp-root.rp-thermal .rp-page {
+          width: 80mm !important;
+          min-height: 0 !important;
+          padding: 2mm !important;
         }
-        .rakeeza-print-doc-page table {
-          font-size: 8pt !important;
-        }
-        .rakeeza-print-doc-page th,
-        .rakeeza-print-doc-page td {
-          padding: 2px 3px !important;
+        .rp-root.rp-thermal .rp-frame {
+          min-height: 0 !important;
         }
       `;
     }
@@ -341,46 +840,35 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           position: static !important;
           width: 100% !important;
           max-width: 100% !important;
-          min-height: auto !important;
           margin: 0 auto !important;
           padding: 0 !important;
-          box-shadow: none !important;
-          border: none !important;
-          border-radius: 0 !important;
           background: #ffffff !important;
-          gap: 0 !important;
         }
-        .rakeeza-print-doc-page {
-          position: static !important;
-          min-height: auto !important;
+        .rp-page {
+          box-shadow: none !important;
+          border-radius: 0 !important;
           margin: 0 auto !important;
-          box-shadow: none !important;
-          border: none !important;
-          border-radius: 0 !important;
-          background: #ffffff !important;
-        }
-        ${docSizeCss}
-        .rakeeza-batch-page-break:not(:last-child) {
+          overflow: visible !important;
           page-break-after: always !important;
           break-after: page !important;
         }
-        .rakeeza-print-doc-page table,
-        #rakeeza-universal-print-sheet table {
-          width: 100% !important;
-          border-collapse: collapse !important;
+        .rp-page:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
         }
-        .rakeeza-print-doc-page thead,
-        #rakeeza-universal-print-sheet thead {
+        .rp-frame {
+          min-height: 100% !important;
+        }
+        ${docSizeCss}
+        .rp-table thead {
           display: table-header-group !important;
         }
-        .rakeeza-print-doc-page tfoot,
-        #rakeeza-universal-print-sheet tfoot {
-          display: table-footer-group !important;
-        }
-        .rakeeza-print-doc-page tr,
-        .rakeeza-print-doc-page .print-avoid-break,
-        #rakeeza-universal-print-sheet tr,
-        #rakeeza-universal-print-sheet .print-avoid-break {
+        .rp-table tr,
+        .rp-totals-area,
+        .rp-data-cards,
+        .rp-signatures,
+        .rp-notes,
+        .rp-foot {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
         }
@@ -400,7 +888,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     if (!printSheetRef.current || isExportingPdf) return;
     setIsExportingPdf(true);
     try {
-      // Allow a brief tick so print-layout tables become visible before html2canvas capture on mobile screens
       await new Promise((resolve) => setTimeout(resolve, 90));
 
       let format: 'a4' | 'a5' | 'thermal' = 'a5';
@@ -417,7 +904,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       await exportElementToPdf(printSheetRef.current, filename, {
         format,
         orientation: 'portrait',
-        margin: format === 'thermal' ? 2 : 4,
+        margin: format === 'thermal' ? 2 : 0,
         scale: 2,
       });
     } catch (e) {
@@ -440,7 +927,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const docSerial =
     activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `${activePayload.docNumber}` : '1';
   const isThermal = selectedSize === 'thermal-80' || selectedSize === 'thermal-58';
-  const sheetWidthStyle = getSheetWidthStyle(selectedSize);
+  const isA4 = selectedSize === 'a4-portrait' || selectedSize === 'a4-landscape';
+  const rootSizeClass = isThermal ? 'rp-thermal' : isA4 ? 'rp-a4' : 'rp-a5';
   const totalAmount = activePayload.amount !== undefined ? Number(activePayload.amount) : 0;
 
   const selectedSizeMeta =
@@ -463,9 +951,10 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       className="fixed inset-0 z-[9999] flex flex-col bg-slate-900/75 rakeeza-modal-backdrop rakeeza-print-modal-root overflow-x-hidden"
       dir="rtl"
     >
-      {/* Top Bar matching Reference Screenshot */}
+      <style dangerouslySetInnerHTML={{ __html: SCOPED_PRINT_CSS }} />
+
+      {/* Top Toolbar (No Manual Document-Type Selector — Paper Size Only) */}
       <div className="preview-header-area no-print bg-white text-slate-900 border-b border-slate-200 px-3 sm:px-5 py-2.5 shadow-xs shrink-0">
-        {/* Row 1: Title + Controls + Close */}
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate flex-1 min-w-0">
             {modalHeaderTitle}
@@ -520,7 +1009,6 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           </button>
         </div>
 
-        {/* Row 2 (Single Document Mode): [Preview / Audit] Toggle + PDF Icon + Print Button */}
         {!isBatchMode && (
           <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
             <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -567,7 +1055,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 type="button"
                 onClick={handlePrint}
                 className="min-h-[40px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
-                title="طباعة الفاتورة"
+                title="طباعة المستند"
               >
                 <Printer className="w-4 h-4 shrink-0" />
                 <span>{isInvoiceKind ? 'طباعة الفاتورة' : 'طباعة'}</span>
@@ -576,10 +1064,10 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           </div>
         )}
 
-        {/* Row 3: Exact 3-Option Paper Size Segmented Selector */}
+        {/* 3-Option Paper Size Segmented Selector */}
         <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
           <span className="text-[11px] sm:text-xs font-semibold text-slate-600 shrink-0 leading-tight">
-            حجم الورق:
+            مقاس الطباعة:
           </span>
           <div className="flex-1 bg-slate-100 p-1 rounded-xl grid grid-cols-3 gap-1">
             {PAPER_SIZE_OPTIONS.map((opt) => (
@@ -589,7 +1077,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 onClick={() => handleSelectPaperSize(opt.id)}
                 className={`min-h-[38px] px-1.5 sm:px-2.5 py-1 rounded-lg text-[10.5px] sm:text-xs font-semibold leading-tight text-center transition cursor-pointer flex items-center justify-center ${
                   selectedSize === opt.id
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#172536] text-white shadow-xs'
                     : 'text-slate-700 hover:bg-white/70'
                 }`}
               >
@@ -600,79 +1088,59 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         </div>
       </div>
 
-      {/* Scrollable Preview Sheet Area (Zero Horizontal Overflow) */}
-      <div className="rakeeza-print-scroll-wrap flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-5 flex justify-center items-start bg-slate-100">
+      {/* Preview Body */}
+      <div className="rakeeza-print-scroll-wrap flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-5 flex justify-center items-start bg-[#edf1f5]">
         {activeTab === 'preview' ? (
           isBatchMode ? (
             <div
               id="rakeeza-batch-print-container"
               ref={printSheetRef}
-              className="w-full flex flex-col items-center gap-4"
+              className={`rp-root ${rootSizeClass}`}
             >
               {batchDocs.map((docPayload, idx) => {
                 const docSettings: Settings = docPayload.settings || settings;
                 const docCur = docSettings.currencySymbol || currencySymbol;
                 return (
-                  <div
-                    key={`${docPayload.docNumber || idx}-${idx}`}
-                    style={sheetWidthStyle}
-                    className={`rakeeza-print-doc-page rakeeza-batch-page-break bg-white text-slate-900 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between ${
-                      isThermal ? 'p-2.5 text-[11px]' : 'p-3 sm:p-5 text-xs'
-                    }`}
-                  >
-                    <InvoiceDocumentSheet
+                  <React.Fragment key={`${docPayload.docNumber || idx}-${idx}`}>
+                    <UnifiedPaginatedDocument
                       payload={docPayload}
                       settings={docSettings}
                       currencySymbol={docCur}
                       currencyName={docCur === 'ج.م' ? 'جنيه مصري' : docCur}
-                      selectedSize={selectedSize}
                       isThermal={isThermal}
-                      forcePrintTable={isExportingPdf}
+                      isA4={isA4}
                       batchPositionLabel={`مستند ${idx + 1} من ${batchDocs.length}`}
                     />
-                  </div>
+                  </React.Fragment>
                 );
               })}
 
               {includeBatchSummary && activePayload.batchSummary && (
-                <div
-                  style={sheetWidthStyle}
-                  className={`rakeeza-print-doc-page rakeeza-batch-page-break bg-white text-slate-900 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between ${
-                    isThermal ? 'p-2.5 text-[11px]' : 'p-3 sm:p-5 text-xs'
-                  }`}
-                >
-                  <BatchSummaryDocumentSheet
-                    summary={activePayload.batchSummary}
-                    settings={settings}
-                    currencySymbol={currencySymbol}
-                    isThermal={isThermal}
-                    forcePrintTable={isExportingPdf}
-                  />
-                </div>
+                <BatchSummaryPages
+                  summary={activePayload.batchSummary}
+                  settings={settings}
+                  isThermal={isThermal}
+                  isA4={isA4}
+                />
               )}
             </div>
           ) : (
             <div
               id="rakeeza-universal-print-sheet"
               ref={printSheetRef}
-              style={sheetWidthStyle}
-              className={`rakeeza-print-doc-page bg-white text-slate-900 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between ${
-                isThermal ? 'p-2.5 text-[11px]' : 'p-3 sm:p-5 text-xs'
-              }`}
+              className={`rp-root ${rootSizeClass}`}
             >
-              <InvoiceDocumentSheet
+              <UnifiedPaginatedDocument
                 payload={activePayload}
                 settings={settings}
                 currencySymbol={currencySymbol}
                 currencyName={currencyName}
-                selectedSize={selectedSize}
                 isThermal={isThermal}
-                forcePrintTable={isExportingPdf}
+                isA4={isA4}
               />
             </div>
           )
         ) : (
-          /* Audit & Accounting Verification Tab */
           <div className="bg-white text-slate-900 p-4 sm:p-6 rounded-xl shadow-sm max-w-2xl w-full border border-slate-200">
             <div className="flex items-center gap-2.5 border-b border-slate-200 pb-3 mb-4">
               <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" />
@@ -699,7 +1167,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
                 <div>
-                  <span className="text-slate-500 text-xs block">نوع المستند:</span>
+                  <span className="text-slate-500 text-xs block">نوع المستند (تلقائي):</span>
                   <span className="font-semibold text-slate-900">{activePayload.title}</span>
                 </div>
                 <div>
@@ -723,50 +1191,29 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 text-xs block">الصافي المستحق:</span>
+                  <span className="text-slate-500 text-xs block">الصافي المعتمد:</span>
                   <span className="font-bold text-slate-900 financial-num">
-                    {fmtSmart(totalAmount)} {currencySymbol}
+                    {fmtMoney(totalAmount, currencySymbol)}
                   </span>
                 </div>
                 {!isBatchMode && (
                   <div>
-                    <span className="text-slate-500 text-xs block">حالة السداد:</span>
+                    <span className="text-slate-500 text-xs block">حالة المستند:</span>
                     <span className="font-medium text-slate-900">{activePayload.paymentStatus || 'معتمد'}</span>
                   </div>
                 )}
-              </div>
-
-              <div className="border border-slate-200 rounded-lg p-3.5">
-                <h4 className="font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
-                  <FileCheck className="w-4 h-4 text-blue-600" />
-                  <span>ضوابط التحقق المطبقة:</span>
-                </h4>
-                <ul className="space-y-1.5 text-xs text-slate-700">
-                  <li className="flex items-center gap-2">
-                    <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>البيانات مستخرجة مباشرة من السجل المحاسبي دون تعديل.</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>فصل بيانات العملاء عن الموردين ومنع تداخل الفئات المحاسبية.</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-emerald-600 font-semibold">✓</span>
-                    <span>توثيق المرتجعات النقدية والآجلة وربطها بالفاتورة الأصلية.</span>
-                  </li>
-                </ul>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom Sticky Action Bar matching Reference Screenshot */}
+      {/* Bottom Sticky Action Bar */}
       <div className="no-print bg-white border-t border-slate-200 px-3 sm:px-5 py-2.5 flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={handlePrint}
-          className="flex-1 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+          className="flex-1 min-h-[44px] bg-[#172536] hover:bg-[#1e3148] text-white rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
         >
           <Printer className="w-4 h-4 shrink-0" />
           <span>
@@ -801,947 +1248,1130 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   return createPortal(modalContent, document.body);
 };
 
-interface InvoiceDocumentSheetProps {
-  payload: UniversalPrintPayload;
-  settings: Settings;
-  currencySymbol: string;
-  currencyName: string;
-  selectedSize: UniversalPaperSize;
-  isThermal: boolean;
-  forcePrintTable?: boolean;
-  batchPositionLabel?: string;
-}
+/* ============================================================================
+ * Shared Header, Shell & Footer matching Attached Unified Print Design
+ * ============================================================================ */
 
-const InvoiceDocumentSheet: React.FC<InvoiceDocumentSheetProps> = ({
-  payload,
-  settings,
-  currencySymbol,
-  currencyName,
-  selectedSize,
-  isThermal,
-  forcePrintTable = false,
-  batchPositionLabel,
-}) => {
+const DocumentHeader: React.FC<{
+  settings: Settings;
+  branchName?: string;
+  isA4: boolean;
+  batchPositionLabel?: string;
+}> = ({ settings, branchName, isA4, batchPositionLabel }) => {
   const companyName = settings.companyName || 'المنظومة المحاسبية';
   const companyAddress = settings.address || '';
   const companyTax = settings.taxNumber || '';
   const companyReg = settings.commercialReg || '';
-  const companyLogo =
-    settings.showLogoInPrint !== false ? (settings as any).logo || (settings as any).logoUrl || '' : '';
-  const branchName = payload.branch || 'الفرع الرئيسي';
+  const showLogo = settings.showLogoInPrint !== false;
+  const companyLogo = showLogo ? (settings as any).logo || (settings as any).logoUrl || '' : '';
   const phones = [settings.phone1, settings.phone2, settings.phone3].filter(Boolean) as string[];
 
+  return (
+    <header className="rp-head">
+      <div className="rp-phones">
+        {phones.length > 0 ? (
+          phones.map((ph, i) => (
+            <div key={i}>
+              {phones.length > 1 ? `هاتف ${i + 1}: ` : 'هاتف: '}
+              {ph}
+            </div>
+          ))
+        ) : (
+          <div>هاتف: —</div>
+        )}
+        {batchPositionLabel && <div style={{ color: '#66717d', fontSize: '7.5pt' }}>{batchPositionLabel}</div>}
+      </div>
+
+      <div className="rp-logo">
+        {companyLogo ? (
+          <img src={companyLogo} alt={companyName} />
+        ) : showLogo ? (
+          <div className="rp-logo-placeholder">
+            شعار
+            <br />
+            المؤسسة
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rp-company">
+        {companyName}
+        {(branchName || companyAddress) && (
+          <div className="rp-branch">
+            {branchName || ''}
+            {branchName && isA4 && companyAddress ? ' — ' : ''}
+            {isA4 && companyAddress ? companyAddress : ''}
+          </div>
+        )}
+        {isA4 && (companyTax || companyReg) && (
+          <div className="rp-branch" style={{ fontSize: '8pt' }}>
+            {companyTax ? `الرقم الضريبي: ${companyTax}` : ''}
+            {companyTax && companyReg ? ' | ' : ''}
+            {companyReg ? `السجل التجاري: ${companyReg}` : ''}
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+const DocumentPageShell: React.FC<{
+  settings: Settings;
+  title: string;
+  dateStr: string;
+  timeStr: string;
+  docSerial: string;
+  branchName?: string;
+  notes?: string;
+  footerTermsNote?: string;
+  pageIndex: number;
+  totalPages: number;
+  isA4: boolean;
+  isLastPage: boolean;
+  batchPositionLabel?: string;
+  children: React.ReactNode;
+}> = ({
+  settings,
+  title,
+  dateStr,
+  timeStr,
+  docSerial,
+  branchName,
+  notes,
+  footerTermsNote,
+  pageIndex,
+  totalPages,
+  isA4,
+  isLastPage,
+  batchPositionLabel,
+  children,
+}) => {
+  const companyName = settings.companyName || 'المنظومة المحاسبية';
+
+  return (
+    <article className="rp-page">
+      <div className="rp-frame">
+        <DocumentHeader
+          settings={settings}
+          branchName={branchName}
+          isA4={isA4}
+          batchPositionLabel={batchPositionLabel}
+        />
+
+        <div className="rp-title-row">
+          <h1>{title}</h1>
+          <div className="rp-date" dir="ltr">
+            {dateStr} {timeStr ? `· ${timeStr}` : ''}
+          </div>
+        </div>
+
+        {children}
+
+        {isLastPage && notes && notes.trim() !== '' && (
+          <div className="rp-notes">
+            <b>ملاحظات:</b> {notes}
+          </div>
+        )}
+
+        {isLastPage && footerTermsNote && (
+          <div className="rp-terms">{footerTermsNote}</div>
+        )}
+
+        <footer className="rp-foot">
+          <span>{companyName}</span>
+          <span>{docSerial && docSerial !== '-' ? `رقم ${docSerial}` : ''}</span>
+          <span className="page-num">
+            {pageIndex + 1} / {totalPages}
+          </span>
+        </footer>
+      </div>
+      <div className="rp-copyright">
+        جميع حقوق الملكية محفوظة لمطور النظام — Mohamed Nazih — 01029190615
+      </div>
+    </article>
+  );
+};
+
+/* ============================================================================
+ * Paginated Document Renderer (Dispatches Automatically by payload.kind)
+ * ============================================================================ */
+
+const UnifiedPaginatedDocument: React.FC<{
+  payload: UniversalPrintPayload;
+  settings: Settings;
+  currencySymbol: string;
+  currencyName: string;
+  isThermal: boolean;
+  isA4: boolean;
+  batchPositionLabel?: string;
+}> = ({
+  payload,
+  settings,
+  currencySymbol,
+  currencyName,
+  isThermal,
+  isA4,
+  batchPositionLabel,
+}) => {
   const now = new Date();
   const printDate = payload.date || now.toISOString().split('T')[0];
   const printTime = payload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const docSerial = payload.docNumber !== undefined && payload.docNumber !== '' ? `${payload.docNumber}` : '1';
-  const totalAmount = payload.amount !== undefined ? Number(payload.amount) : 0;
-  const tafqeetText =
-    payload.amountInWords || (totalAmount > 0 ? tafqeetNumber(totalAmount, currencyName, 'قرش') : '');
+  const branchName = payload.branch || 'الفرع الرئيسي';
+  const kind = payload.kind;
 
-  const isA4 = selectedSize === 'a4-portrait' || selectedSize === 'a4-landscape';
+  // 1. VOUCHER LAYOUT (Receipt / Payment / Treasury Transfer)
+  if (kind === 'receipt_voucher' || kind === 'payment_voucher' || kind === 'treasury_transfer') {
+    const isReceipt = kind === 'receipt_voucher';
+    const partyLabel =
+      payload.partyLabel ||
+      (isReceipt ? 'استلمنا من السيد / السادة' : kind === 'payment_voucher' ? 'اصرفوا إلى السيد / السادة' : 'الطرف / الحساب');
+    const amountVal = payload.amount !== undefined ? Number(payload.amount) : 0;
+    const tafqeetText =
+      payload.amountInWords || (amountVal > 0 ? tafqeetNumber(amountVal, currencyName, 'قرش') : '');
+    const sigs = payload.signatures && payload.signatures.length > 0 ? payload.signatures : ['المستلم', 'المحاسب', 'الاعتماد'];
 
-  return (
-    <div className="flex flex-col justify-between flex-1 w-full">
-      <div className="w-full">
-        {/* 1. Company Header: Right Name/Branch | Center Logo | Left Phones */}
-        {isThermal ? (
-          <div className="flex flex-col items-center text-center gap-1 pb-2 border-b border-dashed border-slate-400">
-            {companyLogo && (
-              <img
-                src={companyLogo}
-                alt={companyName}
-                className="h-10 w-auto max-w-[72px] object-contain"
-              />
-            )}
-            <h1 className="text-sm font-bold text-slate-900 leading-tight">{companyName}</h1>
-            {branchName && <p className="text-[10.5px] text-slate-600">{branchName}</p>}
-            {companyAddress && <p className="text-[10px] text-slate-500">{companyAddress}</p>}
-            {phones.length > 0 && (
-              <div className="text-[10px] text-slate-700 space-y-0.5 tabular-nums">
-                {phones.map((ph, i) => (
-                  <div key={i}>
-                    <span>{phones.length > 1 ? `هاتف ${i + 1}: ` : 'هاتف: '}</span>
-                    <span dir="ltr">{ph}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {batchPositionLabel && (
-              <div className="text-[10px] text-slate-500 tabular-nums">{batchPositionLabel}</div>
-            )}
+    return (
+      <DocumentPageShell
+        settings={settings}
+        title={payload.title}
+        dateStr={printDate}
+        timeStr={printTime}
+        docSerial={docSerial}
+        branchName={branchName}
+        footerTermsNote={payload.footerTermsNote || 'سند مالي معتمد ومسجل بالدفاتر الرسمية بالنظام'}
+        pageIndex={0}
+        totalPages={1}
+        isA4={isA4}
+        isLastPage={true}
+        batchPositionLabel={batchPositionLabel}
+      >
+        <div className="rp-data-cards">
+          <div className="rp-card">
+            <div className="rp-k">رقم السند</div>
+            <div className="rp-v">#{docSerial}</div>
           </div>
-        ) : (
-          <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-200">
-            {/* Right: Company Name & Branch */}
-            <div className="flex-1 min-w-0 text-right">
-              <h1
-                className={`${
-                  isA4 ? 'text-base sm:text-lg' : 'text-[13px] sm:text-[15px]'
-                } font-bold text-slate-900 leading-snug break-words`}
-              >
-                {companyName}
-              </h1>
-              {branchName && (
-                <p className="text-[10.5px] sm:text-xs text-slate-500 mt-0.5">{branchName}</p>
-              )}
-              {isA4 && companyAddress && (
-                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5">{companyAddress}</p>
-              )}
-              {isA4 && (companyTax || companyReg) && (
-                <div className="flex flex-wrap gap-x-3 text-[10px] text-slate-500 mt-0.5">
-                  {companyTax && <span>الضريبي: {companyTax}</span>}
-                  {companyReg && <span>السجل: {companyReg}</span>}
-                </div>
-              )}
+          <div className="rp-card">
+            <div className="rp-k">المبلغ</div>
+            <div className="rp-v">{fmtMoney(amountVal, currencySymbol)}</div>
+          </div>
+          <div className="rp-card">
+            <div className="rp-k">الخزينة / الحساب</div>
+            <div className="rp-v" style={{ fontSize: '10pt' }}>
+              {payload.treasuryOrBank || 'الخزينة الرئيسية'}
             </div>
-
-            {/* Center: Company Logo */}
-            {companyLogo && (
-              <div className="shrink-0 flex items-center justify-center px-1">
-                <img
-                  src={companyLogo}
-                  alt={companyName}
-                  className={`${
-                    isA4 ? 'h-12 sm:h-14 max-w-[90px]' : 'h-10 sm:h-12 max-w-[74px]'
-                  } w-auto object-contain`}
-                />
-              </div>
-            )}
-
-            {/* Left: Phones */}
-            <div className="shrink-0 text-left text-[10px] sm:text-[11px] text-slate-700 leading-snug tabular-nums space-y-0.5">
-              {phones.map((ph, i) => (
-                <div key={i}>
-                  <span className="text-slate-500">{phones.length > 1 ? `هاتف ${i + 1}: ` : 'هاتف: '}</span>
-                  <span dir="ltr" className="font-medium text-slate-900">
-                    {ph}
-                  </span>
-                </div>
-              ))}
-              {batchPositionLabel && (
-                <div className="text-[9.5px] text-slate-500 pt-0.5">{batchPositionLabel}</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 2. Metadata Grid (Strict 3 Columns on A5/A4 matching Screenshot) */}
-        {renderDocumentMetaBox(payload, docSerial, printDate, printTime, isThermal)}
-
-        {/* 3. Document Body Table */}
-        {renderDocumentBody(payload, currencySymbol, isThermal, isA4, forcePrintTable)}
-      </div>
-
-      {/* 4. Totals, Payment & Copyright Footer */}
-      {renderDocumentFooterSummary(payload, currencySymbol, tafqeetText, settings, isThermal, isA4)}
-    </div>
-  );
-};
-
-const BatchSummaryDocumentSheet: React.FC<{
-  summary: UniversalBatchSummary;
-  settings: Settings;
-  currencySymbol: string;
-  isThermal: boolean;
-  forcePrintTable?: boolean;
-}> = ({ summary, settings, isThermal, forcePrintTable = false }) => {
-  const companyName = settings.companyName || 'المنظومة المحاسبية';
-  const showMobileCards = !isThermal && !forcePrintTable && (summary.columns?.length || 0) >= 5;
-  return (
-    <div className="flex flex-col justify-between flex-1 w-full">
-      <div>
-        <div className="flex justify-between items-start gap-2 pb-2 border-b border-slate-300">
-          <div className="min-w-0">
-            <h1 className="text-sm sm:text-base font-bold text-slate-900">{companyName}</h1>
-            <p className="text-xs font-semibold text-slate-700 mt-0.5">{summary.title}</p>
-            {summary.subtitle && <p className="text-[11px] text-slate-500 mt-0.5">{summary.subtitle}</p>}
-          </div>
-          <div className="text-left text-[11px] text-slate-600 tabular-nums shrink-0">
-            <div>تاريخ الطباعة: {new Date().toISOString().split('T')[0]}</div>
           </div>
         </div>
 
-        <div className={`grid ${isThermal ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'} gap-1.5 my-2.5`}>
-          {summary.kpis.map((k, i) => (
-            <div key={i} className="border border-slate-200 rounded-lg p-1.5 bg-slate-50 text-center">
-              <div className="text-[10px] text-slate-500">{k.title}</div>
-              <div className="text-xs font-bold text-slate-900 mt-0.5 financial-num">{k.value}</div>
+        <div className="rp-section">تفاصيل السند</div>
+
+        <div className="rp-notes">
+          <div className="rp-pair" style={{ marginBottom: '2mm', paddingBottom: '1.5mm', borderBottom: '1px dashed #cbd5e1' }}>
+            <span>{partyLabel}:</span>
+            <b>{payload.partyName || (isReceipt ? 'عميل نقدي' : 'مورد / جهة صرف')}</b>
+          </div>
+          {payload.partyCode && payload.partyCode !== '-' && (
+            <div className="rp-pair" style={{ marginBottom: '1.5mm' }}>
+              <span>كود الحساب:</span>
+              <b>{payload.partyCode}</b>
             </div>
+          )}
+          {payload.partyPhone && payload.partyPhone !== '-' && (
+            <div className="rp-pair" style={{ marginBottom: '1.5mm' }}>
+              <span>الهاتف:</span>
+              <b dir="ltr">{payload.partyPhone}</b>
+            </div>
+          )}
+          <div className="rp-pair" style={{ marginBottom: '1.5mm' }}>
+            <span>طريقة الدفع:</span>
+            <b>{payload.paymentMethod || 'نقدي'}</b>
+          </div>
+          {payload.referenceNumber && (
+            <div className="rp-pair" style={{ marginBottom: '1.5mm' }}>
+              <span>رقم المرجع / الفاتورة:</span>
+              <b>#{payload.referenceNumber}</b>
+            </div>
+          )}
+          <p style={{ margin: '2mm 0 1mm' }}>
+            <b>البيان:</b> {payload.statementOrReason || payload.notes || 'معاملة مالية معتمدة بالنظام'}
+          </p>
+          {tafqeetText && (
+            <p style={{ margin: '1mm 0 0' }}>
+              <b>المبلغ كتابةً:</b> {tafqeetText}
+            </p>
+          )}
+        </div>
+
+        <div className="rp-signatures">
+          {sigs.slice(0, 3).map((s, idx) => (
+            <span key={idx}>{s}</span>
           ))}
         </div>
+      </DocumentPageShell>
+    );
+  }
 
-        {summary.columns && summary.rows && (
-          <>
-            {showMobileCards && (
-              <div className="block sm:hidden print:hidden space-y-2 my-2">
-                {summary.rows.map((row, rIdx) => (
-                  <div key={rIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/60 space-y-1 text-[11px]">
-                    {summary.columns!.map((col, cIdx) => (
-                      <div key={cIdx} className="flex justify-between items-start gap-2 border-b last:border-b-0 border-slate-200/70 pb-1 last:pb-0">
-                        <span className="text-slate-500 shrink-0">{col}:</span>
-                        <span className="font-semibold text-slate-900 text-left break-words">
-                          {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '-'}
-                        </span>
-                      </div>
-                    ))}
+  // 2. INVOICE & RETURN LAYOUT (Auto-Paginated for A5 & A4; Continuous 80mm on Thermal)
+  const isInvoiceKind =
+    kind === 'sales_invoice' ||
+    kind === 'purchase_invoice' ||
+    kind === 'sales_return' ||
+    kind === 'purchase_return';
+
+  if (isInvoiceKind) {
+    const items = payload.items || [];
+    const perPage = isThermal ? items.length || 1 : isA4 ? 20 : 12;
+    const chunks = chunkRows(items, perPage);
+    const totalQty = items.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+    const netTotal = payload.amount !== undefined ? Number(payload.amount) : 0;
+    const subtotal = payload.subtotal !== undefined ? Number(payload.subtotal) : netTotal;
+    const discountAmount = Number(payload.discountAmount || 0);
+    const taxAmount = Number(payload.taxAmount || 0);
+    const extraCharges = Number(payload.extraCharges || 0);
+    const paidAmount = payload.paidAmount !== undefined ? Number(payload.paidAmount) : netTotal;
+    const remainingAmount =
+      payload.remainingAmount !== undefined ? Number(payload.remainingAmount) : Math.max(0, netTotal - paidAmount);
+    const isReturnDoc = kind === 'sales_return' || kind === 'purchase_return';
+    const isPurchaseDoc = kind === 'purchase_invoice' || kind === 'purchase_return';
+    const partyLabel = payload.partyLabel || (isPurchaseDoc ? 'المورد' : 'العميل');
+    const partyName = payload.partyName || (isPurchaseDoc ? 'مورد عام' : 'عميل نقدي');
+    const tafqeetText =
+      payload.amountInWords || (netTotal > 0 ? tafqeetNumber(netTotal, currencyName, 'قرش') : '');
+    const footerTerms =
+      payload.footerTermsNote ||
+      settings.invoiceFooterNote ||
+      'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية';
+
+    return (
+      <>
+        {chunks.map((chunk, pageIdx) => {
+          const isLastPage = pageIdx === chunks.length - 1;
+          const startNum = pageIdx * perPage;
+          return (
+            <DocumentPageShell
+              key={pageIdx}
+              settings={settings}
+              title={payload.title}
+              dateStr={printDate}
+              timeStr={printTime}
+              docSerial={docSerial}
+              branchName={branchName}
+              notes={payload.notes}
+              footerTermsNote={footerTerms}
+              pageIndex={pageIdx}
+              totalPages={chunks.length}
+              isA4={isA4}
+              isLastPage={isLastPage}
+              batchPositionLabel={batchPositionLabel}
+            >
+              {/* 3-Column Metadata Box */}
+              <div className="rp-meta">
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>{partyLabel}:</span>
+                    <b>{partyName}</b>
                   </div>
-                ))}
-              </div>
-            )}
+                  {payload.partyCode && payload.partyCode !== '-' && (
+                    <div className="rp-pair">
+                      <span>{payload.partyCodeLabel || 'الكود'}:</span>
+                      <b>{payload.partyCode}</b>
+                    </div>
+                  )}
+                  <div className="rp-pair">
+                    <span>الهاتف:</span>
+                    <b dir="ltr">{payload.partyPhone && payload.partyPhone !== '-' ? payload.partyPhone : '—'}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>طريقة الدفع:</span>
+                    <b>{payload.paymentMethod || 'نقدي'}</b>
+                  </div>
+                </div>
 
-            <div className={`${showMobileCards ? 'hidden sm:block print:block' : 'block'} border border-slate-300 rounded-lg overflow-hidden my-2`}>
-              <table className="w-full border-collapse text-[10px] sm:text-[11px]">
+                <div className="rp-meta-col rp-meta-center">
+                  <div>{payload.title}</div>
+                  <div style={{ fontWeight: 600, fontSize: '9.5pt', marginTop: '0.8mm' }}>
+                    رقم: {docSerial}
+                  </div>
+                  {payload.paymentStatus && (
+                    <small style={{ fontWeight: 'normal', color: '#334155', marginTop: '0.8mm' }}>
+                      {payload.paymentStatus}
+                    </small>
+                  )}
+                  {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
+                    <small style={{ color: '#9b1c1c', fontWeight: 600 }}>
+                      أصل #{payload.originalInvoiceNumber}
+                      {payload.returnKindLabel ? ` · ${payload.returnKindLabel}` : ''}
+                    </small>
+                  )}
+                </div>
+
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>التاريخ:</span>
+                    <b dir="ltr">{printDate}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>الوقت:</span>
+                    <b dir="ltr">{printTime}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>المستخدم:</span>
+                    <b>{payload.user || '—'}</b>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              {isThermal ? (
+                <table className="rp-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'right', width: '44%' }}>الصنف</th>
+                      <th style={{ width: '14%' }}>العدد</th>
+                      <th style={{ width: '20%' }}>السعر</th>
+                      <th style={{ width: '22%' }}>الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chunk.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ color: '#66717d', padding: '4mm' }}>
+                          لا توجد أصناف
+                        </td>
+                      </tr>
+                    ) : (
+                      chunk.map((it, idx) => (
+                        <tr key={idx}>
+                          <td className="rp-item-cell">
+                            <div>{it.name}</div>
+                            {it.notes && it.notes !== '-' && (
+                              <div style={{ fontSize: '6.8pt', color: '#66717d', fontWeight: 'normal' }}>
+                                {it.notes}
+                              </div>
+                            )}
+                          </td>
+                          <td>{it.qty}</td>
+                          <td dir="ltr">{fmtSmart(it.price)}</td>
+                          <td dir="ltr" style={{ fontWeight: 700 }}>
+                            {fmtSmart(it.total)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="rp-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '6%' }}>م</th>
+                      <th style={{ width: '32%' }}>اسم الصنف</th>
+                      <th style={{ width: '22%' }}>البيان / المواصفات</th>
+                      <th style={{ width: '10%' }}>العدد</th>
+                      <th style={{ width: '14%' }}>السعر</th>
+                      <th style={{ width: '16%' }}>الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chunk.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ color: '#66717d', padding: '5mm' }}>
+                          لا توجد أصناف في هذه الفاتورة
+                        </td>
+                      </tr>
+                    ) : (
+                      chunk.map((it, idx) => {
+                        const descText =
+                          it.notes && it.notes.trim() !== '' && it.notes.trim() !== '-'
+                            ? it.notes.trim()
+                            : it.unit || 'قطعة';
+                        return (
+                          <tr key={idx}>
+                            <td>{startNum + idx + 1}</td>
+                            <td className="rp-item-cell">{it.name}</td>
+                            <td>
+                              {descText}
+                              {Number(it.discount || 0) > 0 && (
+                                <div style={{ fontSize: '7.5pt', color: '#9b1c1c' }}>
+                                  خصم: {fmtSmart(it.discount)}
+                                </div>
+                              )}
+                            </td>
+                            <td>{it.qty}</td>
+                            <td dir="ltr">{fmtMoney(it.price, currencySymbol)}</td>
+                            <td dir="ltr" style={{ fontWeight: 700 }}>
+                              {fmtMoney(it.total ?? Number(it.qty) * Number(it.price), currencySymbol)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {/* Left-Aligned Totals Box on Final Page Only (Zero-Remaining Hidden) */}
+              {isLastPage && (
+                <>
+                  <div className="rp-totals-area">
+                    <div className="rp-totals">
+                      <div className="rp-total-line">
+                        <span className="rp-label">إجمالي الأصناف ({fmtSmart(totalQty)} قطعة):</span>
+                        <span className="rp-value">{fmtMoney(subtotal, currencySymbol)}</span>
+                      </div>
+                      {discountAmount > 0.01 && (
+                        <div className="rp-total-line">
+                          <span className="rp-label">الخصم:</span>
+                          <span className="rp-value">-{fmtMoney(discountAmount, currencySymbol)}</span>
+                        </div>
+                      )}
+                      {taxAmount > 0.01 && (
+                        <div className="rp-total-line">
+                          <span className="rp-label">الضريبة:</span>
+                          <span className="rp-value">+{fmtMoney(taxAmount, currencySymbol)}</span>
+                        </div>
+                      )}
+                      {extraCharges > 0.01 && (
+                        <div className="rp-total-line">
+                          <span className="rp-label">{payload.extraChargesLabel || 'مصاريف إضافية'}:</span>
+                          <span className="rp-value">+{fmtMoney(extraCharges, currencySymbol)}</span>
+                        </div>
+                      )}
+                      <div className="rp-total-line rp-main">
+                        <span className="rp-label">
+                          {isReturnDoc ? 'صافي المرتجع:' : 'الإجمالي المستحق:'}
+                        </span>
+                        <span className="rp-value">{fmtMoney(netTotal, currencySymbol)}</span>
+                      </div>
+                      <div className="rp-total-line">
+                        <span className="rp-label">{isReturnDoc ? 'المردود نقداً:' : 'المدفوع:'}</span>
+                        <span className="rp-value">{fmtMoney(paidAmount, currencySymbol)}</span>
+                      </div>
+                      {remainingAmount > 0.01 && (
+                        <div className="rp-total-line rp-due">
+                          <span className="rp-label">
+                            {isReturnDoc ? 'المخصوم على الحساب:' : 'المتبقي (دين):'}
+                          </span>
+                          <span className="rp-value">{fmtMoney(remainingAmount, currencySymbol)}</span>
+                        </div>
+                      )}
+                      {!isThermal &&
+                        payload.partyBalanceAfter !== undefined &&
+                        Math.abs(payload.partyBalanceAfter) > 0.01 && (
+                          <div className="rp-total-line">
+                            <span className="rp-label">
+                              {isPurchaseDoc ? 'رصيد المورد الحالي:' : 'رصيد العميل الحالي:'}
+                            </span>
+                            <span className="rp-value">
+                              {fmtMoney(Math.abs(payload.partyBalanceAfter), currencySymbol)}{' '}
+                              {isPurchaseDoc
+                                ? payload.partyBalanceAfter > 0
+                                  ? '(له)'
+                                  : '(عليه)'
+                                : payload.partyBalanceAfter > 0
+                                ? '(عليه)'
+                                : '(له)'}
+                            </span>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+
+                  {isA4 && tafqeetText && (
+                    <div className="rp-notes" style={{ marginTop: '1mm' }}>
+                      <b>المبلغ كتابةً:</b> {tafqeetText}
+                    </div>
+                  )}
+                </>
+              )}
+            </DocumentPageShell>
+          );
+        })}
+      </>
+    );
+  }
+
+  // 3. ACCOUNT STATEMENT LAYOUT
+  if (kind === 'account_statement') {
+    const rows = payload.rows || [];
+    const cols = payload.columns || ['التاريخ', 'البيان', 'رقم المستند', 'مدين', 'دائن', 'الرصيد'];
+    const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+    const chunks = chunkRows(rows, perPage);
+    const opening = payload.openingBalance !== undefined ? Number(payload.openingBalance) : 0;
+    const totalDeb = payload.totalDebit !== undefined ? Number(payload.totalDebit) : 0;
+    const totalCred = payload.totalCredit !== undefined ? Number(payload.totalCredit) : 0;
+    const closing =
+      payload.closingBalance !== undefined
+        ? Number(payload.closingBalance)
+        : payload.amount !== undefined
+        ? Number(payload.amount)
+        : 0;
+    const movementVal = totalDeb + totalCred;
+    const sigs = payload.signatures && payload.signatures.length > 0 ? payload.signatures : ['المحاسب', 'المراجعة', 'الاعتماد'];
+
+    return (
+      <>
+        {chunks.map((chunk, pageIdx) => {
+          const isLastPage = pageIdx === chunks.length - 1;
+          return (
+            <DocumentPageShell
+              key={pageIdx}
+              settings={settings}
+              title={payload.title}
+              dateStr={printDate}
+              timeStr={printTime}
+              docSerial={docSerial}
+              branchName={branchName}
+              notes={payload.notes}
+              footerTermsNote={payload.footerTermsNote || 'كشف حساب مستخرج ومطابق للقيود المسجلة بالنظام'}
+              pageIndex={pageIdx}
+              totalPages={chunks.length}
+              isA4={isA4}
+              isLastPage={isLastPage}
+              batchPositionLabel={batchPositionLabel}
+            >
+              {/* Statement Party & Period Strip */}
+              <div className="rp-meta">
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>{payload.partyLabel || 'الحساب'}:</span>
+                    <b>{payload.partyName || '—'}</b>
+                  </div>
+                  {payload.partyCode && payload.partyCode !== '-' && (
+                    <div className="rp-pair">
+                      <span>الكود:</span>
+                      <b>{payload.partyCode}</b>
+                    </div>
+                  )}
+                  {payload.partyPhone && payload.partyPhone !== '-' && (
+                    <div className="rp-pair">
+                      <span>الهاتف:</span>
+                      <b dir="ltr">{payload.partyPhone}</b>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rp-meta-col rp-meta-center">
+                  <div>{payload.title}</div>
+                  {payload.period && (payload.period.from || payload.period.to) && (
+                    <small style={{ fontWeight: 'normal', color: '#334155', marginTop: '1mm' }}>
+                      من {payload.period.from || 'البداية'} إلى {payload.period.to || printDate}
+                    </small>
+                  )}
+                </div>
+
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>تاريخ الطباعة:</span>
+                    <b dir="ltr">{printDate}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>الوقت:</span>
+                    <b dir="ltr">{printTime}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>عدد الحركات:</span>
+                    <b>{rows.length}</b>
+                  </div>
+                </div>
+              </div>
+
+              {pageIdx === 0 && (
+                <div className="rp-data-cards">
+                  <div className="rp-card">
+                    <div className="rp-k">رصيد سابق</div>
+                    <div className="rp-v">{fmtMoney(opening, currencySymbol)}</div>
+                  </div>
+                  <div className="rp-card">
+                    <div className="rp-k">إجمالي الحركة</div>
+                    <div className="rp-v">{fmtMoney(movementVal, currencySymbol)}</div>
+                  </div>
+                  <div className="rp-card">
+                    <div className="rp-k">الرصيد النهائي</div>
+                    <div className="rp-v">{fmtMoney(closing, currencySymbol)}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="rp-section">كشف حركة الحساب</div>
+
+              <table className="rp-table">
                 <thead>
-                  <tr className="bg-slate-100">
-                    {summary.columns.map((c, idx) => (
-                      <th key={idx} className="border-b border-l last:border-l-0 border-slate-200 px-1.5 py-1.5 font-semibold text-slate-800 text-center [word-break:normal] [overflow-wrap:normal] leading-snug">
-                        {c}
-                      </th>
+                  <tr>
+                    {cols.map((c, idx) => (
+                      <th key={idx}>{c}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.rows.map((row, rIdx) => (
-                    <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
-                      {row.map((cell, cIdx) => (
-                        <td
-                          key={cIdx}
-                          className={`border-b border-l last:border-l-0 border-slate-200 px-1.5 py-1 text-center [word-break:normal] [overflow-wrap:break-word] ${
-                            typeof cell === 'number' || cIdx >= 5 ? 'financial-num font-medium whitespace-nowrap' : ''
-                          }`}
-                        >
-                          {cell !== null && cell !== undefined ? cell : '-'}
-                        </td>
-                      ))}
+                  {chunk.length === 0 ? (
+                    <tr>
+                      <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
+                        لا توجد حركات مسجلة خلال هذه الفترة
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    chunk.map((row, rIdx) => (
+                      <tr key={rIdx}>
+                        {cols.map((_, cIdx) => (
+                          <td
+                            key={cIdx}
+                            className={cIdx === 1 ? 'rp-item-cell' : ''}
+                            dir={cIdx >= 3 ? 'ltr' : undefined}
+                          >
+                            {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            </div>
-          </>
-        )}
-      </div>
 
-      <div className="border-t border-dashed border-slate-300 mt-3 pt-2 text-center space-y-0.5">
-        {summary.footerNotes?.map((n, i) => (
-          <div key={i} className="text-[10px] text-slate-600">{n}</div>
-        ))}
-        <div className="text-[10px] text-slate-500">
-          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
-        </div>
-      </div>
-    </div>
-  );
-};
+              {isLastPage && (
+                <>
+                  <div className="rp-totals-area">
+                    <div className="rp-totals">
+                      <div className="rp-total-line">
+                        <span className="rp-label">رصيد سابق:</span>
+                        <span className="rp-value">{fmtMoney(opening, currencySymbol)}</span>
+                      </div>
+                      <div className="rp-total-line">
+                        <span className="rp-label">إجمالي المدين (+):</span>
+                        <span className="rp-value">{fmtMoney(totalDeb, currencySymbol)}</span>
+                      </div>
+                      <div className="rp-total-line">
+                        <span className="rp-label">إجمالي الدائن (-):</span>
+                        <span className="rp-value">{fmtMoney(totalCred, currencySymbol)}</span>
+                      </div>
+                      <div className={`rp-total-line rp-main ${Math.abs(closing) > 0.01 ? 'rp-due' : ''}`}>
+                        <span className="rp-label">الرصيد النهائي:</span>
+                        <span className="rp-value">
+                          {fmtMoney(closing, currencySymbol)}
+                          {Math.abs(closing) > 0.01 ? (closing > 0 ? ' (مدين)' : ' (دائن)') : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-function getSheetWidthStyle(size: UniversalPaperSize): React.CSSProperties {
-  switch (size) {
-    case 'a4-portrait':
-      return { width: '100%', maxWidth: '210mm' };
-    case 'a4-landscape':
-      return { width: '100%', maxWidth: '297mm' };
-    case 'a5-landscape':
-      return { width: '100%', maxWidth: '210mm' };
-    case 'thermal-80':
-      return { width: '100%', maxWidth: '80mm' };
-    case 'thermal-58':
-      return { width: '100%', maxWidth: '58mm' };
-    case 'a5-portrait':
-    default:
-      return { width: '100%', maxWidth: '148mm' };
-  }
-}
-
-function renderDocumentMetaBox(
-  payload: UniversalPrintPayload,
-  docSerial: string,
-  printDate: string,
-  printTime: string,
-  isThermal: boolean
-) {
-  const isInvoiceKind =
-    payload.kind === 'sales_invoice' ||
-    payload.kind === 'purchase_invoice' ||
-    payload.kind === 'sales_return' ||
-    payload.kind === 'purchase_return';
-  const isVoucherKind = payload.kind === 'receipt_voucher' || payload.kind === 'payment_voucher';
-  const isStatementKind = payload.kind === 'account_statement';
-  const isPurchaseDoc = payload.kind.includes('purchase');
-
-  // Thermal 80mm compact metadata header
-  if (isThermal) {
-    return (
-      <div className="border border-dashed border-slate-400 rounded p-1.5 my-1.5 text-[10.5px] bg-slate-50/40 text-center space-y-0.5 print-avoid-break">
-        <div className="font-bold text-slate-900">
-          {payload.title} · رقم: <span className="financial-num">{docSerial}</span>
-        </div>
-        {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
-          <div className="text-[10px] text-rose-700 font-semibold">
-            مرجع الفاتورة الأصلية: #{payload.originalInvoiceNumber}
-            {payload.returnKindLabel ? ` (${payload.returnKindLabel})` : ''}
-          </div>
-        )}
-        {(isInvoiceKind || isVoucherKind || isStatementKind || payload.partyName) && (
-          <div className="text-slate-800">
-            <span className="text-slate-500">
-              {payload.partyLabel || (isPurchaseDoc ? 'المورد' : isVoucherKind ? 'الجهة' : 'العميل')}:{' '}
-            </span>
-            <strong className="font-semibold">
-              {payload.partyName || (isPurchaseDoc ? 'مورد عام' : isInvoiceKind ? 'عميل نقدي' : '-')}
-            </strong>
-          </div>
-        )}
-        {payload.partyPhone && payload.partyPhone !== '-' && (
-          <div className="text-slate-700 financial-num">هاتف: {payload.partyPhone}</div>
-        )}
-        {payload.period && (payload.period.from || payload.period.to) && (
-          <div className="text-[10px] text-slate-700 financial-num">
-            الفترة: {payload.period.from || '-'} إلى {payload.period.to || '-'}
-          </div>
-        )}
-        <div className="text-[10px] text-slate-600 financial-num">
-          {printDate} · {printTime}
-        </div>
-      </div>
-    );
-  }
-
-  // A. Sales / Purchase Invoices & Returns Metadata Box (Preserves exact 3-column invoice structure)
-  if (isInvoiceKind) {
-    const partyLabel = payload.partyLabel || (isPurchaseDoc ? 'اسم المورد' : 'اسم العميل');
-    const partyCodeLabel = payload.partyCodeLabel || (isPurchaseDoc ? 'كود المورد' : 'كود العميل');
-    const partyName = payload.partyName || (isPurchaseDoc ? 'مورد عام' : 'عميل نقدي');
-    const partyCodeDisplay = payload.partyCode && payload.partyCode !== '-' ? payload.partyCode : '1';
-
-    return (
-      <div className="border border-slate-300 rounded-lg my-2 px-2 py-1.5 bg-slate-50/40 text-slate-900 print-avoid-break grid grid-cols-3 gap-1.5 items-center divide-x divide-x-reverse divide-slate-200 text-[10px] sm:text-xs">
-        <div className="pl-1.5 text-right space-y-0.5 min-w-0">
-          <div className="truncate">
-            <span className="text-slate-500">{partyCodeLabel}: </span>
-            <span className="font-semibold financial-num text-slate-900">{partyCodeDisplay}</span>
-          </div>
-          <div className="[word-break:normal] [overflow-wrap:break-word] leading-snug">
-            <span className="text-slate-500">{partyLabel}: </span>
-            <span className="font-semibold text-slate-900">{partyName}</span>
-          </div>
-          {payload.partyPhone && payload.partyPhone !== '-' && (
-            <div className="truncate">
-              <span className="text-slate-500">هاتف: </span>
-              <span className="font-medium financial-num" dir="ltr">
-                {payload.partyPhone}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="px-1.5 text-center space-y-0.5 min-w-0">
-          <div className="font-semibold text-slate-900 leading-tight [word-break:normal] [overflow-wrap:break-word]">
-            {payload.title}
-          </div>
-          <div className="font-bold text-slate-900 financial-num">رقم: {docSerial}</div>
-          {payload.paymentStatus && (
-            <div className="pt-0.5">
-              <span className="inline-block border border-slate-300 rounded px-2 py-0.5 text-[9.5px] font-semibold text-slate-700 bg-white">
-                {payload.paymentStatus}
-              </span>
-            </div>
-          )}
-          {payload.originalInvoiceNumber !== undefined && payload.originalInvoiceNumber !== '' && (
-            <div className="text-[9.5px] font-medium text-rose-700 financial-num leading-tight">
-              أصل #{payload.originalInvoiceNumber}
-              {payload.returnKindLabel ? ` · ${payload.returnKindLabel}` : ''}
-            </div>
-          )}
-          {!payload.originalInvoiceNumber && payload.returnKindLabel && (
-            <div className="text-[9.5px] font-medium text-rose-700 leading-tight">{payload.returnKindLabel}</div>
-          )}
-        </div>
-
-        <div className="pr-1.5 text-left space-y-0.5 min-w-0">
-          <div>
-            <span className="text-slate-500">التاريخ: </span>
-            <span className="font-semibold financial-num text-slate-900" dir="ltr">
-              {printDate}
-            </span>
-          </div>
-          <div>
-            <span className="text-slate-500">الوقت: </span>
-            <span className="font-medium financial-num text-slate-800" dir="ltr">
-              {printTime}
-            </span>
-          </div>
-          {payload.pricingTierLabel === 'تسعيرة الجملة' && (
-            <div className="text-[9.5px] font-semibold text-indigo-700">تسعيرة جملة</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // B. Cash Vouchers (Receipt / Payment) & Account Statements Metadata Box
-  if (isVoucherKind || isStatementKind) {
-    const partyLabel =
-      payload.partyLabel ||
-      (payload.kind === 'receipt_voucher'
-        ? 'استلمنا من'
-        : payload.kind === 'payment_voucher'
-        ? 'اصرفوا إلى'
-        : 'الحساب المعني');
-    const partyName = payload.partyName || '-';
-    const codeVal = payload.partyCode && payload.partyCode !== '-' ? payload.partyCode : null;
-
-    return (
-      <div className="border border-slate-300 rounded-lg my-2 px-2.5 py-2 bg-slate-50/50 text-slate-900 print-avoid-break grid grid-cols-1 sm:grid-cols-3 gap-2 items-center sm:divide-x sm:divide-x-reverse divide-slate-200 text-[11px] sm:text-xs">
-        <div className="sm:pl-2 text-right space-y-0.5 min-w-0">
-          <div className="[word-break:normal] [overflow-wrap:break-word]">
-            <span className="text-slate-500">{partyLabel}: </span>
-            <span className="font-bold text-slate-900">{partyName}</span>
-          </div>
-          {codeVal && (
-            <div>
-              <span className="text-slate-500">{payload.partyCodeLabel || 'كود الحساب'}: </span>
-              <span className="font-semibold financial-num">{codeVal}</span>
-            </div>
-          )}
-          {payload.partyPhone && payload.partyPhone !== '-' && (
-            <div>
-              <span className="text-slate-500">الهاتف: </span>
-              <span className="font-medium financial-num" dir="ltr">{payload.partyPhone}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="sm:px-2 text-right sm:text-center space-y-0.5 min-w-0">
-          <div className="font-bold text-slate-900 leading-snug">{payload.title}</div>
-          <div className="font-semibold text-slate-800 financial-num">مرجع: #{docSerial}</div>
-          {payload.period && (payload.period.from || payload.period.to) && (
-            <div className="text-[10px] text-slate-600 financial-num">
-              من {payload.period.from || '-'} إلى {payload.period.to || '-'}
-            </div>
-          )}
-        </div>
-
-        <div className="sm:pr-2 text-right sm:text-left space-y-0.5 min-w-0">
-          <div>
-            <span className="text-slate-500">التاريخ: </span>
-            <span className="font-semibold financial-num" dir="ltr">{printDate}</span>
-          </div>
-          <div>
-            <span className="text-slate-500">الوقت: </span>
-            <span className="font-medium financial-num" dir="ltr">{printTime}</span>
-          </div>
-          {payload.paymentMethod && (
-            <div className="text-[10.5px] text-slate-700 font-medium">الوسيلة: {payload.paymentMethod}</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // C. Tailored Report / Directory / Inventory / Treasury / Audit / Financial Statements Metadata Box
-  const recordsCount = payload.rows ? payload.rows.length : payload.items ? payload.items.length : undefined;
-  const scopeText = payload.branch || 'الإدارة العامة والفرع الرئيسي';
-  const responsibleText = payload.user || payload.authorizedBy;
-
-  return (
-    <div className="border border-slate-300 rounded-lg my-2 px-2.5 py-2 bg-slate-50/50 text-slate-900 print-avoid-break grid grid-cols-1 sm:grid-cols-3 gap-2 items-center sm:divide-x sm:divide-x-reverse divide-slate-200 text-[11px] sm:text-xs">
-      <div className="sm:pl-2 text-right space-y-0.5 min-w-0">
-        <div className="font-bold text-slate-900 leading-snug">{payload.title}</div>
-        {payload.subTitle && payload.subTitle !== payload.title && (
-          <div className="text-[10.5px] text-slate-600 leading-snug">{payload.subTitle}</div>
-        )}
-        <div className="text-[10.5px] text-slate-700 financial-num">مرجع المستند: #{docSerial}</div>
-      </div>
-
-      <div className="sm:px-2 text-right sm:text-center space-y-0.5 min-w-0">
-        <div>
-          <span className="text-slate-500">النطاق / الفرع: </span>
-          <span className="font-semibold text-slate-900">{scopeText}</span>
-        </div>
-        {payload.partyName && (
-          <div>
-            <span className="text-slate-500">{payload.partyLabel || 'البيان'}: </span>
-            <span className="font-semibold text-slate-900">{payload.partyName}</span>
-          </div>
-        )}
-        {payload.period && (payload.period.from || payload.period.to) && (
-          <div className="text-[10.5px] text-slate-700 financial-num">
-            الفترة: {payload.period.from || '-'} إلى {payload.period.to || '-'}
-          </div>
-        )}
-        {responsibleText && (
-          <div className="text-[10.5px] text-slate-700">
-            <span className="text-slate-500">المسؤول: </span>
-            <span className="font-medium">{responsibleText}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="sm:pr-2 text-right sm:text-left space-y-0.5 min-w-0">
-        <div>
-          <span className="text-slate-500">تاريخ الطباعة: </span>
-          <span className="font-semibold financial-num" dir="ltr">{printDate}</span>
-        </div>
-        <div>
-          <span className="text-slate-500">الوقت: </span>
-          <span className="font-medium financial-num" dir="ltr">{printTime}</span>
-        </div>
-        {recordsCount !== undefined && (
-          <div className="text-[10.5px] font-semibold text-slate-700 financial-num">
-            عدد السجلات: {recordsCount}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function renderDocumentBody(
-  payload: UniversalPrintPayload,
-  curSymbol: string,
-  isThermal: boolean,
-  isA4: boolean,
-  forcePrintTable: boolean = false
-) {
-  const kind = payload.kind;
-
-  // Optional KPI Strip above tables / vouchers
-  const kpiStrip =
-    payload.kpis && payload.kpis.length > 0 ? (
-      <div className={`grid ${isThermal ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'} gap-1.5 my-2 print-avoid-break`}>
-        {payload.kpis.map((k, idx) => (
-          <div key={idx} className="border border-slate-200 rounded-lg p-1.5 bg-slate-50 text-center">
-            <div className="text-[10px] text-slate-500 leading-tight">{k.title}</div>
-            <div className="text-[11px] sm:text-xs font-bold text-slate-900 mt-0.5 financial-num break-words">
-              {k.value}
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : null;
-
-  // 1. Voucher Layout (Receipt / Payment)
-  if (kind === 'receipt_voucher' || kind === 'payment_voucher') {
-    const isReceipt = kind === 'receipt_voucher';
-    const actionText = isReceipt ? 'استلمنا من السيد / السادة:' : 'اصرفوا إلى السيد / السادة:';
-    const amountVal = payload.amount !== undefined ? fmtSmart(Number(payload.amount)) : '0';
-    const partyName = payload.partyName || (isReceipt ? 'عميل نقدي عام' : 'مورد عام');
-
-    return (
-      <>
-        {kpiStrip}
-        <div className="border border-slate-300 rounded-lg p-3 my-2 text-xs print-avoid-break">
-          <div className="flex flex-wrap justify-between items-center gap-2 border-b border-dashed border-slate-300 pb-2 mb-2">
-            <span className="font-medium text-slate-900">
-              {actionText} <strong className="font-bold text-slate-950">{partyName}</strong>
-            </span>
-            <span className="font-bold text-sm border border-slate-300 rounded-lg px-2.5 py-1 bg-slate-50 financial-num">
-              {amountVal} {curSymbol}
-            </span>
-          </div>
-
-          <div className="space-y-1.5 mb-2 leading-relaxed">
-            <div>
-              <span className="text-slate-500">مبلغاً وقدره: </span>
-              <span className="font-medium text-slate-900">{payload.amountInWords || '-'}</span>
-            </div>
-            <div>
-              <span className="text-slate-500">وذلك عن: </span>
-              <span className="text-slate-900">
-                {payload.statementOrReason || payload.notes || 'معاملة مالية معتمدة بالنظام'}
-              </span>
-            </div>
-          </div>
-
-          <div className="border border-slate-200 rounded-lg p-2 bg-slate-50 flex flex-wrap justify-between gap-2 text-[11px]">
-            <div>
-              <span className="text-slate-500">طريقة السداد: </span>
-              <span className="font-semibold">{payload.paymentMethod || 'كاش / نقدي'}</span>
-            </div>
-            <div>
-              <span className="text-slate-500">الخزينة / الحساب: </span>
-              <span className="font-semibold">{payload.treasuryOrBank || 'الخزينة الرئيسية'}</span>
-            </div>
-            {payload.referenceNumber && (
-              <div>
-                <span className="text-slate-500">رقم المرجع: </span>
-                <span className="font-semibold financial-num">{payload.referenceNumber}</span>
-              </div>
-            )}
-          </div>
-        </div>
+                  {isA4 && (
+                    <div className="rp-signatures">
+                      {sigs.slice(0, 3).map((s, idx) => (
+                        <span key={idx}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </DocumentPageShell>
+          );
+        })}
       </>
     );
   }
 
-  // 2. Custom Columns / Rows (Reports, Ledgers, Directories, Inventory, Financial Statements)
-  if (payload.columns && payload.rows) {
-    const showMobileCards = !isThermal && !forcePrintTable && payload.columns.length >= 5;
+  // 4. SHIFT CLOSING & DAILY CLOSING LAYOUT
+  if (kind === 'shift_closing') {
+    const m = payload.shiftMetrics || {
+      opening: 0,
+      cashSales: 0,
+      receipts: 0,
+      payments: 0,
+      profit: 0,
+      expected: payload.amount || 0,
+      actual: payload.amount || 0,
+      variance: 0,
+    };
+    const variance = Number((m.actual ?? m.expected) - m.expected);
+    const rows = payload.rows || [];
+    const cols = payload.columns || ['الحركة', 'القيمة', 'ملاحظات'];
+    const perPage = isThermal ? rows.length || 1 : isA4 ? 18 : 11;
+    const chunks = chunkRows(rows, perPage);
+    const sigs = payload.signatures && payload.signatures.length > 0 ? payload.signatures : ['أمين الخزينة / الكاشير', 'المراجع المالي', 'الاعتماد'];
+
+    const shiftCards = [
+      { k: 'رصيد بداية الخزينة', v: fmtMoney(m.opening, currencySymbol) },
+      { k: 'مبيعات نقدية', v: fmtMoney(m.cashSales, currencySymbol) },
+      { k: 'تحصيلات', v: fmtMoney(m.receipts, currencySymbol) },
+      { k: 'مدفوعات / مصروفات', v: fmtMoney(m.payments, currencySymbol) },
+      { k: 'صافي الربح', v: fmtMoney(m.profit, currencySymbol) },
+      { k: 'الرصيد المتوقع', v: fmtMoney(m.expected, currencySymbol) },
+    ];
 
     return (
       <>
-        {kpiStrip}
-        {showMobileCards && (
-          <div className="block sm:hidden print:hidden space-y-2 my-2">
-            {payload.rows.length === 0 ? (
-              <div className="border border-slate-200 rounded-lg p-4 text-center text-xs text-slate-500 bg-slate-50">
-                لا توجد سجلات مطابقة في هذا المستند
+        {chunks.map((chunk, pageIdx) => {
+          const isLastPage = pageIdx === chunks.length - 1;
+          return (
+            <DocumentPageShell
+              key={pageIdx}
+              settings={settings}
+              title={payload.title}
+              dateStr={printDate}
+              timeStr={printTime}
+              docSerial={docSerial}
+              branchName={branchName}
+              notes={payload.notes}
+              footerTermsNote={payload.footerTermsNote || 'تقرير إغلاق وردية ويومية معتمد ومطابق لحركة الخزينة'}
+              pageIndex={pageIdx}
+              totalPages={chunks.length}
+              isA4={isA4}
+              isLastPage={isLastPage}
+              batchPositionLabel={batchPositionLabel}
+            >
+              <div className="rp-meta">
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>{payload.partyLabel || 'المسؤول'}:</span>
+                    <b>{payload.partyName || payload.user || 'كاشير الوردية'}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>الفرع:</span>
+                    <b>{branchName}</b>
+                  </div>
+                </div>
+                <div className="rp-meta-col rp-meta-center">
+                  <div>{payload.title}</div>
+                  <small style={{ fontWeight: 'normal', color: '#334155' }}>مرجع: #{docSerial}</small>
+                </div>
+                <div className="rp-meta-col">
+                  <div className="rp-pair">
+                    <span>التاريخ:</span>
+                    <b dir="ltr">{printDate}</b>
+                  </div>
+                  <div className="rp-pair">
+                    <span>الوقت:</span>
+                    <b dir="ltr">{printTime}</b>
+                  </div>
+                </div>
               </div>
-            ) : (
-              payload.rows.map((row, rIdx) => (
-                <div key={rIdx} className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/60 space-y-1 text-[11px]">
-                  {payload.columns!.map((col, cIdx) => (
-                    <div key={cIdx} className="flex justify-between items-start gap-2 border-b last:border-b-0 border-slate-200/70 pb-1 last:pb-0">
-                      <span className="text-slate-500 font-medium shrink-0">{col}:</span>
-                      <span className="font-semibold text-slate-900 text-left [word-break:normal] [overflow-wrap:break-word]">
-                        {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '-'}
-                      </span>
+
+              {pageIdx === 0 && (
+                <div className="rp-data-cards">
+                  {shiftCards.map((c, idx) => (
+                    <div key={idx} className="rp-card">
+                      <div className="rp-k">{c.k}</div>
+                      <div className="rp-v">{c.v}</div>
                     </div>
                   ))}
                 </div>
-              ))
-            )}
-          </div>
-        )}
-
-        <div className={`${showMobileCards ? 'hidden sm:block print:block' : 'block'} border border-slate-300 rounded-lg overflow-hidden my-2`}>
-          <table className={`w-full border-collapse ${isThermal ? 'text-[9.5px]' : 'text-[10px] sm:text-xs'}`}>
-            <thead>
-              <tr className="bg-slate-100">
-                {payload.columns.map((c, idx) => (
-                  <th
-                    key={idx}
-                    className="border-b border-l last:border-l-0 border-slate-200 px-1.5 sm:px-2 py-1.5 font-semibold text-slate-800 text-center [word-break:normal] [overflow-wrap:normal] leading-snug"
-                  >
-                    {c}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {payload.rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={payload.columns.length}
-                    className="text-center text-slate-500 py-4 border-b border-slate-200"
-                  >
-                    لا توجد سجلات مطابقة في هذا المستند
-                  </td>
-                </tr>
-              ) : (
-                payload.rows.map((row, rIdx) => (
-                  <tr key={rIdx} className={rIdx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}>
-                    {row.map((cell, cIdx) => {
-                      const isNum = typeof cell === 'number';
-                      return (
-                        <td
-                          key={cIdx}
-                          className={`border-b border-l last:border-l-0 border-slate-200 px-1.5 sm:px-2 py-1.5 [word-break:normal] [overflow-wrap:break-word] leading-snug ${
-                            isNum
-                              ? 'text-center font-medium financial-num whitespace-nowrap'
-                              : cIdx === 0
-                              ? 'text-center'
-                              : 'text-right'
-                          }`}
-                        >
-                          {cell !== null && cell !== undefined ? cell : '-'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
               )}
-            </tbody>
-          </table>
-        </div>
+
+              <div className="rp-section">حركات الوردية واليومية</div>
+
+              <table className="rp-table">
+                <thead>
+                  <tr>
+                    {cols.map((c, idx) => (
+                      <th key={idx}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {chunk.length === 0 ? (
+                    <tr>
+                      <td colSpan={cols.length} style={{ color: '#66717d', padding: '4mm' }}>
+                        لا توجد حركات مسجلة خلال هذا اليوم
+                      </td>
+                    </tr>
+                  ) : (
+                    chunk.map((row, rIdx) => (
+                      <tr key={rIdx}>
+                        {cols.map((_, cIdx) => (
+                          <td key={cIdx} className={cIdx === 0 || cIdx === 1 ? 'rp-item-cell' : ''}>
+                            {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+
+              {isLastPage && (
+                <>
+                  <div className="rp-totals-area">
+                    <div className="rp-totals">
+                      <div className="rp-total-line">
+                        <span className="rp-label">الرصيد المتوقع:</span>
+                        <span className="rp-value">{fmtMoney(m.expected, currencySymbol)}</span>
+                      </div>
+                      <div className="rp-total-line">
+                        <span className="rp-label">الرصيد الفعلي:</span>
+                        <span className="rp-value">{fmtMoney(m.actual ?? m.expected, currencySymbol)}</span>
+                      </div>
+                      <div
+                        className={`rp-total-line rp-main ${
+                          variance < -0.01 ? 'rp-deficit' : variance > 0.01 ? 'rp-surplus' : ''
+                        }`}
+                      >
+                        <span className="rp-label">العجز / الزيادة:</span>
+                        <span className="rp-value">{fmtMoney(variance, currencySymbol)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rp-signatures">
+                    {sigs.slice(0, 3).map((s, idx) => (
+                      <span key={idx}>{s}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </DocumentPageShell>
+          );
+        })}
       </>
     );
   }
 
-  // 3. Invoice Items List
-  const items = payload.items || [];
+  // 5. ALL SYSTEM REPORTS, DIRECTORIES, INVENTORY, STOCKTAKE, SETTLEMENTS, CLOSING, JOURNALS, FINANCIAL STATEMENTS
+  const rows = payload.rows || [];
+  const cols = payload.columns || ['البند', 'التفاصيل', 'القيمة'];
+  const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+  const chunks = chunkRows(rows, perPage);
+  const visibleSummaries = (payload.summaries || []).filter((s) => {
+    const lbl = s.label || '';
+    if ((lbl.includes('متبقي') || lbl.includes('المتبقي') || lbl.includes('مديونية')) && Math.abs(parseNumericValue(s.value)) <= 0.01) {
+      return false;
+    }
+    return true;
+  });
 
-  // Thermal 80mm compact 4-column table
-  if (isThermal) {
-    return (
-      <div className="border border-slate-400 rounded overflow-hidden my-1.5">
-        <table className="w-full table-fixed border-collapse text-[10px]">
-          <thead>
-            <tr className="bg-slate-100 border-b border-slate-400">
-              <th className="border-l border-slate-300 p-1 font-bold text-right w-[44%]">الصنف</th>
-              <th className="border-l border-slate-300 p-1 font-bold text-center w-[14%]">العدد</th>
-              <th className="border-l border-slate-300 p-1 font-bold text-center w-[20%]">السعر</th>
-              <th className="p-1 font-bold text-center w-[22%]">الإجمالي</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="text-center text-slate-500 py-3">
-                  لا توجد أصناف
-                </td>
-              </tr>
-            ) : (
-              items.map((it, idx) => (
-                <tr key={idx}>
-                  <td className="border-l border-slate-200 p-1 text-right font-medium text-slate-900 break-words">
-                    <div>{it.name}</div>
-                    {it.notes && it.notes !== '-' && (
-                      <div className="text-[9px] text-slate-500">{it.notes}</div>
-                    )}
-                  </td>
-                  <td className="border-l border-slate-200 p-1 text-center financial-num">
-                    {it.qty}
-                  </td>
-                  <td className="border-l border-slate-200 p-1 text-center financial-num">
-                    {fmtSmart(Number(it.price))}
-                  </td>
-                  <td className="p-1 text-center font-semibold financial-num">
-                    {fmtSmart(Number(it.total))}
-                  </td>
-                </tr>
-              ))
+  return (
+    <>
+      {chunks.map((chunk, pageIdx) => {
+        const isLastPage = pageIdx === chunks.length - 1;
+        return (
+          <DocumentPageShell
+            key={pageIdx}
+            settings={settings}
+            title={payload.title}
+            dateStr={printDate}
+            timeStr={printTime}
+            docSerial={docSerial}
+            branchName={branchName}
+            notes={payload.notes}
+            footerTermsNote={payload.footerTermsNote || 'تم استخراج هذا المستند آلياً من السجلات المحاسبية المعتمدة بالنظام'}
+            pageIndex={pageIdx}
+            totalPages={chunks.length}
+            isA4={isA4}
+            isLastPage={isLastPage}
+            batchPositionLabel={batchPositionLabel}
+          >
+            {/* Scope / Report Metadata Box */}
+            <div className="rp-meta">
+              <div className="rp-meta-col">
+                <div className="rp-pair">
+                  <span>الفرع / النطاق:</span>
+                  <b>{branchName}</b>
+                </div>
+                {payload.partyName && (
+                  <div className="rp-pair">
+                    <span>{payload.partyLabel || 'الجهة'}:</span>
+                    <b>{payload.partyName}</b>
+                  </div>
+                )}
+                {payload.user && (
+                  <div className="rp-pair">
+                    <span>المسؤول:</span>
+                    <b>{payload.user}</b>
+                  </div>
+                )}
+              </div>
+
+              <div className="rp-meta-col rp-meta-center">
+                <div>{payload.title}</div>
+                {payload.subTitle && payload.subTitle !== payload.title && (
+                  <small style={{ fontWeight: 'normal', color: '#334155', marginTop: '0.5mm' }}>
+                    {payload.subTitle}
+                  </small>
+                )}
+                <small style={{ fontWeight: 'normal', color: '#66717d' }}>مرجع: #{docSerial}</small>
+              </div>
+
+              <div className="rp-meta-col">
+                <div className="rp-pair">
+                  <span>التاريخ:</span>
+                  <b dir="ltr">{printDate}</b>
+                </div>
+                <div className="rp-pair">
+                  <span>الوقت:</span>
+                  <b dir="ltr">{printTime}</b>
+                </div>
+                {payload.period && (payload.period.from || payload.period.to) && (
+                  <div className="rp-pair">
+                    <span>الفترة:</span>
+                    <b dir="ltr">
+                      {payload.period.from || '-'} : {payload.period.to || '-'}
+                    </b>
+                  </div>
+                )}
+                <div className="rp-pair">
+                  <span>السجلات:</span>
+                  <b>{rows.length}</b>
+                </div>
+              </div>
+            </div>
+
+            {pageIdx === 0 && payload.kpis && payload.kpis.length > 0 && (
+              <div className="rp-data-cards">
+                {payload.kpis.map((k, i) => (
+                  <div key={i} className="rp-card">
+                    <div className="rp-k">{k.title}</div>
+                    <div className="rp-v">{k.value}</div>
+                  </div>
+                ))}
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
 
-  // Standard 5-Column Clean Table matching Reference Screenshot (Zero Horizontal Scroll)
-  return (
-    <div className="border border-slate-300 rounded-lg overflow-hidden my-2">
-      <table className={`w-full table-fixed border-collapse ${isA4 ? 'text-xs sm:text-[13px]' : 'text-[10.5px] sm:text-xs'}`}>
-        <thead>
-          <tr className="bg-slate-100 border-b border-slate-300">
-            <th className="border-l border-slate-200 px-1.5 py-1.5 font-semibold text-slate-900 text-center w-[36%]">
-              اسم الصنف
-            </th>
-            <th className="border-l border-slate-200 px-1 py-1.5 font-semibold text-slate-900 text-center w-[18%]">
-              البيان
-            </th>
-            <th className="border-l border-slate-200 px-1 py-1.5 font-semibold text-slate-900 text-center w-[12%]">
-              العدد
-            </th>
-            <th className="border-l border-slate-200 px-1 py-1.5 font-semibold text-slate-900 text-center w-[16%]">
-              السعر
-            </th>
-            <th className="px-1 py-1.5 font-semibold text-slate-900 text-center w-[18%]">
-              الإجمالي
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-200">
-          {items.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="text-center text-slate-500 py-4">
-                لا توجد أصناف في هذه الفاتورة
-              </td>
-            </tr>
-          ) : (
-            items.map((it, idx) => {
-              const specOrUnit =
-                it.notes && it.notes.trim() !== '' && it.notes.trim() !== '-'
-                  ? it.notes.trim()
-                  : it.unit || 'قطعة';
-              return (
-                <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}>
-                  <td className="border-l border-slate-200 px-1.5 py-1.5 text-center sm:text-right font-medium text-slate-900 break-words leading-snug">
-                    {it.name}
-                  </td>
-                  <td className="border-l border-slate-200 px-1 py-1.5 text-center text-slate-700 break-words">
-                    {specOrUnit}
-                  </td>
-                  <td className="border-l border-slate-200 px-1 py-1.5 text-center font-medium text-slate-900 financial-num">
-                    {it.qty}
-                  </td>
-                  <td className="border-l border-slate-200 px-1 py-1.5 text-center text-slate-800 financial-num">
-                    {fmtSmart(Number(it.price))}
-                  </td>
-                  <td className="px-1 py-1.5 text-center font-semibold text-slate-900 financial-num">
-                    {fmtSmart(Number(it.total))}
-                  </td>
+            {pageIdx === 0 && payload.statementOrReason && (
+              <div className="rp-notes">{payload.statementOrReason}</div>
+            )}
+
+            <div className="rp-section">{payload.subTitle || payload.title}</div>
+
+            <table className="rp-table">
+              <thead>
+                <tr>
+                  {cols.map((c, idx) => (
+                    <th key={idx}>{c}</th>
+                  ))}
                 </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
+              </thead>
+              <tbody>
+                {chunk.length === 0 ? (
+                  <tr>
+                    <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
+                      لا توجد بيانات متاحة لهذا التقرير
+                    </td>
+                  </tr>
+                ) : (
+                  chunk.map((row, rIdx) => (
+                    <tr key={rIdx}>
+                      {cols.map((_, cIdx) => {
+                        const cell = row[cIdx];
+                        return (
+                          <td
+                            key={cIdx}
+                            className={cIdx === 0 || (cols.length >= 4 && cIdx === 1) ? 'rp-item-cell' : ''}
+                          >
+                            {cell !== null && cell !== undefined ? cell : '—'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
+            {isLastPage && (
+              <>
+                {visibleSummaries.length > 0 && (
+                  <div className="rp-totals-area">
+                    <div className="rp-totals">
+                      {visibleSummaries.map((s, idx) => (
+                        <div
+                          key={idx}
+                          className={`rp-total-line ${s.isTotal ? 'rp-main' : ''} ${
+                            s.isHighlight && !s.isTotal ? 'rp-due' : ''
+                          }`}
+                        >
+                          <span className="rp-label">{s.label}:</span>
+                          <span className="rp-value">{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {payload.signatures && payload.signatures.length > 0 && (
+                  <div className="rp-signatures">
+                    {payload.signatures.slice(0, 3).map((sig, idx) => (
+                      <span key={idx}>{sig}</span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </DocumentPageShell>
+        );
+      })}
+    </>
   );
-}
+};
 
-function renderDocumentFooterSummary(
-  payload: UniversalPrintPayload,
-  curSymbol: string,
-  tafqeetText: string,
-  settings: Settings,
-  isThermal: boolean,
-  isA4: boolean
-) {
-  const items = payload.items || [];
-  const totalQty = items.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
-  const netTotal = payload.amount !== undefined ? Number(payload.amount) : 0;
-  const subtotal = payload.subtotal !== undefined ? Number(payload.subtotal) : netTotal;
-  const discountAmount = Number(payload.discountAmount || 0);
-  const taxAmount = Number(payload.taxAmount || 0);
-  const extraCharges = Number(payload.extraCharges || 0);
-  const paidAmount = payload.paidAmount !== undefined ? Number(payload.paidAmount) : netTotal;
-  const remainingAmount =
-    payload.remainingAmount !== undefined ? Number(payload.remainingAmount) : Math.max(0, netTotal - paidAmount);
+/* ============================================================================
+ * Batch Summary Cover/Closing Sheet
+ * ============================================================================ */
 
-  const paymentMethod = payload.paymentMethod || 'نقدي';
-  const isReturnDoc = payload.kind === 'sales_return' || payload.kind === 'purchase_return';
-  const isPurchaseDoc = payload.kind === 'purchase_invoice' || payload.kind === 'purchase_return';
-  const isInvoiceDoc =
-    payload.kind === 'sales_invoice' ||
-    payload.kind === 'purchase_invoice' ||
-    isReturnDoc;
-
-  const hasAdjustments = discountAmount > 0.01 || taxAmount > 0.01 || extraCharges > 0.01;
+const BatchSummaryPages: React.FC<{
+  summary: UniversalBatchSummary;
+  settings: Settings;
+  isThermal: boolean;
+  isA4: boolean;
+}> = ({ summary, settings, isThermal, isA4 }) => {
+  const rows = summary.rows || [];
+  const cols = summary.columns || ['#', 'التاريخ', 'التصنيف', 'الطرف', 'الحالة', 'الإجمالي', 'المدفوع'];
+  const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+  const chunks = chunkRows(rows, perPage);
+  const nowStr = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="mt-1.5 text-slate-900 print-avoid-break w-full">
-      {isInvoiceDoc ? (
-        <div className={`border-t border-slate-300 ${isThermal ? 'text-[10.5px]' : 'text-[11px] sm:text-xs'}`}>
-          {/* Row 1: Total Qty */}
-          <div className="flex justify-between items-center py-1.5 border-b border-slate-200">
-            <span className="text-slate-600 font-medium">إجمالي الكميات:</span>
-            <span className="font-bold text-slate-900 financial-num">{fmtSmart(totalQty)}</span>
-          </div>
-
-          {/* Optional Subtotal / Discount / Tax / Extra Charges only when present */}
-          {hasAdjustments && (
-            <div className="py-1 border-b border-slate-200 space-y-0.5 text-[10.5px] text-slate-600">
-              <div className="flex justify-between items-center">
-                <span>المجموع الفرعي:</span>
-                <span className="font-medium financial-num text-slate-800">{fmtSmart(subtotal)} {curSymbol}</span>
+    <>
+      {chunks.map((chunk, pageIdx) => {
+        const isLastPage = pageIdx === chunks.length - 1;
+        return (
+          <DocumentPageShell
+            key={pageIdx}
+            settings={settings}
+            title={summary.title}
+            dateStr={nowStr}
+            timeStr=""
+            docSerial={`${rows.length}`}
+            footerTermsNote={summary.footerNotes?.join(' · ') || 'ملخص السجل المجمع للمستندات'}
+            pageIndex={pageIdx}
+            totalPages={chunks.length}
+            isA4={isA4}
+            isLastPage={isLastPage}
+          >
+            {pageIdx === 0 && summary.kpis.length > 0 && (
+              <div className="rp-data-cards">
+                {summary.kpis.map((k, idx) => (
+                  <div key={idx} className="rp-card">
+                    <div className="rp-k">{k.title}</div>
+                    <div className="rp-v">{k.value}</div>
+                  </div>
+                ))}
               </div>
-              {discountAmount > 0.01 && (
-                <div className="flex justify-between items-center">
-                  <span>الخصم:</span>
-                  <span className="font-medium financial-num text-rose-700">-{fmtSmart(discountAmount)} {curSymbol}</span>
-                </div>
-              )}
-              {taxAmount > 0.01 && (
-                <div className="flex justify-between items-center">
-                  <span>الضريبة:</span>
-                  <span className="font-medium financial-num text-slate-800">+{fmtSmart(taxAmount)} {curSymbol}</span>
-                </div>
-              )}
-              {extraCharges > 0.01 && (
-                <div className="flex justify-between items-center">
-                  <span>{payload.extraChargesLabel || 'مصاريف إضافية'}:</span>
-                  <span className="font-medium financial-num text-slate-800">+{fmtSmart(extraCharges)} {curSymbol}</span>
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* Row 2: Net Invoice Total */}
-          <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-300 font-bold text-xs sm:text-sm">
-            <span className="text-slate-900">
-              {isReturnDoc ? 'إجمالي المرتجع:' : 'إجمالي الفاتورة:'}
-            </span>
-            <span className="text-slate-900 financial-num">
-              {fmtSmart(netTotal)} {curSymbol}
-            </span>
-          </div>
+            <div className="rp-section">{summary.subtitle || summary.title}</div>
 
-          {/* Row 3: Payment Method Badge + Paid Amount */}
-          <div className="flex flex-wrap justify-between items-center gap-2 py-1.5 border-b border-dashed border-slate-300">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-600 font-medium">طريقة الدفع:</span>
-              <span className="inline-block border border-slate-400 rounded-md px-2 py-0.5 bg-slate-50 font-semibold text-slate-900 text-[10.5px]">
-                {paymentMethod}
-              </span>
-            </div>
-            <div className="font-semibold text-slate-900 financial-num">
-              <span className="text-slate-600 font-medium">
-                {isReturnDoc ? 'المردود نقداً: ' : 'المدفوع: '}
-              </span>
-              <strong>{fmtSmart(paidAmount)} {curSymbol}</strong>
-            </div>
-          </div>
-
-          {/* Row 4 (Conditional): Remaining Balance if credit/partial */}
-          {remainingAmount > 0.01 && (
-            <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-300 font-semibold text-rose-700">
-              <span>{isReturnDoc ? 'المخصوم على الحساب:' : 'المتبقي (آجل):'}</span>
-              <span className="financial-num">{fmtSmart(remainingAmount)} {curSymbol}</span>
-            </div>
-          )}
-
-          {/* Row 5 (Conditional): Party Account Balance Summary when relevant */}
-          {!isThermal && payload.partyBalanceAfter !== undefined && Math.abs(payload.partyBalanceAfter) > 0.01 && (
-            <div className="flex justify-between items-center py-1 text-[10.5px] text-slate-600">
-              <span>{isPurchaseDoc ? 'رصيد المورد الحالي:' : 'رصيد العميل الحالي:'}</span>
-              <span className="font-semibold text-slate-900 financial-num">
-                {fmtSmart(Math.abs(payload.partyBalanceAfter))} {curSymbol}{' '}
-                {isPurchaseDoc
-                  ? payload.partyBalanceAfter > 0
-                    ? '(له)'
-                    : '(عليه)'
-                  : payload.partyBalanceAfter > 0
-                  ? '(عليه)'
-                  : '(له)'}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : payload.summaries && payload.summaries.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 my-2">
-          {payload.summaries.map((s, idx) => (
-            <div key={idx} className="border border-slate-200 rounded-lg p-1.5 bg-slate-50 text-center">
-              <div className="text-[10px] text-slate-500">{s.label}</div>
-              <div className="text-xs font-bold text-slate-900 mt-0.5 financial-num">
-                {s.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Tafqeet (shown cleanly on A4 or Vouchers to keep A5 ultra-compact onto 1 page) */}
-      {tafqeetText && (isA4 || !isInvoiceDoc) && (
-        <div className="text-[10.5px] text-slate-700 mt-1.5 px-1">
-          <span className="text-slate-500">المبلغ كتابة: </span>
-          <span className="font-medium">{tafqeetText}</span>
-        </div>
-      )}
-
-      {payload.notes && (
-        <div className="text-[10.5px] text-slate-700 mt-1 px-1 break-words">
-          <span className="text-slate-500">ملاحظات: </span>
-          <span>{payload.notes}</span>
-        </div>
-      )}
-
-      {/* Signatures strip when provided on formal non-invoice A4 reports */}
-      {isA4 && !isInvoiceDoc && payload.signatures && payload.signatures.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mt-3 pt-2 border-t border-slate-200 text-center text-[10.5px] text-slate-700">
-          {payload.signatures.slice(0, 3).map((sig, i) => (
-            <div key={i} className="space-y-2">
-              <div className="font-semibold">{sig}</div>
-              <div className="border-b border-dotted border-slate-400 mx-4 h-3" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Footer Policy & Developer Copyright */}
-      <div className="mt-2.5 pt-2 border-t border-dashed border-slate-300 text-center space-y-0.5">
-        <div className="text-[10px] sm:text-[11px] font-medium text-slate-700">
-          {payload.footerTermsNote ||
-            (isInvoiceDoc
-              ? settings.invoiceFooterNote || 'البضاعة المباعة ترد وتستبدل خلال 14 يوماً وفقاً لحالتها الأصلية'
-              : 'تم استخراج هذا المستند آلياً من السجلات المحاسبية المعتمدة بالنظام')}
-        </div>
-        <div className="text-[9.5px] sm:text-[10px] text-slate-500">
-          جميع حقوق الملكية محفوظة لمطور النظام Mohamed Nazih ت 01029190615
-        </div>
-      </div>
-    </div>
+            <table className="rp-table">
+              <thead>
+                <tr>
+                  {cols.map((c, idx) => (
+                    <th key={idx}>{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {chunk.map((row, rIdx) => (
+                  <tr key={rIdx}>
+                    {cols.map((_, cIdx) => (
+                      <td key={cIdx} className={cIdx === 3 ? 'rp-item-cell' : ''}>
+                        {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DocumentPageShell>
+        );
+      })}
+    </>
   );
-}
+};

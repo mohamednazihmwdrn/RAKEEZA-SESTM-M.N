@@ -49,46 +49,83 @@ export function compileShiftReportData(
 
   // Filter sales invoices for target date
   const dateInvoices = (appData.salesInvoices || []).filter((inv: SaleInvoice) => {
-    return inv.date === targetDate;
+    return (inv.date || '').split('T')[0] === targetDate;
   });
 
   let salesCount = 0;
   let salesGross = 0;
   let salesDiscount = 0;
   let salesNet = 0;
+  let cashSalesIn = 0;
+  let creditSalesRemaining = 0;
+  let returnsCount = 0;
+  let returnsGross = 0;
+  let returnsDiscount = 0;
+  let returnsNet = 0;
+  let returnsCashOut = 0;
   let costOfGoodsSold = 0;
 
   dateInvoices.forEach((inv) => {
-    salesCount += 1;
-    const invSubtotal = inv.subtotal || inv.total || 0;
-    const invDiscount = (inv.discount && inv.discount > 0) ? (invSubtotal * (inv.discount / 100)) : 0;
-    const invNet = inv.total || (invSubtotal - invDiscount);
+    const isRet = inv.type?.startsWith('return_');
+    const invSubtotal = Number(inv.subtotal || inv.total || 0);
+    const invDiscount = Number(inv.discount || 0);
+    const invNet = Number(inv.total !== undefined ? inv.total : Math.max(0, invSubtotal - invDiscount));
+    const invPaid = Number(inv.paidAmount !== undefined ? inv.paidAmount : (inv.type === 'nagdi' || inv.type === 'return_nagdi' ? invNet : 0));
+    const invRem = Math.max(0, invNet - invPaid);
 
-    salesGross += invSubtotal;
-    salesDiscount += invDiscount;
-    salesNet += invNet;
-
-    // Calculate COGS from items
+    let invCogs = 0;
     if (inv.items && inv.items.length > 0) {
       inv.items.forEach((item) => {
-        const itemCost = item.costPrice || (appData.items.find((i) => i.name === item.name || i.id === item.itemId)?.purchasePrice) || 0;
-        costOfGoodsSold += (itemCost * (item.qty || 1));
+        const matchedCatalog = appData.items.find((i) => i.name === item.name || i.id === item.itemId);
+        const itemCost = Number(item.costPrice || matchedCatalog?.purchasePrice || 0);
+        invCogs += itemCost * Number((item as any).quantity ?? item.qty ?? 1);
       });
+    }
+
+    if (isRet) {
+      returnsCount += 1;
+      returnsGross += invSubtotal;
+      returnsDiscount += invDiscount;
+      returnsNet += invNet;
+      returnsCashOut += invPaid;
+      costOfGoodsSold -= invCogs;
+    } else {
+      salesCount += 1;
+      salesGross += invSubtotal;
+      salesDiscount += invDiscount;
+      salesNet += invNet;
+      cashSalesIn += invPaid;
+      creditSalesRemaining += invRem;
+      costOfGoodsSold += invCogs;
     }
   });
 
-  // Calculate expenses for target date from cash transactions
-  const dateExpenses = (appData.cashTransactions || []).filter((tx) => {
-    return tx.date === targetDate && (tx.type === 'pay' || tx.type === 'withdraw') && (!tx.supplierName);
-  });
+  // Calculate cash receipts & expenses/payments for target date
+  const dateCashTxs = (appData.cashTransactions || []).filter(
+    (tx) => (tx.date || '').split('T')[0] === targetDate
+  );
 
-  const totalExpenses = dateExpenses.reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  const receiptsTotal = dateCashTxs
+    .filter((tx) => tx.type === 'receive' || tx.type === 'deposit')
+    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
 
-  // Return items calculations (if any returns exist)
-  const returnsCount = 0;
-  const returnsGross = 0;
-  const returnsDiscount = 0;
-  const returnsNet = 0;
+  const voucherPaymentsTotal = dateCashTxs
+    .filter((tx) => tx.type === 'pay' || tx.type === 'withdraw')
+    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+
+  const dateExpensesList = dateCashTxs.filter(
+    (tx) => (tx.type === 'pay' || tx.type === 'withdraw') && !tx.supplierName
+  );
+  const directExpensesTotal = 0;
+
+  const totalExpenses = dateExpensesList.reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+
+  const purchasePaidToday = (appData.purchaseInvoices || [])
+    .filter((inv) => (inv.date || '').split('T')[0] === targetDate)
+    .reduce((acc, inv) => {
+      const p = Number(inv.paidAmount !== undefined ? inv.paidAmount : (inv.type === 'nagdi' ? inv.total : 0));
+      return inv.type?.startsWith('return_') ? acc - p : acc + p;
+    }, 0);
 
   const totalInvoicesCount = salesCount + returnsCount;
   const totalGross = salesGross - returnsGross;
@@ -97,10 +134,17 @@ export function compileShiftReportData(
   const grossProfit = totalNet - costOfGoodsSold;
   const netProfit = grossProfit - totalExpenses;
 
-  // Active Branch
-  const branchName = appData.activeBranchId
-    ? (appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي')
-    : 'الفرع الرئيسي - الإدارة';
+  const activeBranchObj = appData.activeBranchId
+    ? appData.branches?.find((b) => b.id === appData.activeBranchId)
+    : undefined;
+  const branchName = activeBranchObj?.name || 'الفرع الرئيسي';
+
+  const branchCash = activeBranchObj?.id ? appData.branchCashBoxes?.[activeBranchObj.id] : undefined;
+  const currentCashDrawer = Number(branchCash?.drawer ?? appData.cashBox?.drawer ?? 0);
+  const totalCashPaymentsOut = voucherPaymentsTotal + directExpensesTotal + returnsCashOut + Math.max(0, purchasePaidToday);
+  const netTodayCashDelta = cashSalesIn + receiptsTotal - totalCashPaymentsOut;
+  const openingCashBalance = currentCashDrawer - netTodayCashDelta;
+  const expectedCashBalance = openingCashBalance + cashSalesIn + receiptsTotal - totalCashPaymentsOut;
 
   const logoSrc = settings.logo || settings.logoUrl || '';
 
@@ -127,6 +171,16 @@ export function compileShiftReportData(
     grossProfit,
     totalExpenses,
     netProfit,
+    // Extended cash & variance telemetry
+    ...( {
+      cashSalesIn,
+      creditSalesRemaining,
+      receiptsTotal,
+      totalCashPaymentsOut,
+      openingCashBalance,
+      expectedCashBalance,
+      actualCashBalance: currentCashDrawer,
+    } as any ),
     company: {
       name: settings.companyName || 'منظومة RAKEEZA للمحاسبة والمبيعات',
       companyName: settings.companyName || 'منظومة RAKEEZA للمحاسبة والمبيعات',
@@ -475,40 +529,60 @@ export function printShiftReportWindow(
 ) {
   const shiftData = compileShiftReportData(appData, filterDate, customCashierName);
 
-  // 🖨️ Dispatch to Centralized Universal Print Modal
+  // 🖨️ Dispatch to Centralized Universal Print Modal using dedicated shift_closing template
   try {
     const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+    const ext = shiftData as any;
     const totalInvoices = shiftData.totalInvoicesCount || (shiftData.salesCount || 0) + (shiftData.returnsCount || 0);
-    const totalNetSales = shiftData.totalNet || shiftData.salesNet || 0;
+    const cashSales = Number(ext.cashSalesIn || 0);
+    const creditSales = Number(ext.creditSalesRemaining || 0);
+    const receipts = Number(ext.receiptsTotal || 0);
+    const payments = Number(ext.totalCashPaymentsOut || shiftData.totalExpenses || 0);
+    const opening = Number(ext.openingCashBalance || 0);
+    const expected = Number(ext.expectedCashBalance || 0);
+    const actual = Number(ext.actualCashBalance ?? expected);
+    const variance = actual - expected;
 
     openUniversalPrint({
-      kind: 'sales_report',
-      title: 'تقرير إغلاق الوردية والمبيعات',
+      kind: 'shift_closing',
+      title: 'تقرير إغلاق الوردية واليومية',
       docNumber: shiftData.serialNo || 1,
       date: shiftData.date || new Date().toISOString().split('T')[0],
       time: shiftData.time || new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
       branch: shiftData.branch || 'الفرع الرئيسي',
+      user: shiftData.cashierName || 'كاشير الوردية',
       partyName: shiftData.cashierName || 'كاشير الوردية',
       partyLabel: 'الكاشير المسؤول',
-      columns: ['البيان', 'العدد', 'الإجمالي'],
+      columns: ['الحركة / البند', 'القيمة', 'ملاحظات'],
       rows: [
-        ['مبيعات الوردية الإجمالية', shiftData.salesCount || 0, `${(shiftData.salesGross || 0).toFixed(2)} ${curSymbol}`],
-        ['خصومات المبيعات', '-', `${(shiftData.salesDiscount || 0).toFixed(2)} ${curSymbol}`],
-        ['صافي المبيعات', '-', `${(shiftData.salesNet || 0).toFixed(2)} ${curSymbol}`],
-        ['مرتجعات الوردية', shiftData.returnsCount || 0, `${(shiftData.returnsNet || 0).toFixed(2)} ${curSymbol}`],
+        ['مبيعات نقدية محصلة', cashSales.toFixed(2), `${shiftData.salesCount || 0} فاتورة صادرة`],
+        ['مبيعات آجلة (متبقية)', creditSales.toFixed(2), 'على حسابات العملاء'],
+        ['مرتجعات المبيعات', (shiftData.returnsNet || 0).toFixed(2), `${shiftData.returnsCount || 0} إذن مرتجع`],
+        ['تحصيلات وسندات قبض', receipts.toFixed(2), 'دفعات وتحصيلات نقدية'],
+        ['مصروفات ومدفوعات', payments.toFixed(2), 'سندات صرف ومشتريات ومصروفات'],
+        ['تكلفة البضاعة المباعة (COGS)', (shiftData.costOfGoodsSold || 0).toFixed(2), `إجمالي الفواتير: ${totalInvoices}`],
+        ['صافي ربح الوردية', (shiftData.netProfit || 0).toFixed(2), 'بعد خصم التكلفة والمصروفات'],
       ],
-      kpis: [
-        { title: 'إجمالي المبيعات', value: `${(shiftData.salesGross || 0).toFixed(2)} ${curSymbol}` },
-        { title: 'المرتجعات', value: `${(shiftData.returnsNet || 0).toFixed(2)} ${curSymbol}` },
-        { title: 'عدد الفواتير', value: `${totalInvoices} فاتورة` },
-        { title: 'صافي الوردية', value: `${totalNetSales.toFixed(2)} ${curSymbol}` },
-      ],
-      amount: totalNetSales,
+      shiftMetrics: {
+        opening,
+        cashSales,
+        creditSales,
+        returns: shiftData.returnsNet || 0,
+        receipts,
+        payments,
+        expenses: shiftData.totalExpenses || 0,
+        profit: shiftData.netProfit || 0,
+        expected,
+        actual,
+        variance,
+      },
+      amount: expected,
       summaries: [
-        { label: 'عدد الفواتير', value: `${totalInvoices} فاتورة` },
-        { label: 'صافي مبيعات الوردية', value: `${totalNetSales.toFixed(2)} ${curSymbol}`, isTotal: true },
+        { label: 'الرصيد المتوقع', value: `${expected.toFixed(2)} ${curSymbol}` },
+        { label: 'الرصيد الفعلي', value: `${actual.toFixed(2)} ${curSymbol}` },
+        { label: 'العجز / الزيادة', value: `${variance.toFixed(2)} ${curSymbol}`, isTotal: true },
       ],
-      signatures: ['كاشير الوردية', 'مراجع المبيعات'],
+      signatures: ['كاشير الوردية', 'المراجع المالي', 'الاعتماد'],
       settings: appData.settings,
       preferredPaperSize: 'a5-portrait',
     });

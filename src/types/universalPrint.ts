@@ -39,6 +39,7 @@ export type UniversalDocKind =
   | 'debt_aging'
   | 'bank_reconciliation'
   | 'audit_trail'
+  | 'shift_closing'
   | 'batch_invoices'
   | 'generic_report';
 
@@ -138,6 +139,19 @@ export interface UniversalPrintPayload {
   summaries?: UniversalPrintSummaryItem[];
   kpis?: Array<{ title: string; value: string }>;
   signatures?: string[];
+  shiftMetrics?: {
+    opening: number;
+    cashSales: number;
+    creditSales?: number;
+    returns?: number;
+    receipts: number;
+    payments: number;
+    expenses?: number;
+    profit: number;
+    expected: number;
+    actual?: number;
+    variance?: number;
+  };
   footerTermsNote?: string;
   preferredPaperSize?: UniversalPaperSize;
   settings?: Settings;

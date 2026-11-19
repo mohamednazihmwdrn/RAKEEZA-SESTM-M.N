@@ -235,11 +235,13 @@ export function buildInvoicePrintPayload(
     label: fin.isReturn ? 'المردود / المسترد نقداً' : isSales ? 'المحصل / المدفوع' : 'المبلغ المسدد',
     value: `${fin.paidVal.toFixed(2)} ${curSymbol}`,
   });
-  summaries.push({
-    label: fin.isReturn ? 'المسوّى على الحساب' : 'المتبقي المستحق',
-    value: `${fin.remainingVal.toFixed(2)} ${curSymbol}`,
-    isHighlight: fin.remainingVal > 0,
-  });
+  if (fin.remainingVal > 0.01) {
+    summaries.push({
+      label: fin.isReturn ? 'المسوّى على الحساب' : 'المتبقي المستحق',
+      value: `${fin.remainingVal.toFixed(2)} ${curSymbol}`,
+      isHighlight: true,
+    });
+  }
 
   let prefSize: UniversalPaperSize = 'a5-portrait';
   if (preferredPaperSize) {
@@ -408,7 +410,9 @@ export function buildBatchInvoicesPrintPayload(
       { title: 'عدد المستندات', value: `${stats.count} مستند` },
       { title: 'إجمالي القيمة', value: `${fmt(stats.grossTotalSum)} ${curSymbol}` },
       { title: 'إجمالي المدفوع / المحصل', value: `${fmt(stats.paidSum)} ${curSymbol}` },
-      { title: 'إجمالي المتبقي', value: `${fmt(stats.remainingSum)} ${curSymbol}` },
+      ...(stats.remainingSum > 0.01
+        ? [{ title: 'إجمالي المتبقي', value: `${fmt(stats.remainingSum)} ${curSymbol}` }]
+        : []),
       ...(stats.returnsTotalSum > 0
         ? [{ title: 'قيمة المرتجعات', value: `${fmt(stats.returnsTotalSum)} ${curSymbol}` }]
         : []),

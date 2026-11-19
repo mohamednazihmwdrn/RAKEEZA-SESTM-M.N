@@ -9,6 +9,7 @@ import {
   exportBalanceSheetToExcel,
 } from '../utils/excelExport';
 import { computeFinancialStatementsFromLedger } from '../utils/accountingEngine';
+import { openUniversalPrint } from '../services/centralizedPrintService';
 
 interface OperationsViewProps {
   appData: AppData;
@@ -724,7 +725,40 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                 <span>تصدير إلى Excel</span>
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+                  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  openUniversalPrint({
+                    kind: 'trial_balance',
+                    title: 'ميزان المراجعة العام (Trial Balance)',
+                    docNumber: 'TB-' + new Date().toISOString().split('T')[0],
+                    date: new Date().toISOString().split('T')[0],
+                    time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                    branch: appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي',
+                    columns: ['كود الحساب', 'اسم الحساب', 'النوع', 'مدين', 'دائن', 'الرصيد'],
+                    rows: statements.trialBalanceRows.map((r) => [
+                      r.code,
+                      r.name,
+                      r.type,
+                      r.debit > 0 ? fmt(r.debit) : '-',
+                      r.credit > 0 ? fmt(r.credit) : '-',
+                      `${fmt(r.balance)} ${curSymbol}`,
+                    ]),
+                    kpis: [
+                      { title: 'إجمالي المدين', value: `${fmt(statements.trialTotalDebit)} ${curSymbol}` },
+                      { title: 'إجمالي الدائن', value: `${fmt(statements.trialTotalCredit)} ${curSymbol}` },
+                      { title: 'حالة الميزان', value: statements.isTrialBalanced ? 'متوازن' : 'فرق تسوية' },
+                    ],
+                    summaries: [
+                      { label: 'مجموع المدين', value: `${fmt(statements.trialTotalDebit)} ${curSymbol}` },
+                      { label: 'مجموع الدائن', value: `${fmt(statements.trialTotalCredit)} ${curSymbol}` },
+                      { label: 'الفرق', value: `${fmt(statements.trialTotalDebit - statements.trialTotalCredit)} ${curSymbol}`, isTotal: true },
+                    ],
+                    signatures: ['المحاسب', 'المراجع المالي', 'الاعتماد'],
+                    preferredPaperSize: 'a4-portrait',
+                    settings: appData.settings,
+                  });
+                }}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
               >
                 🖨️ طباعة الميزان
@@ -873,7 +907,41 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                 <span>تصدير إلى Excel</span>
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+                  const fmt = (n: number) => `${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+                  openUniversalPrint({
+                    kind: 'income_statement',
+                    title: 'قائمة الدخل والأرباح والخسائر (Income Statement)',
+                    docNumber: 'IS-' + new Date().toISOString().split('T')[0],
+                    date: new Date().toISOString().split('T')[0],
+                    time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                    branch: appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي',
+                    columns: ['البند المحاسبي', 'التصنيف', 'القيمة'],
+                    rows: [
+                      ['إجمالي الإيرادات والمبيعات', 'إيرادات', fmt(allSales)],
+                      ['مردودات ومسموحات المبيعات', 'خصومات', `-${fmt(allSalesReturns)}`],
+                      ['صافي المبيعات (Net Revenue)', 'صافي الإيراد', fmt(netSalesRevenue)],
+                      ['تكلفة البضاعة المباعة (COGS)', 'التكاليف', fmt(totalCOGS)],
+                      ['مجمل الربح التجاري (Gross Profit)', 'نتيجة النشاط', fmt(grossProfit)],
+                      ['المصروفات التشغيلية والإدارية', 'مصروفات', fmt(operatingExpenses)],
+                      ['صافي الربح / الخسارة النهائي', 'صافي النتيجة', fmt(netIncome)],
+                    ],
+                    kpis: [
+                      { title: 'صافي المبيعات', value: fmt(netSalesRevenue) },
+                      { title: 'مجمل الربح', value: fmt(grossProfit) },
+                      { title: 'صافي الربح النهائي', value: fmt(netIncome) },
+                    ],
+                    summaries: [
+                      { label: 'صافي المبيعات', value: fmt(netSalesRevenue) },
+                      { label: 'إجمالي المصروفات والتكلفة', value: fmt(totalCOGS + operatingExpenses) },
+                      { label: 'صافي الدخل', value: fmt(netIncome), isTotal: true },
+                    ],
+                    signatures: ['المحاسب', 'المدير المالي', 'الاعتماد'],
+                    preferredPaperSize: 'a4-portrait',
+                    settings: appData.settings,
+                  });
+                }}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
               >
                 🖨️ طباعة
@@ -967,7 +1035,41 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                 <span>تصدير إلى Excel</span>
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const curSymbol = appData.settings?.currencySymbol || 'ج.م';
+                  const fmt = (n: number) => `${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curSymbol}`;
+                  openUniversalPrint({
+                    kind: 'balance_sheet',
+                    title: 'الميزانية العمومية والمركز المالي (Balance Sheet)',
+                    docNumber: 'BS-' + new Date().toISOString().split('T')[0],
+                    date: new Date().toISOString().split('T')[0],
+                    time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                    branch: appData.branches?.find((b) => b.id === appData.activeBranchId)?.name || 'الفرع الرئيسي',
+                    columns: ['البند المحاسبي', 'القسم', 'القيمة'],
+                    rows: [
+                      ['النقدية والبنوك والخزائن', 'أصول متداولة', fmt(totalCashBank)],
+                      ['حسابات العملاء والمدينون', 'أصول متداولة', fmt(totalReceivables)],
+                      ['مخزون البضاعة بالتكلفة', 'أصول متداولة', fmt(totalInventoryVal)],
+                      ['الأصول الثابتة والمعدات', 'أصول ثابتة', fmt(totalFixedAssets)],
+                      ['الموردون والدائنون', 'خصوم متداولة', fmt(totalPayables)],
+                      ['الالتزامات الضريبية المستحقة', 'خصوم متداولة', fmt(totalVatPayable)],
+                      ['رأس المال المستثمر', 'حقوق الملكية', fmt(capital)],
+                      ['أرباح وخسائر العام الحالي', 'حقوق الملكية', fmt(netIncome)],
+                    ],
+                    kpis: [
+                      { title: 'إجمالي الأصول', value: fmt(totalAssets) },
+                      { title: 'إجمالي الخصوم', value: fmt(totalLiabilities) },
+                      { title: 'حقوق الملكية', value: fmt(totalEquity) },
+                    ],
+                    summaries: [
+                      { label: 'إجمالي الأصول', value: fmt(totalAssets) },
+                      { label: 'إجمالي الخصوم وحقوق الملكية', value: fmt(totalLiabilities + totalEquity), isTotal: true },
+                    ],
+                    signatures: ['المحاسب', 'المراجع المالي', 'الاعتماد'],
+                    preferredPaperSize: 'a4-portrait',
+                    settings: appData.settings,
+                  });
+                }}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
               >
                 🖨️ طباعة

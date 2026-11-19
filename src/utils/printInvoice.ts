@@ -79,7 +79,7 @@ export function generateInvoicePrintHtml(
     ...(fin.extraChargesVal > 0 ? [{ label: 'مصاريف إضافية', value: `${fin.extraChargesVal.toFixed(2)} ${curSymbol}` }] : []),
     { label: 'الصافي المستحق', value: `${fin.grandTotal.toFixed(2)} ${curSymbol}`, isTotal: true, isHighlight: true },
     { label: 'المدفوع', value: `${fin.paidVal.toFixed(2)} ${curSymbol}` },
-    { label: 'المتبقي', value: `${fin.remainingVal.toFixed(2)} ${curSymbol}` },
+    ...(fin.remainingVal > 0.01 ? [{ label: 'المتبقي', value: `${fin.remainingVal.toFixed(2)} ${curSymbol}` }] : []),
   ];
 
   return generateUnifiedReportHtml({

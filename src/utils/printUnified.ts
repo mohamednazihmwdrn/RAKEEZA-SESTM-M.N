@@ -27,6 +27,7 @@ export function inferDocKind(title: string = '', columns?: string[]): UniversalD
   if (t.includes('ميزان المراجعة')) return 'trial_balance';
   if (t.includes('قائمة الدخل') || t.includes('الأرباح والخسائر')) return 'income_statement';
   if (t.includes('المركز المالي') || t.includes('الميزانية')) return 'balance_sheet';
+  if (t.includes('إغلاق الوردية') || t.includes('إغلاق وردية') || t.includes('تقفيل الوردية') || t.includes('إغلاق اليومية') || t.includes('وردية')) return 'shift_closing';
   if (t.includes('إغلاق الخزينة') || t.includes('أرصدة الخز') || t.includes('الأرصدة النقدية')) return 'treasury_balances';
   if (t.includes('تحويل') && t.includes('خز')) return 'treasury_transfer';
   if (t.includes('خزينة') || t.includes('نقدية') || t.includes('مقبوضات')) return 'treasury_movement';
@@ -41,7 +42,7 @@ export function inferDocKind(title: string = '', columns?: string[]): UniversalD
   if (t.includes('إيرادات')) return 'revenues_report';
   if (t.includes('تدقيق') || t.includes('الرقاب') || t.includes('حركات النظام')) return 'audit_trail';
   if (t.includes('قيد') || t.includes('يومية عامة')) return 'journal_entry';
-  if (t.includes('مبيعات') || t.includes('وردية') || t.includes('رواتب')) return 'sales_report';
+  if (t.includes('مبيعات') || t.includes('رواتب')) return 'sales_report';
   if (t.includes('مشتريات') || t.includes('توريد')) return 'purchases_report';
 
   return 'generic_report';
