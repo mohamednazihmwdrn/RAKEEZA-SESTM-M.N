@@ -5,6 +5,7 @@ import {
   BulkImportBatch,
   BulkImportRollbackBlockReport,
   BulkImportRow,
+  User,
 } from '../types';
 import {
   analyzeBulkImportRows,
@@ -53,6 +54,8 @@ interface BulkImportViewProps {
   ) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onNavigate?: (page: string) => void;
+  currentUser?: User;
+  companyName?: string;
 }
 
 type StatusFilter = 'all' | 'new' | 'match_existing' | 'issues' | 'ready';
@@ -74,6 +77,8 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
   onUpdateData,
   showToast,
   onNavigate,
+  currentUser: currentUserProp,
+  companyName,
 }) => {
   const currency = appData.settings?.currencySymbol || 'ج.م';
   const companyId = appData.companyId || 'COMP-000001';
@@ -81,8 +86,11 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
   const mainBranchId = getMainBranchId(branches);
 
   const currentUser = useMemo(
-    () => appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0],
-    [appData.users, appData.currentUser]
+    () =>
+      currentUserProp ||
+      appData.users?.find((u) => u.id === appData.currentUser) ||
+      appData.users?.[0],
+    [currentUserProp, appData.users, appData.currentUser]
   );
 
   const accessibleBranches = useMemo(() => {
@@ -204,6 +212,7 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
         supplierName: SQ101197_METADATA.supplierName,
         defaultSaleMarkupPercent: Math.max(0, parseFloat(defaultMarkupPercent) || 0),
         idempotencyKey: getSq101197IdempotencyKey(companyId, selectedWarehouseId),
+        actingUser: currentUser,
       });
 
       if (!result.success) {
@@ -573,6 +582,7 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
         supplierName: supplierHint,
         defaultSaleMarkupPercent: Math.max(0, parseFloat(defaultMarkupPercent) || 0),
         idempotencyKey,
+        actingUser: currentUser,
       });
 
       if (!result.success) {
@@ -619,7 +629,7 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
 
   const handleConfirmRollback = () => {
     if (!rollbackCandidate) return;
-    const res = rollbackBulkImportBatch(appData, rollbackCandidate.id);
+    const res = rollbackBulkImportBatch(appData, rollbackCandidate.id, currentUser);
     if (!res.success) {
       if (res.blockReport) {
         setRollbackBlockReport(res.blockReport);
@@ -767,7 +777,7 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
             </div>
             <p className="text-xs text-indigo-100 leading-relaxed">
               استورد مئات أو آلاف الأصناف من <strong className="text-white">Excel / CSV / PDF (مع OCR وذكاء اصطناعي لجميع الصفحات)</strong> إلى{' '}
-              <strong className="text-amber-300">{appData.settings?.companyName}</strong> — المخزن المحدد:{' '}
+              <strong className="text-amber-300">{companyName || appData.settings?.companyName}</strong> — المخزن المحدد:{' '}
               <strong className="text-amber-200">{selectedWarehouse?.name || 'الفرع الرئيسي'}</strong>
             </p>
           </div>

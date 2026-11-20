@@ -21,6 +21,14 @@ import { BackupView } from './components/BackupView';
 import { InventoryStocktakingView } from './components/InventoryStocktakingView';
 import { YearEndClosingView } from './components/YearEndClosingView';
 import { BulkImportView } from './components/BulkImportView';
+import { analyzeBulkImportRows, executeBulkImportBatch } from './utils/bulkImportEngine';
+import { getMainBranchId } from './utils/branchIsolation';
+import {
+  buildSq101197BulkRows,
+  getSq101197IdempotencyKey,
+  isElectricalCompanyName,
+  SQ101197_METADATA,
+} from './data/sq101197AlAndalusPreset';
 
 // Enterprise Pillar Views
 import { PosView } from './components/PosView';
@@ -143,6 +151,8 @@ export default function App() {
   const [session, setSession] = useState<AuthSessionResponse | null>(null);
   const [ownerSession, setOwnerSession] = useState<{ token: string; user?: any } | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [hydratedCompanyId, setHydratedCompanyId] = useState<string | null>(null);
+  const autoMergedSq101197Ref = useRef<Set<string>>(new Set());
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState<boolean>(false);
   const [licenseCodeInput, setLicenseCodeInput] = useState<string>('');
   const [isActivatingLicense, setIsActivatingLicense] = useState<boolean>(false);
@@ -571,8 +581,10 @@ export default function App() {
                 setAppData(localData);
               }
             }
+            setHydratedCompanyId(activeSession.company.id);
           } else {
             setSession(null);
+            setHydratedCompanyId(null);
           }
 
           // Check for active Owner session (isolated from tenant session)
@@ -660,6 +672,7 @@ export default function App() {
         setAppData(localData);
       }
     }
+    setHydratedCompanyId(loginResult.company.id);
 
     const targetPage = (loginResult.user.role === 'owner')
       ? 'owner_panel'
@@ -703,6 +716,7 @@ export default function App() {
     } catch {}
     setSession(null);
     setOwnerSession(null);
+    setHydratedCompanyId(null);
     setCurrentPage('home');
     showToast('تم تسجيل الخروج بنجاح من المنظومة', 'info');
   };
@@ -1173,6 +1187,62 @@ export default function App() {
   const userCompanyId =
     session?.company?.id || currentUser?.companyId || appData.companyId || 'COMP-000001';
 
+  // ⚡ Automatic One-Time Opening Balance Merge of SQ101197 (154 Al-Andalus items) for مؤسسة أدوات الكهرباء
+  useEffect(() => {
+    if (!session?.valid || !session?.company?.id) return;
+    if (hydratedCompanyId !== session.company.id) return;
+
+    const compId = session.company.id;
+    const compName = session.company.name || appData.settings?.companyName || '';
+    if (!isElectricalCompanyName(compName)) return;
+    if (appData.viewingClosedYear) return;
+    if (autoMergedSq101197Ref.current.has(compId)) return;
+
+    const alreadyProcessed =
+      Object.keys(appData.processedImportKeys || {}).some((k) =>
+        k.startsWith('preset_sq101197_')
+      ) ||
+      (appData.bulkImportBatches || []).some((b) =>
+        (b.idempotencyKey || '').startsWith('preset_sq101197_')
+      );
+    if (alreadyProcessed) {
+      autoMergedSq101197Ref.current.add(compId);
+      return;
+    }
+
+    const targetBranchId = appData.activeBranchId || getMainBranchId(appData.branches);
+    const presetRows = buildSq101197BulkRows(targetBranchId);
+    const analyzed = analyzeBulkImportRows(presetRows, appData, targetBranchId, false);
+    const hasCreatable = analyzed.some((r) => r.action === 'create_new');
+    autoMergedSq101197Ref.current.add(compId);
+    if (!hasCreatable) return;
+
+    const result = executeBulkImportBatch({
+      appData,
+      rows: analyzed,
+      warehouseId: targetBranchId,
+      sourceType: 'pdf',
+      fileName: `SQ101197 عرض سعر شركة الأندلس (154 صنف)`,
+      importDate: SQ101197_METADATA.date,
+      supplierName: SQ101197_METADATA.supplierName,
+      defaultSaleMarkupPercent: 0,
+      idempotencyKey: getSq101197IdempotencyKey(compId, targetBranchId),
+      actingUser: currentUser || session.user,
+    });
+
+    if (result.success && !result.duplicate && result.updatedData && result.batch) {
+      updateData(result.updatedData, {
+        action: 'bulk_import',
+        module: 'الاستيراد الجماعي للأصناف',
+        details: `دمج تلقائي لكامل أصناف عرض سعر شركة الأندلس (${SQ101197_METADATA.docCode}) — ${result.batch.createdCount} صنف كأرصدة ابتدائية في [${result.batch.warehouseName}] بقيمة ${result.batch.totalOpeningValue} ج.م`,
+      });
+      showToast(
+        `تم دمج كامل الـ ${result.batch.createdCount} صنف من عرض أسعار الأندلس (${SQ101197_METADATA.docCode}) كأرصدة ابتدائية بالمخزن (${result.batch.totalOpeningValue.toLocaleString('en-US')} ج.م) بنجاح!`,
+        'success'
+      );
+    }
+  }, [hydratedCompanyId, session?.valid, session?.company?.id, session?.company?.name, appData]);
+
   const pendingWebOrdersCount = (appData.quotations || []).filter((q) => {
     const isWebOrder =
       (q.source === 'online_catalog' || q.status === 'online_order' || (q.orderReference && q.orderReference.startsWith('ORD-'))) &&
@@ -1403,6 +1473,8 @@ export default function App() {
             onShareCatalog={() => setIsShareCatalogOpen(true)}
             onOpenCatalog={() => handleNavigate('catalog')}
             onNavigate={handleNavigate}
+            currentUser={currentUser}
+            companyName={session?.company?.name || appData.settings?.companyName}
           />
         );
       case 'bulk_import':
@@ -1412,6 +1484,8 @@ export default function App() {
             onUpdateData={updateData}
             showToast={showToast}
             onNavigate={handleNavigate}
+            currentUser={currentUser}
+            companyName={session?.company?.name || appData.settings?.companyName}
           />
         );
       case 'physical_inventory':
@@ -1512,6 +1586,7 @@ export default function App() {
                     setAppData(localData);
                   }
                 }
+                setHydratedCompanyId(company.id);
                 showToast(`تم الدخول بنجاح إلى شركة: ${company.name} ${asSupport ? '(وضع الدعم الفني)' : ''}`, 'success');
                 handleNavigate('home');
               } catch (e) {
@@ -1612,6 +1687,7 @@ export default function App() {
                   setAppData(localData);
                 }
               }
+              setHydratedCompanyId(company.id);
               showToast(`تم الدخول بنجاح إلى شركة: ${company.name} ${asSupport ? '(وضع الدعم الفني)' : ''}`, 'success');
               handleNavigate('home');
             } catch (e) {

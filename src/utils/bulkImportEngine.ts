@@ -9,6 +9,7 @@ import {
   BulkImportRow,
   Item,
   JournalEntry,
+  User,
 } from '../types';
 import { assertPeriodUnlocked, recalculateAllAccountingBalances } from './accountingEngine';
 import { getMainBranchId } from './branchIsolation';
@@ -861,6 +862,7 @@ export interface CommitBulkImportParams {
   supplierName?: string;
   defaultSaleMarkupPercent?: number;
   idempotencyKey: string;
+  actingUser?: User;
 }
 
 export interface CommitBulkImportResult {
@@ -882,12 +884,19 @@ export function executeBulkImportBatch(params: CommitBulkImportParams): CommitBu
     supplierName,
     defaultSaleMarkupPercent = 0,
     idempotencyKey,
+    actingUser,
   } = params;
 
   const currentUser =
-    appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    actingUser ||
+    appData.users?.find((u) => u.id === appData.currentUser) ||
+    appData.users?.[0];
 
-  if (!hasPermission(currentUser, 'bulk_import') && !hasPermission(currentUser, 'items_create')) {
+  if (
+    currentUser &&
+    !hasPermission(currentUser, 'bulk_import') &&
+    !hasPermission(currentUser, 'items_create')
+  ) {
     return {
       success: false,
       error: 'عفواً، لا يمتلك المستخدم الحالي صلاحية تنفيذ الاستيراد الجماعي للأصناف.',
@@ -1543,12 +1552,19 @@ export function checkBulkImportRollbackEligibility(
 
 export function rollbackBulkImportBatch(
   appData: AppData,
-  batchId: string
+  batchId: string,
+  actingUser?: User
 ): { success: boolean; error?: string; blockReport?: BulkImportRollbackBlockReport; updatedData?: AppData } {
   const currentUser =
-    appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+    actingUser ||
+    appData.users?.find((u) => u.id === appData.currentUser) ||
+    appData.users?.[0];
 
-  if (!hasPermission(currentUser, 'bulk_import') && !hasPermission(currentUser, 'items_delete')) {
+  if (
+    currentUser &&
+    !hasPermission(currentUser, 'bulk_import') &&
+    !hasPermission(currentUser, 'items_delete')
+  ) {
     return {
       success: false,
       error: 'عفواً، لا يمتلك المستخدم الحالي صلاحية التراجع عن دفعات الاستيراد الجماعي.',

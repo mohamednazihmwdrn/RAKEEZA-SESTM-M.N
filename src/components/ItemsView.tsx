@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppData, Item, ItemAltUnit } from '../types';
+import { AppData, Item, ItemAltUnit, User } from '../types';
 import { Modal } from './Modal';
 import { exportToExcel } from '../utils/excelExport';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
@@ -28,6 +28,8 @@ interface ItemsViewProps {
   onShareCatalog?: () => void;
   onOpenCatalog?: () => void;
   onNavigate?: (page: string) => void;
+  currentUser?: User;
+  companyName?: string;
 }
 
 export const ItemsView: React.FC<ItemsViewProps> = ({
@@ -38,6 +40,8 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   onShareCatalog,
   onOpenCatalog,
   onNavigate,
+  currentUser,
+  companyName,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,10 +62,23 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   const [scannerTarget, setScannerTarget] = useState<null | 'search' | 'modal'>(null);
 
   const currentUserObj = useMemo(
-    () => appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0],
-    [appData.users, appData.currentUser]
+    () =>
+      currentUser ||
+      appData.users?.find((u) => u.id === appData.currentUser) ||
+      appData.users?.[0],
+    [currentUser, appData.users, appData.currentUser]
   );
-  const canViewCost = useMemo(() => hasPermission(currentUserObj, 'view_cost_price'), [currentUserObj]);
+  const canViewCost = useMemo(
+    () => !currentUserObj || hasPermission(currentUserObj, 'view_cost_price'),
+    [currentUserObj]
+  );
+  const canBulkImport = useMemo(
+    () =>
+      !currentUserObj ||
+      hasPermission(currentUserObj, 'bulk_import') ||
+      hasPermission(currentUserObj, 'items_create'),
+    [currentUserObj]
+  );
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -170,18 +187,19 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     return getBranchItems(appData.items, activeBranchId, mainBranchId);
   }, [appData.items, activeBranchId, mainBranchId]);
 
+  const effectiveCompanyName = companyName || appData.settings?.companyName || '';
   const sq101197Key = getSq101197IdempotencyKey(appData.companyId || 'COMP-000001', activeBranchId);
   const isSq101197Committed = Boolean(
     appData.processedImportKeys?.[sq101197Key] ||
       (appData.bulkImportBatches || []).some(
-        (b) => b.idempotencyKey === sq101197Key && b.status === 'committed'
+        (b) => (b.idempotencyKey === sq101197Key || (b.idempotencyKey || '').startsWith('preset_sq101197_')) && b.status === 'committed'
       )
   );
   const showSq101197QuickMerge =
     subPage === 'items' &&
     !isSq101197Committed &&
-    isElectricalCompanyName(appData.settings?.companyName) &&
-    (hasPermission(currentUserObj, 'bulk_import') || hasPermission(currentUserObj, 'items_create'));
+    isElectricalCompanyName(effectiveCompanyName) &&
+    canBulkImport;
 
   const handleQuickMergeSq101197 = () => {
     const presetRows = buildSq101197BulkRows(activeBranchId);
@@ -216,6 +234,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
       supplierName: SQ101197_METADATA.supplierName,
       defaultSaleMarkupPercent: 0,
       idempotencyKey: sq101197Key,
+      actingUser: currentUserObj,
     });
 
     if (!result.success) {
@@ -804,7 +823,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                   <span>🌳</span>
                   <span>+ شجرة صنف (مجموعة &gt; تصنيف &gt; نوع &gt; صنف)</span>
                 </button>
-                {onNavigate && (hasPermission(currentUserObj, 'bulk_import') || hasPermission(currentUserObj, 'items_create')) && (
+                {onNavigate && canBulkImport && (
                   <button
                     type="button"
                     onClick={() => onNavigate('bulk_import')}
