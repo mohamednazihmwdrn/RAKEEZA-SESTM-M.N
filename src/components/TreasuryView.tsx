@@ -106,22 +106,26 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
-    const updatedData = saveTreasuryMovement(appData, {
-      action: 'deposit',
-      date: depDate || new Date().toISOString().split('T')[0],
-      amount: amt,
-      method: depMethod,
-      branchId: targetBranchId,
-      bankId: depBankId || undefined,
-      note: depNote.trim() || `إيداع نقدية مباشر في ${getMethodName(depMethod)}`,
-      user: currentUserObj,
-    });
+    try {
+      const updatedData = saveTreasuryMovement(appData, {
+        action: 'deposit',
+        date: depDate || new Date().toISOString().split('T')[0],
+        amount: amt,
+        method: depMethod,
+        branchId: targetBranchId,
+        bankId: depBankId || undefined,
+        note: depNote.trim() || `إيداع نقدية مباشر في ${getMethodName(depMethod)}`,
+        user: currentUserObj,
+      });
 
-    onUpdateData(updatedData);
-    setIsDepositOpen(false);
-    setDepAmount('');
-    setDepNote('');
-    showToast(`تم إيداع مبلغ ${amt.toFixed(2)} ج.م في ${getMethodName(depMethod)} بنجاح`, 'success');
+      onUpdateData(updatedData);
+      setIsDepositOpen(false);
+      setDepAmount('');
+      setDepNote('');
+      showToast(`تم إيداع مبلغ ${amt.toFixed(2)} ج.م في ${getMethodName(depMethod)} بنجاح`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر تنفيذ حركة الإيداع', 'error');
+    }
   };
 
   // Transfer Action
@@ -148,25 +152,29 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
-    const updatedData = saveTreasuryMovement(appData, {
-      action: 'transfer',
-      date: trDate || new Date().toISOString().split('T')[0],
-      amount: amt,
-      fromMethod: trFrom,
-      toMethod: trTo,
-      branchId: targetBranchId,
-      note: trNote.trim() || undefined,
-      user: currentUserObj,
-    });
+    try {
+      const updatedData = saveTreasuryMovement(appData, {
+        action: 'transfer',
+        date: trDate || new Date().toISOString().split('T')[0],
+        amount: amt,
+        fromMethod: trFrom,
+        toMethod: trTo,
+        branchId: targetBranchId,
+        note: trNote.trim() || undefined,
+        user: currentUserObj,
+      });
 
-    onUpdateData(updatedData);
-    setIsTransferOpen(false);
-    setTrAmount('');
-    setTrNote('');
-    showToast(
-      `تم تحويل مبلغ ${amt.toFixed(2)} ج.م من ${getMethodName(trFrom)} إلى ${getMethodName(trTo)} بنجاح`,
-      'success'
-    );
+      onUpdateData(updatedData);
+      setIsTransferOpen(false);
+      setTrAmount('');
+      setTrNote('');
+      showToast(
+        `تم تحويل مبلغ ${amt.toFixed(2)} ج.م من ${getMethodName(trFrom)} إلى ${getMethodName(trTo)} بنجاح`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر تنفيذ حركة التحويل', 'error');
+    }
   };
 
   // Withdraw Action
@@ -186,21 +194,25 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
     }
 
     const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
-    const updatedData = saveTreasuryMovement(appData, {
-      action: 'withdraw',
-      date: wthDate || new Date().toISOString().split('T')[0],
-      amount: amt,
-      method: wthMethod,
-      branchId: targetBranchId,
-      note: wthNote.trim() || `سحب/مصروفات من ${getMethodName(wthMethod)}`,
-      user: currentUserObj,
-    });
+    try {
+      const updatedData = saveTreasuryMovement(appData, {
+        action: 'withdraw',
+        date: wthDate || new Date().toISOString().split('T')[0],
+        amount: amt,
+        method: wthMethod,
+        branchId: targetBranchId,
+        note: wthNote.trim() || `سحب/مصروفات من ${getMethodName(wthMethod)}`,
+        user: currentUserObj,
+      });
 
-    onUpdateData(updatedData);
-    setIsWithdrawOpen(false);
-    setWthAmount('');
-    setWthNote('');
-    showToast(`تم سحب مبلغ ${amt.toFixed(2)} ج.م من ${getMethodName(wthMethod)} بنجاح`, 'success');
+      onUpdateData(updatedData);
+      setIsWithdrawOpen(false);
+      setWthAmount('');
+      setWthNote('');
+      showToast(`تم سحب مبلغ ${amt.toFixed(2)} ج.م من ${getMethodName(wthMethod)} بنجاح`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر تنفيذ حركة السحب', 'error');
+    }
   };
 
   // Add Bank Account Action
@@ -212,22 +224,26 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
     const initAmt = Number(bankInitial) || 0;
     const currentUserObj = appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
-    const updatedData = saveTreasuryMovement(appData, {
-      action: 'bank_opening',
-      date: new Date().toISOString().split('T')[0],
-      amount: initAmt,
-      branchId: targetBranchId,
-      bankName: bankName.trim(),
-      bankAccountNumber: bankAccountNum.trim(),
-      user: currentUserObj,
-    });
+    try {
+      const updatedData = saveTreasuryMovement(appData, {
+        action: 'bank_opening',
+        date: new Date().toISOString().split('T')[0],
+        amount: initAmt,
+        branchId: targetBranchId,
+        bankName: bankName.trim(),
+        bankAccountNumber: bankAccountNum.trim(),
+        user: currentUserObj,
+      });
 
-    onUpdateData(updatedData);
-    setIsBankOpen(false);
-    setBankName('');
-    setBankAccountNum('');
-    setBankInitial('');
-    showToast('تم إضاقة الحساب البنكي الجديد بنجاح', 'success');
+      onUpdateData(updatedData);
+      setIsBankOpen(false);
+      setBankName('');
+      setBankAccountNum('');
+      setBankInitial('');
+      showToast('تم إضاقة الحساب البنكي الجديد بنجاح', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر إضافة الحساب البنكي', 'error');
+    }
   };
 
   const handleDeleteBankAccount = (id: string) => {
@@ -240,9 +256,13 @@ export const TreasuryView: React.FC<TreasuryViewProps> = ({ appData, onUpdateDat
 
   const handleDeleteTransaction = (id: number) => {
     if (!confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) return;
-    const updatedData = deleteCashVoucher(appData, id);
-    onUpdateData(updatedData);
-    showToast('تم حذف الحركة النقدية وتعديل رصيد الخزينة والقيود بنجاح', 'success');
+    try {
+      const updatedData = deleteCashVoucher(appData, id);
+      onUpdateData(updatedData);
+      showToast('تم حذف الحركة النقدية وتعديل رصيد الخزينة والقيود بنجاح', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف الحركة النقدية', 'error');
+    }
   };
 
   // Filter Transactions

@@ -29,6 +29,10 @@ export interface Settings {
   companyId?: string;
   companyCode?: string;
   apiKey?: string;
+  periodLockDate?: string;
+  preventBelowCostSale?: boolean;
+  enforceCreditLimit?: 'warn' | 'block' | 'pin';
+  supervisorPin?: string;
 }
 
 export interface CustomerRepresentative {
@@ -211,6 +215,16 @@ export interface ItemMovement {
   batchNumber?: string;
 }
 
+export interface ItemAltUnit {
+  id: string;
+  name: string;
+  factor: number;
+  barcode?: string;
+  buyPrice?: number;
+  salePrice?: number;
+  wholesalePrice?: number;
+}
+
 export interface Item {
   id: string;
   companyId?: string;
@@ -220,6 +234,7 @@ export interface Item {
   barcode?: string;
   category?: string;
   unit?: string;
+  altUnits?: ItemAltUnit[];
   description?: string;
   quantity: number;
   purchasePrice: number;
@@ -287,6 +302,9 @@ export interface InvoiceItem {
   batchNumber?: string;
   serialNumber?: string;
   unit?: string;
+  unitFactor?: number;
+  baseQty?: number;
+  uncostedQty?: number;
   priceType?: 'cash' | 'wholesale' | 'custom';
   priceSource?: 'price_management' | 'manual_override';
 }
@@ -401,6 +419,12 @@ export interface PurchaseInvoice {
   warehouseId?: string;
   costCenter?: string;
   status?: 'draft' | 'approved' | 'cancelled';
+  retroactiveSettlements?: Array<{
+    saleInvoiceId: number;
+    lineIndex: number;
+    settledBaseQty: number;
+    settledCogs: number;
+  }>;
 }
 
 export interface CashTransaction {

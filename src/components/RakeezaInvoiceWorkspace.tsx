@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AppData, SaleInvoice, PurchaseInvoice, Item, Customer, Supplier } from '../types';
+import { AppData, SaleInvoice, PurchaseInvoice, Item, Customer, Supplier, ItemAltUnit } from '../types';
 import { calculateCustomerBalance, calculateSupplierBalance } from '../utils/accounting';
 import { postSaleInvoice, postPurchaseInvoice, mapPaymentMethodToKey } from '../utils/posting';
 import { printInvoiceWindow } from '../utils/printInvoice';
 import { registerModalBackHandler } from '../utils/navigationHistory';
 import { getBranchItems, getMainBranchId } from '../utils/branchIsolation';
+import { hasPermission } from '../utils/permissions';
+import { Camera, ShieldAlert, X } from 'lucide-react';
+import { BarcodeCameraModal } from './BarcodeCameraModal';
+import { SupervisorPinModal } from './SupervisorPinModal';
 
 export interface RakeezaInvoiceWorkspaceProps {
   isOpen: boolean;
@@ -41,6 +45,9 @@ export interface WorkspaceItemRow {
   cashPrice?: number;
   wholesalePrice?: number;
   buyPrice?: number;
+  unitFactor?: number;
+  baseQty?: number;
+  altUnits?: ItemAltUnit[];
 }
 
 export interface WorkspacePayRow {
@@ -54,18 +61,22 @@ export function findMatchingInvoiceRowIndex(
   resolvedName: string,
   matchedCatalog: { code?: string; itemId?: string | number },
   spec: string,
-  hasLineMods: boolean
+  hasLineMods: boolean,
+  unit?: string
 ): number {
   if (hasLineMods) return -1;
   const targetName = resolvedName.trim().toLowerCase();
   const targetCode = (matchedCatalog.code || '').trim().toLowerCase();
   const targetId = matchedCatalog.itemId !== undefined && matchedCatalog.itemId !== null ? String(matchedCatalog.itemId) : '';
   const targetSpec = spec.trim();
+  const targetUnit = (unit || '').trim();
 
   const isSameItem = (r: WorkspaceItemRow): boolean => {
     const rName = (r.name || '').trim().toLowerCase();
     // Different item names MUST NEVER merge into the same row
     if (!rName || !targetName || rName !== targetName) return false;
+
+    if (targetUnit && (r.unit || 'قطعة').trim() !== targetUnit) return false;
 
     const rId = r.itemId !== undefined && r.itemId !== null ? String(r.itemId) : '';
     if (rId && targetId && rId !== targetId) return false;
@@ -326,6 +337,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       const wbPrice = Number((i as any).wholesalePurchasePrice || (i as any).wholesaleBuyPrice || bPrice || 0);
       return {
         code: i.code || `ITM-${String(idx + 1).padStart(3, '0')}`,
+        barcode: i.barcode || '',
         name: i.name,
         group: i.category || 'عام',
         company: i.material || 'عام',
@@ -336,6 +348,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         wholesalePrice: wPrice,
         wholesaleBuyPrice: wbPrice,
         itemId: i.id,
+        altUnits: i.altUnits || [],
       };
     });
   };
@@ -361,31 +374,41 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const q = workspaceItemSearch.trim().toLowerCase();
     if (!q) return [];
     return localItemsDatabase.filter(
-      (i) => (i.name && i.name.toLowerCase().includes(q)) || (i.code && i.code.toLowerCase().includes(q))
+      (i) =>
+        (i.name && i.name.toLowerCase().includes(q)) ||
+        (i.code && i.code.toLowerCase().includes(q)) ||
+        (i.barcode && i.barcode.toLowerCase().includes(q)) ||
+        (i.altUnits || []).some((u) => u.barcode && u.barcode.toLowerCase().includes(q))
     ).slice(0, 15);
   }, [workspaceItemSearch, localItemsDatabase]);
 
   // Current Invoice Items
   const [currentInvoiceItems, setCurrentInvoiceItems] = useState<WorkspaceItemRow[]>(() => {
     if (editingInvoice?.items && editingInvoice.items.length > 0) {
-      return editingInvoice.items.map((i, idx) => ({
-        rowId: (i as any).rowId || `row_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        code: i.code || '',
-        name: i.name,
-        unit: (i as any).unit || 'قطعة',
-        spec: i.spec || i.notes || '',
-        qty: Number(i.qty || (i as any).quantity || 1),
-        price: Number(i.price || 0),
-        total: Number(i.total || (Number(i.qty || 1) * Number(i.price || 0))),
-        discVal: Number((i as any).discountValue ?? (i as any).discVal ?? 0),
-        discType: ((i as any).discType === 'val' || (i as any).discountType === 'fixed') ? 'val' : 'percent',
-        actualDisc: Number((i as any).actualDisc ?? (i as any).discount ?? 0),
-        taxVal: Number((i as any).taxValue ?? (i as any).taxVal ?? 0),
-        taxType: ((i as any).taxType === 'val' || (i as any).taxType === 'fixed') ? 'val' : 'percent',
-        actualTax: Number((i as any).actualTax ?? (i as any).tax ?? 0),
-        itemId: i.itemId,
-        costPrice: i.costPrice,
-      }));
+      return editingInvoice.items.map((i, idx) => {
+        const uFactor = Number((i as any).unitFactor || 1);
+        const qVal = Number(i.qty || (i as any).quantity || 1);
+        return {
+          rowId: (i as any).rowId || `row_${idx}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          code: i.code || '',
+          name: i.name,
+          unit: (i as any).unit || 'قطعة',
+          unitFactor: uFactor,
+          baseQty: Number((i as any).baseQty || qVal * uFactor),
+          spec: i.spec || i.notes || '',
+          qty: qVal,
+          price: Number(i.price || 0),
+          total: Number(i.total || (qVal * Number(i.price || 0))),
+          discVal: Number((i as any).discountValue ?? (i as any).discVal ?? 0),
+          discType: ((i as any).discType === 'val' || (i as any).discountType === 'fixed') ? 'val' : 'percent',
+          actualDisc: Number((i as any).actualDisc ?? (i as any).discount ?? 0),
+          taxVal: Number((i as any).taxValue ?? (i as any).taxVal ?? 0),
+          taxType: ((i as any).taxType === 'val' || (i as any).taxType === 'fixed') ? 'val' : 'percent',
+          actualTax: Number((i as any).actualTax ?? (i as any).tax ?? 0),
+          itemId: i.itemId,
+          costPrice: i.costPrice,
+        };
+      });
     }
     return [];
   });
@@ -485,11 +508,32 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     selectedType: null,
   });
 
+  const currentUserObj =
+    appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+  const canViewCost = hasPermission(currentUserObj, 'view_cost_price');
+  const allowBelowCost = hasPermission(currentUserObj, 'allow_below_cost_sale');
+
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const [pinGuardState, setPinGuardState] = useState<null | {
+    mode: 'below_cost' | 'credit_limit';
+    title: string;
+    message: string;
+    details: string[];
+    belowCostApproved: boolean;
+    creditLimitApproved: boolean;
+  }>(null);
+  const [creditWarnModal, setCreditWarnModal] = useState<null | {
+    message: string;
+    belowCostApproved: boolean;
+  }>(null);
+
   // Item Detail / Quick Add Card Modal State (7fca626a.png)
   const [isDetailCardOpen, setIsDetailCardOpen] = useState(false);
   const [cardItem, setCardItem] = useState<any>(null);
   const [cardItemSearch, setCardItemSearch] = useState<string>('');
   const [showCardDropdown, setShowCardDropdown] = useState<boolean>(false);
+  const [cardUnit, setCardUnit] = useState<string>('قطعة');
+  const [cardUnitFactor, setCardUnitFactor] = useState<number>(1);
   const [cardQty, setCardQty] = useState<string>('1');
   const [cardPrice, setCardPrice] = useState<string>('');
   const [cardDiscVal, setCardDiscVal] = useState<string>('');
@@ -506,7 +550,13 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const q = cardItemSearch.trim().toLowerCase();
     if (!q) return localItemsDatabase.slice(0, 10);
     return localItemsDatabase
-      .filter((i) => (i.name && i.name.toLowerCase().includes(q)) || (i.code && i.code.toLowerCase().includes(q)))
+      .filter(
+        (i) =>
+          (i.name && i.name.toLowerCase().includes(q)) ||
+          (i.code && i.code.toLowerCase().includes(q)) ||
+          (i.barcode && i.barcode.toLowerCase().includes(q)) ||
+          (i.altUnits || []).some((u) => u.barcode && u.barcode.toLowerCase().includes(q))
+      )
       .slice(0, 12);
   }, [cardItemSearch, localItemsDatabase]);
 
@@ -707,9 +757,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const afterDisc = Math.max(0, gross - actualDisc);
     const tVal = Number(row.taxVal || 0);
     const actualTax = row.taxType === 'val' ? tVal : (afterDisc * tVal) / 100;
+    const factor = row.unitFactor || 1;
     return {
       ...row,
       qty: nextQty,
+      baseQty: Number((nextQty * factor).toFixed(4)),
       price: nextPrice,
       actualDisc: Number(actualDisc.toFixed(2)),
       actualTax: Number(actualTax.toFixed(2)),
@@ -747,6 +799,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     setCardItem(null);
     setCardItemSearch('');
     setShowCardDropdown(false);
+    setCardUnit('قطعة');
+    setCardUnitFactor(1);
     setCardQty('1');
     setCardPrice('');
     setCardDiscVal('');
@@ -768,11 +822,22 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   };
 
   // Open Item Detail Card prefilled from search or catalog tree
-  const openItemDetailCard = (item: any) => {
+  const openItemDetailCard = (
+    item: any,
+    preselectedUnit?: { name: string; factor: number; price?: number }
+  ) => {
     setCardItem(item);
     setCardItemSearch(item.name || '');
     setShowCardDropdown(false);
-    const calculatedP = getItemPriceForTier(item, activePricingTier);
+    const chosenUnit = preselectedUnit?.name || item.typeName || 'قطعة';
+    const chosenFactor = preselectedUnit?.factor && preselectedUnit.factor > 0 ? preselectedUnit.factor : 1;
+    setCardUnit(chosenUnit);
+    setCardUnitFactor(chosenFactor);
+    const baseP = getItemPriceForTier(item, activePricingTier);
+    const calculatedP =
+      preselectedUnit?.price && preselectedUnit.price > 0
+        ? preselectedUnit.price
+        : Number((baseP * chosenFactor).toFixed(2));
     const pStr = calculatedP > 0 ? calculatedP.toString() : '';
     setCardPrice(pStr);
     setCardQty('1');
@@ -794,6 +859,75 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
       }, 60);
     });
+  };
+
+  const handleSelectCardUnit = (unitName: string) => {
+    setCardUnit(unitName);
+    if (!cardItem) {
+      setCardUnitFactor(1);
+      return;
+    }
+    const baseName = cardItem.typeName || 'قطعة';
+    const basePrice = getItemPriceForTier(cardItem, activePricingTier);
+    let nextFactor = 1;
+    let nextPrice = basePrice;
+
+    if (unitName !== baseName) {
+      const au = (cardItem.altUnits || []).find((u: ItemAltUnit) => u.name === unitName);
+      if (au) {
+        nextFactor = au.factor > 0 ? au.factor : 1;
+        const unitCustom = isSale
+          ? activePricingTier === 'wholesale'
+            ? au.wholesalePrice || au.salePrice
+            : au.salePrice
+          : au.buyPrice;
+        nextPrice = unitCustom && unitCustom > 0 ? unitCustom : Number((basePrice * nextFactor).toFixed(2));
+      }
+    }
+
+    setCardUnitFactor(nextFactor);
+    const pStr = nextPrice > 0 ? nextPrice.toString() : '';
+    setCardPrice(pStr);
+    setCardLastEdited('price');
+    syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
+  };
+
+  const handleBarcodeDetected = (scannedCode: string) => {
+    const clean = scannedCode.trim().toLowerCase();
+    if (!clean) return;
+    setIsCameraScannerOpen(false);
+
+    for (const item of localItemsDatabase) {
+      const matchedAlt = (item.altUnits || []).find(
+        (u: ItemAltUnit) => u.barcode && u.barcode.trim().toLowerCase() === clean
+      );
+      if (matchedAlt) {
+        const unitCustom = isSale
+          ? activePricingTier === 'wholesale'
+            ? matchedAlt.wholesalePrice || matchedAlt.salePrice
+            : matchedAlt.salePrice
+          : matchedAlt.buyPrice;
+        openItemDetailCard(item, {
+          name: matchedAlt.name,
+          factor: matchedAlt.factor || 1,
+          price: unitCustom,
+        });
+        showToast(`تم قراءة الصنف: ${item.name} (${matchedAlt.name})`, 'success');
+        return;
+      }
+      if (
+        (item.barcode && item.barcode.trim().toLowerCase() === clean) ||
+        (item.code && item.code.trim().toLowerCase() === clean)
+      ) {
+        openItemDetailCard(item);
+        showToast(`تم قراءة الصنف: ${item.name}`, 'success');
+        return;
+      }
+    }
+
+    setWorkspaceItemSearch(scannedCode.trim());
+    setShowWorkspaceItemDropdown(true);
+    showToast(`لم يتم العثور على صنف مطابق للباركود: ${scannedCode}`, 'warning');
   };
 
   // Confirm Adding Item from Dark Quick-Add Card
@@ -844,17 +978,31 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         cashPrice: isSale ? p : 0,
         wholesalePrice: 0,
         itemId: undefined,
+        altUnits: [],
       };
+
+    const resolvedUnit = cardUnit || matchedCatalog.typeName || 'قطعة';
+    const resolvedFactor = cardUnitFactor > 0 ? cardUnitFactor : 1;
+    const addedBaseQty = Number((q * resolvedFactor).toFixed(4));
 
     if (isSale && matchedCatalog.itemId) {
       setLocalItemsDatabase((prev) =>
-        prev.map((i) => (i.code === matchedCatalog.code ? { ...i, stock: Number(((i.stock || 0) - q).toFixed(2)) } : i))
+        prev.map((i) =>
+          i.code === matchedCatalog.code ? { ...i, stock: Number(((i.stock || 0) - addedBaseQty).toFixed(2)) } : i
+        )
       );
     }
 
     setCurrentInvoiceItems((prev) => {
       const hasLineMods = dVal > 0 || tVal > 0;
-      const targetIndex = findMatchingInvoiceRowIndex(prev, resolvedName, matchedCatalog, s, hasLineMods);
+      const targetIndex = findMatchingInvoiceRowIndex(
+        prev,
+        resolvedName,
+        matchedCatalog,
+        s,
+        hasLineMods,
+        resolvedUnit
+      );
 
       if (targetIndex > -1) {
         return prev.map((row, idx) => {
@@ -875,7 +1023,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         rowId: `row_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         code: matchedCatalog.code,
         name: resolvedName,
-        unit: matchedCatalog.typeName || 'قطعة',
+        unit: resolvedUnit,
+        unitFactor: resolvedFactor,
+        baseQty: addedBaseQty,
+        altUnits: (matchedCatalog as any).altUnits || [],
         spec: s,
         qty: q,
         price: p,
@@ -887,7 +1038,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         taxType: cardTaxType,
         actualTax: Number(actualTax.toFixed(2)),
         itemId: matchedCatalog.itemId,
-        costPrice: matchedCatalog.buyPrice || 0,
+        costPrice: Number(((matchedCatalog.buyPrice || 0) * resolvedFactor).toFixed(4)),
         cashPrice: cPrice > 0 ? cPrice : p,
         wholesalePrice: wPrice > 0 ? wPrice : cPrice > 0 ? cPrice : p,
         buyPrice: bPrice > 0 ? bPrice : 0,
@@ -949,8 +1100,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const removeItem = (index: number) => {
     const removed = currentInvoiceItems[index];
     if (removed && isSale && removed.itemId) {
+      const removedBaseQty = Number(((removed.qty || 0) * (removed.unitFactor || 1)).toFixed(2));
       setLocalItemsDatabase((prev) =>
-        prev.map((i) => (i.code === removed.code ? { ...i, stock: (i.stock || 0) + Number(removed.qty || 0) } : i))
+        prev.map((i) => (i.code === removed.code ? { ...i, stock: (i.stock || 0) + removedBaseQty } : i))
       );
     }
     setCurrentInvoiceItems((prev) => prev.filter((_, idx) => idx !== index));
@@ -1111,6 +1263,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const newItem = {
       code,
       name,
+      barcode: '',
+      altUnits: [],
       group: grp,
       company: comp,
       typeName: typ,
@@ -1167,7 +1321,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const name = newInputItemName.trim();
     const code = newInputItemCode.trim();
     if (!name) {
-      alert('يرجى إدخال اسم الصنف');
+      showToast('يرجى إدخال اسم الصنف', 'warning');
       return;
     }
 
@@ -1178,6 +1332,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
     const newItem = {
       code,
+      barcode: '',
+      altUnits: [],
       name,
       group: editItemCategory || 'عام',
       company: 'عام',
@@ -1220,10 +1376,77 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   };
 
   // Save Invoice & Post to Ledger & Database
-  const saveInvoice = () => {
+  const saveInvoice = (bypassFlags?: { belowCostApproved?: boolean; creditLimitApproved?: boolean }) => {
     if (currentInvoiceItems.length === 0) {
       showToast('الفاتورة فارغة! يرجى إدراج صنف واحد على الأقل.', 'warning');
       return;
+    }
+
+    const belowCostApproved = !!bypassFlags?.belowCostApproved;
+    const creditLimitApproved = !!bypassFlags?.creditLimitApproved;
+
+    // 🛡️ Below-Cost Sale Guard
+    if (isSale && !isReturn && appData.settings?.preventBelowCostSale && !allowBelowCost && !belowCostApproved) {
+      const violations: string[] = [];
+      currentInvoiceItems.forEach((row) => {
+        const dbItm = localItemsDatabase.find((it) => it.itemId === row.itemId || it.name === row.name);
+        const factor = row.unitFactor || 1;
+        const baseCost = Number(dbItm?.buyPrice || 0);
+        const unitCost = baseCost > 0 ? baseCost * factor : Number(row.costPrice || 0);
+        const effectiveUnitPrice = row.qty > 0 ? row.total / row.qty : row.price;
+        if (unitCost > 0 && effectiveUnitPrice < unitCost - 0.01) {
+          violations.push(
+            `${row.name}: سعر البيع (${effectiveUnitPrice.toFixed(2)}) أقل من التكلفة (${unitCost.toFixed(2)})`
+          );
+        }
+      });
+      if (violations.length > 0) {
+        setPinGuardState({
+          mode: 'below_cost',
+          title: 'تنبيه البيع بأقل من سعر التكلفة',
+          message: 'تم تفعيل قيد منع البيع بأقل من سعر التكلفة. أدخل كود اعتماد المدير لإتمام حفظ الفاتورة.',
+          details: violations,
+          belowCostApproved: true,
+          creditLimitApproved,
+        });
+        return;
+      }
+    }
+
+    // 🛡️ Credit Limit Enforcement (warn / pin / block)
+    if (isSale && !isReturn && matchedParty && totals.remain > 0 && !creditLimitApproved) {
+      const custLimit = Number((matchedParty as Customer).creditLimit || 0);
+      const projectedBal = partyBalance + totals.remain;
+      if (custLimit > 0 && projectedBal > custLimit) {
+        const policy = appData.settings?.enforceCreditLimit || 'warn';
+        if (policy === 'block') {
+          showToast(
+            `ممنوع الحفظ: العميل "${matchedParty.name}" سيتجاوز سقف الائتمان المسموح (${custLimit.toFixed(2)} ج.م). الرصيد المتوقع: ${projectedBal.toFixed(2)} ج.م`,
+            'error'
+          );
+          return;
+        }
+        if (policy === 'pin') {
+          setPinGuardState({
+            mode: 'credit_limit',
+            title: 'اعتماد تجاوز حد الائتمان',
+            message: `العميل "${matchedParty.name}" سيتجاوز حد الائتمان المسموح (${custLimit.toFixed(2)} ج.م). الرصيد بعد الفاتورة سيكون ${projectedBal.toFixed(2)} ج.م.`,
+            details: [
+              `الرصيد الحالي: ${partyBalance.toFixed(2)} ج.م`,
+              `الآجل بالفاتورة: ${totals.remain.toFixed(2)} ج.م`,
+              `حد الائتمان المحدد: ${custLimit.toFixed(2)} ج.م`,
+            ],
+            belowCostApproved,
+            creditLimitApproved: true,
+          });
+          return;
+        }
+        setCreditWarnModal({
+          message: `العميل "${matchedParty.name}" سيتجاوز حد الائتمان المسموح (${custLimit.toFixed(2)} ج.م). الرصيد بعد الحفظ سيكون ${projectedBal.toFixed(2)} ج.م.`,
+          belowCostApproved,
+        });
+        return;
+      }
     }
 
     const defaultPartyName = isSale
@@ -1265,23 +1488,28 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         customerName: defaultPartyName,
         phone: custPhone.trim(),
         notes: jobSite,
-        items: currentInvoiceItems.map((i) => ({
-          itemId: i.itemId || undefined,
-          code: i.code,
-          name: i.name,
-          unit: i.unit || 'قطعة',
-          qty: i.qty,
-          price: i.price,
-          total: i.total,
-          spec: i.spec,
-          costPrice: i.costPrice || 0,
-          discount: i.actualDisc || 0,
-          discountType: i.discType === 'val' ? 'fixed' : 'percent',
-          discountValue: i.discVal || 0,
-          tax: i.actualTax || 0,
-          taxType: i.taxType === 'val' ? 'fixed' : 'percent',
-          taxValue: i.taxVal || 0,
-        })),
+        items: currentInvoiceItems.map((i) => {
+          const factor = i.unitFactor || 1;
+          return {
+            itemId: i.itemId || undefined,
+            code: i.code,
+            name: i.name,
+            unit: i.unit || 'قطعة',
+            unitFactor: factor,
+            baseQty: Number(((i.qty || 0) * factor).toFixed(4)),
+            qty: i.qty,
+            price: i.price,
+            total: i.total,
+            spec: i.spec,
+            costPrice: i.costPrice || 0,
+            discount: i.actualDisc || 0,
+            discountType: i.discType === 'val' ? 'fixed' : 'percent',
+            discountValue: i.discVal || 0,
+            tax: i.actualTax || 0,
+            taxType: i.taxType === 'val' ? 'fixed' : 'percent',
+            taxValue: i.taxVal || 0,
+          };
+        }),
         subtotal: totals.subtotal,
         discount: totals.discount,
         discountType: invDiscType === 'percent' ? 'percent' : 'fixed',
@@ -1307,16 +1535,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       };
 
       const isEditing = !!editingInvoice?.id;
-      const updated = postSaleInvoice(appData, invoiceData, isEditing, editingInvoice?.id);
+      try {
+        const updated = postSaleInvoice(appData, invoiceData, isEditing, editingInvoice?.id);
 
-      onUpdateData(updated, {
-        action: isEditing ? 'تعديل فاتورة مبيعات' : 'حفظ فاتورة مبيعات',
-        module: 'المبيعات',
-        details: `فاتورة مبيعات #${invNum} - العميل: ${defaultPartyName} - الصافي: ${totals.net.toFixed(2)} ج.م`,
-      });
+        onUpdateData(updated, {
+          action: isEditing ? 'تعديل فاتورة مبيعات' : 'حفظ فاتورة مبيعات',
+          module: 'المبيعات',
+          details: `فاتورة مبيعات #${invNum} - العميل: ${defaultPartyName} - الصافي: ${totals.net.toFixed(2)} ج.م`,
+        });
 
-      showToast(`✅ تم حفظ وترحيل فاتورة المبيعات #${invNum} وتحديث الحسابات والمخزن والأسعار بنجاح`, 'success');
-      onClose();
+        showToast(`✅ تم حفظ وترحيل فاتورة المبيعات #${invNum} وتحديث الحسابات والمخزن والأسعار بنجاح`, 'success');
+        onClose();
+      } catch (err: any) {
+        showToast(err?.message || 'تعذر حفظ فاتورة المبيعات', 'error');
+      }
     } else {
       const invoiceData: PurchaseInvoice = {
         id: editingInvoice?.id || invoiceId,
@@ -1329,23 +1561,28 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         supplierName: defaultPartyName,
         phone: custPhone.trim(),
         notes: jobSite,
-        items: currentInvoiceItems.map((i) => ({
-          itemId: i.itemId || undefined,
-          code: i.code,
-          name: i.name,
-          unit: i.unit || 'قطعة',
-          qty: i.qty,
-          price: i.price,
-          total: i.total,
-          spec: i.spec,
-          costPrice: i.price,
-          discount: i.actualDisc || 0,
-          discountType: i.discType === 'val' ? 'fixed' : 'percent',
-          discountValue: i.discVal || 0,
-          tax: i.actualTax || 0,
-          taxType: i.taxType === 'val' ? 'fixed' : 'percent',
-          taxValue: i.taxVal || 0,
-        })),
+        items: currentInvoiceItems.map((i) => {
+          const factor = i.unitFactor || 1;
+          return {
+            itemId: i.itemId || undefined,
+            code: i.code,
+            name: i.name,
+            unit: i.unit || 'قطعة',
+            unitFactor: factor,
+            baseQty: Number(((i.qty || 0) * factor).toFixed(4)),
+            qty: i.qty,
+            price: i.price,
+            total: i.total,
+            spec: i.spec,
+            costPrice: i.price,
+            discount: i.actualDisc || 0,
+            discountType: i.discType === 'val' ? 'fixed' : 'percent',
+            discountValue: i.discVal || 0,
+            tax: i.actualTax || 0,
+            taxType: i.taxType === 'val' ? 'fixed' : 'percent',
+            taxValue: i.taxVal || 0,
+          };
+        }),
         subtotal: totals.subtotal,
         discount: totals.discount,
         discountType: invDiscType === 'percent' ? 'percent' : 'fixed',
@@ -1371,16 +1608,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       };
 
       const isEditing = !!editingInvoice?.id;
-      const updated = postPurchaseInvoice(appData, invoiceData, isEditing, editingInvoice?.id);
+      try {
+        const updated = postPurchaseInvoice(appData, invoiceData, isEditing, editingInvoice?.id);
 
-      onUpdateData(updated, {
-        action: isEditing ? 'تعديل فاتورة مشتريات' : 'حفظ فاتورة مشتريات',
-        module: 'المشتريات',
-        details: `فاتورة مشتريات #${invNum} - المورد: ${defaultPartyName} - الصافي: ${totals.net.toFixed(2)} ج.م`,
-      });
+        onUpdateData(updated, {
+          action: isEditing ? 'تعديل فاتورة مشتريات' : 'حفظ فاتورة مشتريات',
+          module: 'المشتريات',
+          details: `فاتورة مشتريات #${invNum} - المورد: ${defaultPartyName} - الصافي: ${totals.net.toFixed(2)} ج.م`,
+        });
 
-      showToast(`✅ تم حفظ وترحيل فاتورة المشتريات #${invNum} وتحديث التوريدات والمخزن بنجاح`, 'success');
-      onClose();
+        showToast(`✅ تم حفظ وترحيل فاتورة المشتريات #${invNum} وتحديث التوريدات والمخزن بنجاح`, 'success');
+        onClose();
+      } catch (err: any) {
+        showToast(err?.message || 'تعذر حفظ فاتورة المشتريات', 'error');
+      }
     }
   };
 
@@ -2412,33 +2653,61 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
           {/* 🔍 Quick Search Bar on-screen for direct mobile/desktop item addition */}
           <div className="relative w-full shrink-0">
-            <div className="relative flex items-center bg-white rounded-lg border border-blue-400 shadow-2xs">
-              <i className="fa-solid fa-magnifying-glass text-blue-600 text-sm pr-3 pl-2 shrink-0"></i>
-              <input
-                type="text"
-                value={workspaceItemSearch}
-                onChange={(e) => {
-                  setWorkspaceItemSearch(e.target.value);
-                  setShowWorkspaceItemDropdown(true);
-                }}
-                onFocus={() => {
-                  if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
-                }}
-                placeholder={`بحث ديناميكي لإضافة صنف فوراً بالاسم أو الكود (${localItemsDatabase.length} صنف)...`}
-                className="w-full text-xs sm:text-sm min-h-[38px] py-1.5 pl-8 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
-              />
-              {workspaceItemSearch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWorkspaceItemSearch('');
-                    setShowWorkspaceItemDropdown(false);
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1 min-w-0 flex items-center bg-white rounded-lg border border-blue-400 shadow-2xs">
+                <i className="fa-solid fa-magnifying-glass text-blue-600 text-sm pr-3 pl-2 shrink-0"></i>
+                <input
+                  type="text"
+                  value={workspaceItemSearch}
+                  onChange={(e) => {
+                    setWorkspaceItemSearch(e.target.value);
+                    setShowWorkspaceItemDropdown(true);
                   }}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5 cursor-pointer"
-                >
-                  ×
-                </button>
-              )}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && workspaceItemSearch.trim()) {
+                      const q = workspaceItemSearch.trim().toLowerCase();
+                      const exact = localItemsDatabase.find(
+                        (it) =>
+                          (it.barcode && it.barcode.trim().toLowerCase() === q) ||
+                          (it.code && it.code.trim().toLowerCase() === q) ||
+                          (it.altUnits || []).some((u: ItemAltUnit) => u.barcode && u.barcode.trim().toLowerCase() === q)
+                      );
+                      if (exact) {
+                        e.preventDefault();
+                        handleBarcodeDetected(workspaceItemSearch.trim());
+                        setWorkspaceItemSearch('');
+                        setShowWorkspaceItemDropdown(false);
+                      }
+                    }
+                  }}
+                  onFocus={() => {
+                    if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
+                  }}
+                  placeholder={`بحث ديناميكي لإضافة صنف فوراً بالاسم أو الباركود (${localItemsDatabase.length} صنف)...`}
+                  className="w-full text-xs sm:text-sm min-h-[38px] py-1.5 pl-8 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                />
+                {workspaceItemSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceItemSearch('');
+                      setShowWorkspaceItemDropdown(false);
+                    }}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCameraScannerOpen(true)}
+                className="min-h-[38px] px-2.5 sm:px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0 transition"
+                title="مسح الباركود بكاميرا الهاتف"
+              >
+                <Camera className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">كاميرا</span>
+              </button>
             </div>
 
             {/* Quick Autocomplete Dropdown + Direct New Item Option */}
@@ -2562,6 +2831,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                               #{index + 1}
                             </span>
                             <span className="font-semibold text-slate-900 break-words">{item.name}</span>
+                            {item.unit && (item.unit !== 'قطعة' || (item.unitFactor || 1) > 1) && (
+                              <span className="mr-1 inline-block text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
+                                {item.unit}
+                                {(item.unitFactor || 1) > 1 ? ` ×${item.unitFactor}` : ''}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
@@ -2686,7 +2961,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             <button
               type="button"
               className="btn-action bg-emerald-600 hover:bg-emerald-700"
-              onClick={saveInvoice}
+              onClick={() => saveInvoice()}
             >
               <i className="fa-solid fa-floppy-disk"></i>
               <span className="truncate">حفظ وترحيل الحسابات</span>
@@ -2952,6 +3227,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                             setCardItem(m);
                             setCardItemSearch(m.name);
                             setShowCardDropdown(false);
+                            setCardUnit(m.typeName || 'قطعة');
+                            setCardUnitFactor(1);
                             const tierPrice = getItemPriceForTier(m, activePricingTier);
                             const pStr = tierPrice > 0 ? tierPrice.toString() : '';
                             setCardPrice(pStr);
@@ -3057,11 +3334,34 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 />
               </div>
 
-              {/* 3. الكمية (العدد) و السعر (للقطعة) */}
+              {/* الوحدة (تعدد الوحدات إن وجد) */}
+              {cardItem && (cardItem.altUnits?.length || 0) > 0 && (
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-300">
+                    الوحدة المختارة
+                  </label>
+                  <select
+                    value={cardUnit}
+                    onChange={(e) => handleSelectCardUnit(e.target.value)}
+                    className="w-full bg-[#162238] border border-blue-500/60 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-blue-400"
+                  >
+                    <option value={cardItem.typeName || 'قطعة'}>
+                      {cardItem.typeName || 'قطعة'} (الوحدة الأساسية ×1)
+                    </option>
+                    {(cardItem.altUnits || []).map((au: ItemAltUnit) => (
+                      <option key={au.id} value={au.name}>
+                        {au.name} (معامل تحويل ×{au.factor})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* 3. الكمية (العدد) و السعر */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-semibold text-slate-300">
-                    الكمية (العدد) <span className="text-rose-400">*</span>
+                    الكمية ({cardUnit}) <span className="text-rose-400">*</span>
                   </label>
                   <input
                     ref={cardQtyInputRef}
@@ -3076,7 +3376,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-semibold text-slate-300">
-                    السعر (للقطعة) <span className="text-rose-400">*</span>
+                    السعر (لـ {cardUnit}) <span className="text-rose-400">*</span>
                   </label>
                   <input
                     type="number"
@@ -3316,9 +3616,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         <span>{item.name}</span>
                         <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                      <div className={`grid ${isSale && !canViewCost ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums`}>
                         <div>المخزون: <strong className={item.stock < 0 ? 'text-rose-600' : 'text-blue-600'}>{item.stock}</strong></div>
-                        <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        {(!isSale || canViewCost) && (
+                          <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        )}
                         <div>بيع: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
@@ -3419,9 +3721,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         <span>{item.name}</span>
                         <span className="text-blue-600 text-xs font-mono tabular-nums">كود: {item.code}</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums">
+                      <div className={`grid ${isSale && !canViewCost ? 'grid-cols-2' : 'grid-cols-3'} gap-2 text-xs text-center bg-slate-50 p-2 rounded-md border border-slate-200 font-normal tabular-nums`}>
                         <div>المخزون: <strong className={item.stock < 0 ? 'text-rose-600' : 'text-blue-600'}>{item.stock}</strong></div>
-                        <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        {(!isSale || canViewCost) && (
+                          <div>شراء: <strong className="text-rose-600">{Number(item.buyPrice || 0).toFixed(2)}</strong></div>
+                        )}
                         <div>بيع: <strong className="text-emerald-600">{Number(item.cashPrice || 0).toFixed(2)}</strong></div>
                       </div>
                     </div>
@@ -3770,6 +4074,86 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 <i className="fa-solid fa-check"></i>
                 <span>حفظ التعديل</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <BarcodeCameraModal
+        isOpen={isCameraScannerOpen}
+        title="مسح باركود الصنف بالكاميرا"
+        onClose={() => setIsCameraScannerOpen(false)}
+        onDetected={handleBarcodeDetected}
+      />
+
+      <SupervisorPinModal
+        isOpen={pinGuardState !== null}
+        title={pinGuardState?.title || 'اعتماد المدير'}
+        message={pinGuardState?.message || ''}
+        details={pinGuardState?.details}
+        settings={appData.settings}
+        users={appData.users}
+        onCancel={() => {
+          setPinGuardState(null);
+          showToast('تم إلغاء حفظ الفاتورة لعدم اعتماد المدير', 'info');
+        }}
+        onSuccess={() => {
+          const st = pinGuardState;
+          setPinGuardState(null);
+          if (st) {
+            saveInvoice({
+              belowCostApproved: st.belowCostApproved,
+              creditLimitApproved: st.creditLimitApproved,
+            });
+          }
+        }}
+      />
+
+      {creditWarnModal && (
+        <div className="fixed inset-0 z-[10000] bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4" dir="rtl">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-amber-300 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-amber-600 text-white">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <ShieldAlert className="w-5 h-5 shrink-0" />
+                <span>تنبيه تجاوز حد الائتمان</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreditWarnModal(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/20"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed bg-amber-50 border border-amber-200 rounded-xl p-3">
+                {creditWarnModal.message}
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreditWarnModal(null);
+                    showToast('تم إلغاء الحفظ لمراجعة سقف ائتمان العميل', 'info');
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold text-xs sm:text-sm hover:bg-slate-50"
+                >
+                  إلغاء وتعديل الدفع
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const st = creditWarnModal;
+                    setCreditWarnModal(null);
+                    saveInvoice({
+                      belowCostApproved: st.belowCostApproved,
+                      creditLimitApproved: true,
+                    });
+                  }}
+                  className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm"
+                >
+                  تأكيد ومتابعة الحفظ
+                </button>
+              </div>
             </div>
           </div>
         </div>

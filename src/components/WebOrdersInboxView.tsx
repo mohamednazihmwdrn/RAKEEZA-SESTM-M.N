@@ -403,9 +403,9 @@ export const WebOrdersInboxView: React.FC<WebOrdersInboxViewProps> = ({
         `🎉 تم تحويل الطلب بنجاح إلى فاتورة مبيعات معتمدة رقم #${nextInvId} وخصم المخزون!`,
         'success'
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('حدث خطأ أثناء تحويل الطلب لفاتورة', 'error');
+      showToast(err?.message || 'حدث خطأ أثناء تحويل الطلب لفاتورة', 'error');
     }
   };
 

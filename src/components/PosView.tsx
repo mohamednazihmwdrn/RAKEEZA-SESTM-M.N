@@ -5,12 +5,15 @@ import { printCashClosingWindow } from '../utils/printCashClosing';
 import { printShiftReportWindow } from '../utils/printShiftReport';
 import { addAuditLog } from '../utils/storage';
 import { getProductActivePrice } from '../utils/priceService';
-import { LayoutGrid, List, Sparkles, X, Image as ImageIcon, GitBranch } from 'lucide-react';
+import { LayoutGrid, List, Sparkles, X, Image as ImageIcon, GitBranch, Camera, ShieldAlert } from 'lucide-react';
 import {
   getBranchItems,
   getMainBranchId,
 } from '../utils/branchIsolation';
 import { processSaleInvoice } from '../utils/accountingEngine';
+import { hasPermission } from '../utils/permissions';
+import { BarcodeCameraModal } from './BarcodeCameraModal';
+import { SupervisorPinModal } from './SupervisorPinModal';
 
 interface PosViewProps {
   appData: AppData;
@@ -42,6 +45,27 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
   const [posMobileTab, setPosMobileTab] = useState<'products' | 'cart'>('products');
   const [posViewMode, setPosViewMode] = useState<'visual' | 'compact'>('visual');
   const [editingCartIndex, setEditingCartIndex] = useState<number | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [pinModalState, setPinModalState] = useState<null | {
+    mode: 'below_cost' | 'credit_limit';
+    title: string;
+    message: string;
+    details: string[];
+    isThermalPrint: boolean;
+    belowCostApproved: boolean;
+    creditLimitApproved: boolean;
+  }>(null);
+  const [creditWarnState, setCreditWarnState] = useState<null | {
+    message: string;
+    isThermalPrint: boolean;
+    belowCostApproved: boolean;
+  }>(null);
+
+  const currentUserObj = useMemo(
+    () => appData.users.find((u) => u.id === appData.currentUser) || appData.users[0],
+    [appData.users, appData.currentUser]
+  );
+  const allowBelowCost = useMemo(() => hasPermission(currentUserObj, 'allow_below_cost_sale'), [currentUserObj]);
 
   // 🏢 Active Branch Isolation for POS
   const activeBranchId = appData.activeBranchId || appData.branches?.[0]?.id || 'br-main';
@@ -110,10 +134,14 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
 
   // Filter items specifically for the active branch
   const filteredItems = branchItems.filter((item) => {
+    const q = searchTerm.trim().toLowerCase();
     const matchCat = selectedCategory === 'all' || (item.category || 'عام') === selectedCategory;
+    if (!q) return matchCat;
     const matchSearch =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.barcode && item.barcode.includes(searchTerm));
+      item.name.toLowerCase().includes(q) ||
+      (item.code && item.code.toLowerCase().includes(q)) ||
+      (item.barcode && item.barcode.toLowerCase().includes(q)) ||
+      (item.altUnits || []).some((u) => u.barcode && u.barcode.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
 
@@ -143,7 +171,13 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     }
   };
 
-  const handleAddToCart = (item: Item) => {
+  const handleAddToCart = (
+    item: Item,
+    unitOverride?: { unitName: string; factor: number; unitPriceOverride?: number }
+  ) => {
+    const factor = unitOverride?.factor && unitOverride.factor > 0 ? unitOverride.factor : 1;
+    const selectedUnit = unitOverride?.unitName || item.unit || 'قطعة';
+
     if (item.quantity <= 0) {
       showToast(`الصنف ${item.name} غير متوفر بالمخزن حالياً`, 'warning');
       return;
@@ -151,7 +185,7 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
 
     // Check active master price
     const priceRes = getProductActivePrice(appData, item.id, pricingTier);
-    if (!priceRes.hasPrice) {
+    if (!priceRes.hasPrice && !unitOverride?.unitPriceOverride) {
       showToast(
         priceRes.message || `الصنف ${item.name} ليس له سعر بيع (${pricingTier === 'wholesale' ? 'جملة' : 'نقدي'}) محدد في إدارة الأسعار`,
         'error'
@@ -159,18 +193,36 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       return;
     }
 
-    const unitPrice = priceRes.price;
+    const basePrice = priceRes.hasPrice ? priceRes.price : Number(item.salePrice || 0);
+    const unitPrice =
+      unitOverride?.unitPriceOverride && unitOverride.unitPriceOverride > 0
+        ? unitOverride.unitPriceOverride
+        : Number((basePrice * factor).toFixed(2));
+
+    const currentlyUsedBaseQty = cart
+      .filter((c) => (c.itemId && c.itemId === item.id) || c.name === item.name)
+      .reduce((s, c) => s + Number(c.baseQty ?? c.qty * (c.unitFactor || 1)), 0);
+
+    if (currentlyUsedBaseQty + factor > item.quantity) {
+      showToast('لا يمكن تجاوز الكمية المتوفرة بالمخزن', 'warning');
+      return;
+    }
 
     setCart((prev) => {
-      const existing = prev.find((i) => i.name === item.name);
+      const existing = prev.find(
+        (i) => i.name === item.name && (i.unit || item.unit || 'قطعة') === selectedUnit
+      );
       if (existing) {
-        if (existing.qty >= item.quantity) {
-          showToast('لا يمكن تجاوز الكمية المتوفرة بالمخزن', 'warning');
-          return prev;
-        }
+        const nextQty = existing.qty + 1;
         return prev.map((i) =>
-          i.name === item.name
-            ? { ...i, qty: i.qty + 1, price: unitPrice, total: (i.qty + 1) * unitPrice }
+          i === existing
+            ? {
+                ...i,
+                qty: nextQty,
+                baseQty: Number((nextQty * factor).toFixed(4)),
+                price: unitPrice,
+                total: Number((nextQty * unitPrice).toFixed(2)),
+              }
             : i
         );
       }
@@ -178,16 +230,104 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
         ...prev,
         {
           itemId: item.id,
+          code: item.code,
           name: item.name,
+          unit: selectedUnit,
+          unitFactor: factor,
+          baseQty: factor,
           qty: 1,
           price: unitPrice,
-          costPrice: item.purchasePrice,
+          costPrice: Number(((item.purchasePrice || 0) * factor).toFixed(4)),
           priceType: pricingTier,
           priceSource: 'price_management',
           total: unitPrice,
         },
       ];
     });
+  };
+
+  const handleCameraBarcodeDetected = (scannedCode: string) => {
+    const clean = scannedCode.trim().toLowerCase();
+    if (!clean) return;
+    setIsScannerOpen(false);
+
+    // Search altUnits barcode first, then main barcode / code
+    for (const item of branchItems) {
+      const matchedAlt = (item.altUnits || []).find(
+        (u) => u.barcode && u.barcode.trim().toLowerCase() === clean
+      );
+      if (matchedAlt) {
+        const altPrice =
+          pricingTier === 'wholesale'
+            ? matchedAlt.wholesalePrice || matchedAlt.salePrice
+            : matchedAlt.salePrice;
+        handleAddToCart(item, {
+          unitName: matchedAlt.name,
+          factor: matchedAlt.factor || 1,
+          unitPriceOverride: altPrice && altPrice > 0 ? altPrice : undefined,
+        });
+        showToast(`تمت إضافة: ${item.name} (${matchedAlt.name})`, 'success');
+        return;
+      }
+      if (
+        (item.barcode && item.barcode.trim().toLowerCase() === clean) ||
+        (item.code && item.code.trim().toLowerCase() === clean)
+      ) {
+        handleAddToCart(item);
+        showToast(`تمت إضافة: ${item.name}`, 'success');
+        return;
+      }
+    }
+
+    setSearchTerm(scannedCode.trim());
+    showToast(`لم يتم العثور على صنف بالباركود: ${scannedCode}`, 'warning');
+  };
+
+  const handleSwitchCartItemUnit = (index: number, newUnitName: string) => {
+    const targetRow = cart[index];
+    if (!targetRow) return;
+    const item = branchItems.find((i) => i.id === targetRow.itemId || i.name === targetRow.name);
+    if (!item) return;
+
+    const baseUnitName = item.unit || 'قطعة';
+    let factor = 1;
+    let nextUnitPrice =
+      getProductActivePrice(appData, item.id, pricingTier).price || Number(item.salePrice || 0);
+
+    if (newUnitName !== baseUnitName) {
+      const au = (item.altUnits || []).find((u) => u.name === newUnitName);
+      if (au) {
+        factor = au.factor > 0 ? au.factor : 1;
+        const customP = pricingTier === 'wholesale' ? au.wholesalePrice || au.salePrice : au.salePrice;
+        nextUnitPrice = customP && customP > 0 ? customP : Number((nextUnitPrice * factor).toFixed(2));
+      }
+    }
+
+    const otherUsedBase = cart
+      .filter((_, i) => i !== index)
+      .filter((c) => (c.itemId && c.itemId === item.id) || c.name === item.name)
+      .reduce((s, c) => s + Number(c.baseQty ?? c.qty * (c.unitFactor || 1)), 0);
+
+    if (otherUsedBase + targetRow.qty * factor > item.quantity) {
+      showToast('الكمية بالوحدة المختارة تتجاوز المتوفر بالمخزون', 'warning');
+      return;
+    }
+
+    setCart((prev) =>
+      prev.map((row, i) =>
+        i !== index
+          ? row
+          : {
+              ...row,
+              unit: newUnitName,
+              unitFactor: factor,
+              baseQty: Number((row.qty * factor).toFixed(4)),
+              price: nextUnitPrice,
+              costPrice: Number(((item.purchasePrice || 0) * factor).toFixed(4)),
+              total: Number((row.qty * nextUnitPrice).toFixed(2)),
+            }
+      )
+    );
   };
 
   const handleUpdateQty = (index: number, newQty: number) => {
@@ -197,15 +337,22 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     }
     setCart((prev) => {
       const copy = [...prev];
-      const item = appData.items.find((i) => i.name === copy[index].name);
-      if (item && newQty > item.quantity) {
+      const row = copy[index];
+      const factor = row.unitFactor || 1;
+      const item = appData.items.find((i) => i.id === row.itemId || i.name === row.name);
+      const otherUsedBase = prev
+        .filter((_, i) => i !== index)
+        .filter((c) => (c.itemId && c.itemId === row.itemId) || c.name === row.name)
+        .reduce((s, c) => s + Number(c.baseQty ?? c.qty * (c.unitFactor || 1)), 0);
+      if (item && otherUsedBase + newQty * factor > item.quantity) {
         showToast('الكمية المطلوبة أكبر من المتوفر بالمخزون', 'warning');
         return prev;
       }
       copy[index] = {
-        ...copy[index],
+        ...row,
         qty: newQty,
-        total: newQty * copy[index].price,
+        baseQty: Number((newQty * factor).toFixed(4)),
+        total: Number((newQty * row.price).toFixed(2)),
       };
       return copy;
     });
@@ -318,7 +465,10 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
     }
   };
 
-  const handleCheckout = (isThermalPrint = false) => {
+  const handleCheckout = (
+    isThermalPrint = false,
+    bypassFlags?: { belowCostApproved?: boolean; creditLimitApproved?: boolean }
+  ) => {
     if (cart.length === 0) {
       showToast('يرجى إضافة أصناف إلى السلة أولاً', 'warning');
       return;
@@ -334,16 +484,68 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
       return;
     }
 
-    if (isCreditLimitExceeded) {
-      const confirmExceed = confirm(
-        `⚠️ تنبيه ائتماني: العميل "${selectedCustomer}" سيتجاوز حد الائتمان المسموح به (${custCreditLimit.toFixed(
-          2
-        )} ج.م). الرصيد الجديد سيكون (${projectedBalance.toFixed(2)} ج.م).\n\nهل تريد المتابعة وتأكيد العملية؟`
-      );
-      if (!confirmExceed) {
-        showToast('تم إلغاء إصدار الفاتورة لتجاوز حد الائتمان', 'info');
+    const belowCostApproved = !!bypassFlags?.belowCostApproved;
+    const creditLimitApproved = !!bypassFlags?.creditLimitApproved;
+
+    // 🛡️ 1. Below-Cost Sale Guard
+    if (appData.settings?.preventBelowCostSale && !allowBelowCost && !belowCostApproved) {
+      const violations: string[] = [];
+      cart.forEach((row) => {
+        const catItem = branchItems.find((i) => i.id === row.itemId || i.name === row.name);
+        const factor = row.unitFactor || 1;
+        const baseCost = Number(catItem?.purchasePrice || catItem?.costPrice || 0);
+        const unitCost = baseCost > 0 ? baseCost * factor : Number(row.costPrice || 0);
+        if (unitCost > 0 && row.price < unitCost - 0.005) {
+          violations.push(`${row.name}: سعر البيع (${row.price.toFixed(2)}) أقل من التكلفة (${unitCost.toFixed(2)})`);
+        }
+      });
+      if (violations.length > 0) {
+        setPinModalState({
+          mode: 'below_cost',
+          title: 'تنبيه البيع بأقل من سعر التكلفة',
+          message: 'تم تفعيل قيد منع البيع بأقل من سعر التكلفة. يلزم إدخال كود اعتماد المدير لإتمام هذه الفاتورة.',
+          details: violations,
+          isThermalPrint,
+          belowCostApproved: true,
+          creditLimitApproved,
+        });
         return;
       }
+    }
+
+    // 🛡️ 2. Credit Limit Policy Enforcement (warn / pin / block)
+    if (isCreditLimitExceeded && !creditLimitApproved) {
+      const policy = appData.settings?.enforceCreditLimit || 'warn';
+      if (policy === 'block') {
+        showToast(
+          `ممنوع الحفظ: العميل "${selectedCustomer}" تجاوز حد الائتمان (${custCreditLimit.toFixed(2)} ج.م). الرصيد المتوقع: ${projectedBalance.toFixed(2)} ج.م`,
+          'error'
+        );
+        return;
+      }
+      if (policy === 'pin') {
+        setPinModalState({
+          mode: 'credit_limit',
+          title: 'اعتماد تجاوز حد الائتمان',
+          message: `العميل "${selectedCustomer}" سيتجاوز سقف الائتمان المسموح (${custCreditLimit.toFixed(2)} ج.م). الرصيد بعد الفاتورة سيكون ${projectedBalance.toFixed(2)} ج.م.`,
+          details: [
+            `الرصيد الحالي: ${currentCustBalance.toFixed(2)} ج.م`,
+            `الآجل بالفاتورة: ${effectiveRemainingCredit.toFixed(2)} ج.م`,
+            `الحد الأقصى المسموح: ${custCreditLimit.toFixed(2)} ج.م`,
+          ],
+          isThermalPrint,
+          belowCostApproved,
+          creditLimitApproved: true,
+        });
+        return;
+      }
+      // policy === 'warn'
+      setCreditWarnState({
+        message: `العميل "${selectedCustomer}" سيتجاوز حد الائتمان المسموح (${custCreditLimit.toFixed(2)} ج.م). الرصيد الجديد سيكون ${projectedBalance.toFixed(2)} ج.م.`,
+        isThermalPrint,
+        belowCostApproved,
+      });
+      return;
     }
 
     const nextId = appData.nextInvoiceNumber || (appData.salesInvoices?.length || 0) + 1;
@@ -550,11 +752,27 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
 
           {/* Search, View Mode & Barcode Bar */}
           <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
-            <div className="relative w-full sm:flex-1 min-w-0">
+            <div className="relative flex-1 min-w-0">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchTerm.trim()) {
+                    const q = searchTerm.trim().toLowerCase();
+                    const exactMatch = branchItems.find(
+                      (it) =>
+                        (it.barcode && it.barcode.trim().toLowerCase() === q) ||
+                        (it.code && it.code.trim().toLowerCase() === q) ||
+                        (it.altUnits || []).some((u) => u.barcode && u.barcode.trim().toLowerCase() === q)
+                    );
+                    if (exactMatch) {
+                      e.preventDefault();
+                      handleCameraBarcodeDetected(searchTerm.trim());
+                      setSearchTerm('');
+                    }
+                  }
+                }}
                 placeholder="🔍 ابحث بالاسم أو امسح الباركود سريعاً..."
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
                 autoFocus
@@ -570,6 +788,16 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
                 </button>
               )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition"
+              title="قراءة الباركود بكاميرا الهاتف"
+            >
+              <Camera className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">كاميرا الباركود</span>
+            </button>
 
             {/* View Mode Toggle */}
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
@@ -1004,8 +1232,34 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
                     </div>
 
                     {isEditing ? (
-                      /* Inline Reverse Calculation Editor */
+                      /* Inline Reverse Calculation & Unit Selector Editor */
                       <div className="bg-white p-2 rounded-lg border border-indigo-200 space-y-1.5">
+                        {(() => {
+                          const catItm = branchItems.find((b) => b.id === item.itemId || b.name === item.name);
+                          const unitOpts = catItm
+                            ? [
+                                { name: catItm.unit || 'قطعة', factor: 1 },
+                                ...(catItm.altUnits || []).map((u) => ({ name: u.name, factor: u.factor })),
+                              ]
+                            : [];
+                          if (unitOpts.length <= 1) return null;
+                          return (
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-0.5">الوحدة</label>
+                              <select
+                                value={item.unit || catItm?.unit || 'قطعة'}
+                                onChange={(e) => handleSwitchCartItemUnit(idx, e.target.value)}
+                                className="w-full p-1 border border-slate-300 rounded text-xs font-bold bg-slate-50"
+                              >
+                                {unitOpts.map((u) => (
+                                  <option key={u.name} value={u.name}>
+                                    {u.name} {u.factor > 1 ? `(×${u.factor})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })()}
                         <div className="grid grid-cols-3 gap-1.5 items-center">
                           <div>
                             <label className="text-[9px] text-slate-500 font-bold block mb-0.5">الكمية</label>
@@ -1308,6 +1562,86 @@ export const PosView: React.FC<PosViewProps> = ({ appData, onUpdateData, showToa
               <span className="bg-white/20 px-2 py-1 rounded-lg text-xs">إتمام البيع ⬅</span>
             </div>
           </button>
+        </div>
+      )}
+      <BarcodeCameraModal
+        isOpen={isScannerOpen}
+        title="مسح باركود الصنف (نقطة البيع)"
+        onClose={() => setIsScannerOpen(false)}
+        onDetected={handleCameraBarcodeDetected}
+      />
+
+      <SupervisorPinModal
+        isOpen={pinModalState !== null}
+        title={pinModalState?.title || 'اعتماد المدير'}
+        message={pinModalState?.message || ''}
+        details={pinModalState?.details}
+        settings={appData.settings}
+        users={appData.users}
+        onCancel={() => {
+          setPinModalState(null);
+          showToast('تم إلغاء العملية لعدم اعتماد المدير', 'info');
+        }}
+        onSuccess={() => {
+          const state = pinModalState;
+          setPinModalState(null);
+          if (state) {
+            handleCheckout(state.isThermalPrint, {
+              belowCostApproved: state.belowCostApproved,
+              creditLimitApproved: state.creditLimitApproved,
+            });
+          }
+        }}
+      />
+
+      {creditWarnState && (
+        <div className="fixed inset-0 z-[10000] bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4" dir="rtl">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-amber-300 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-amber-600 text-white">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <ShieldAlert className="w-5 h-5 shrink-0" />
+                <span>تنبيه تجاوز حد الائتمان</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreditWarnState(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/20"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed bg-amber-50 border border-amber-200 rounded-xl p-3">
+                {creditWarnState.message}
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreditWarnState(null);
+                    showToast('تم إيقاف الحفظ لتجاوز حد الائتمان', 'info');
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold text-xs sm:text-sm hover:bg-slate-50"
+                >
+                  إلغاء وتعديل الدفع
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const st = creditWarnState;
+                    setCreditWarnState(null);
+                    handleCheckout(st.isThermalPrint, {
+                      belowCostApproved: st.belowCostApproved,
+                      creditLimitApproved: true,
+                    });
+                  }}
+                  className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs sm:text-sm"
+                >
+                  تأكيد ومتابعة الحفظ
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -23,6 +23,28 @@ export function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+export function getEffectivePeriodLockDate(appData: AppData): string | undefined {
+  const a = (appData.fiscalLockDate || '').trim().slice(0, 10);
+  const b = (appData.settings?.periodLockDate || '').trim().slice(0, 10);
+  if (a && b) return a >= b ? a : b;
+  return a || b || undefined;
+}
+
+export function assertPeriodUnlocked(
+  appData: AppData,
+  dateStr?: string,
+  actionLabel: string = 'تنفيذ الحركة'
+): void {
+  const lockDate = getEffectivePeriodLockDate(appData);
+  if (!lockDate) return;
+  const targetDate = (dateStr || new Date().toISOString().split('T')[0]).trim().slice(0, 10);
+  if (targetDate && /^\d{4}-\d{2}-\d{2}$/.test(targetDate) && targetDate <= lockDate) {
+    throw new Error(
+      `الفترة المحاسبية مقفلة حتى تاريخ ${lockDate}. لا يمكن ${actionLabel} بتاريخ (${targetDate}) قبل فك الإقفال من الإعدادات.`
+    );
+  }
+}
+
 // Helper to determine cashbox key from method name
 export function mapPaymentMethodToKey(methodName?: string): 'drawer' | 'vodafone' | 'instapay' | 'bank' {
   if (!methodName) return 'drawer';
@@ -455,23 +477,36 @@ export function processPurchaseInvoice(
     ? (oldInvoiceId || invoice.id)
     : (appData.purchaseInvoices.some((i) => i.id === invoice.id) ? invoice.id : undefined);
 
+  const now = new Date();
+  const dateStr = invoice.date || now.toISOString().split('T')[0];
+  assertPeriodUnlocked(appData, dateStr, isEditing ? 'تعديل فاتورة مشتريات' : 'حفظ فاتورة مشتريات');
+  if (targetOldId) {
+    const existingOld = (appData.purchaseInvoices || []).find((i) => i.id === targetOldId);
+    if (existingOld) {
+      assertPeriodUnlocked(appData, existingOld.date, 'تعديل فاتورة مشتريات من فترة مقفلة');
+    }
+  }
+
   const data: AppData = {
     ...appData,
     items: (appData.items || []).map((i) => ({
       ...i,
       movements: [...(i.movements || [])],
       fifoLayers: [...(i.fifoLayers || []).map((l) => ({ ...l }))],
+      altUnits: i.altUnits ? i.altUnits.map((u) => ({ ...u })) : undefined,
     })),
     suppliers: (appData.suppliers || []).map((s) => ({ ...s, transactions: [...(s.transactions || [])] })),
     productPrices: (appData.productPrices || []).map((p) => ({ ...p })),
     cashTransactions: [...(appData.cashTransactions || [])],
     journalEntries: [...(appData.journalEntries || [])],
     purchaseInvoices: [...(appData.purchaseInvoices || [])],
+    salesInvoices: (appData.salesInvoices || []).map((si) => ({
+      ...si,
+      items: (si.items || []).map((li) => ({ ...li })),
+    })),
   };
 
   const isReturn = invoice.type.startsWith('return_');
-  const now = new Date();
-  const dateStr = invoice.date || now.toISOString().split('T')[0];
   const timeStr = invoice.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const mainBranchId = getMainBranchId(data.branches);
   const invBranchId = invoice.branchId || data.activeBranchId || mainBranchId;
@@ -483,6 +518,22 @@ export function processPurchaseInvoice(
       const wasReturn = oldInv.type.startsWith('return_');
       const oldBr = oldInv.branchId || mainBranchId;
 
+      // Revert any retroactive negative-stock COGS settlements created by this purchase invoice
+      if (oldInv.retroactiveSettlements && oldInv.retroactiveSettlements.length > 0) {
+        oldInv.retroactiveSettlements.forEach((rs) => {
+          const sInv = data.salesInvoices.find((si) => si.id === rs.saleInvoiceId);
+          const line = sInv?.items?.[rs.lineIndex];
+          if (line) {
+            const nextUncosted = round2(Number(line.uncostedQty || 0) + rs.settledBaseQty);
+            const prevCogs = Number(line.costPrice || 0) * Number(line.qty || 0);
+            const nextCogs = round2(Math.max(0, prevCogs - rs.settledCogs));
+            line.uncostedQty = nextUncosted;
+            line.costMissing = nextUncosted > 0.001 || nextCogs <= 0;
+            line.costPrice = Number(line.qty || 0) > 0 ? round2(nextCogs / Number(line.qty)) : 0;
+          }
+        });
+      }
+
       oldInv.items?.forEach((itm) => {
         const stockItm = data.items.find(
           (i) =>
@@ -493,7 +544,11 @@ export function processPurchaseInvoice(
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
         );
         if (stockItm) {
-          const qtyDiff = wasReturn ? itm.qty : -itm.qty;
+          const itmFactor = Math.max(0.0001, Number(itm.unitFactor || 1));
+          const itmBaseQty = round2(
+            itm.baseQty !== undefined && Number(itm.baseQty) > 0 ? Number(itm.baseQty) : Number(itm.qty || 0) * itmFactor
+          );
+          const qtyDiff = wasReturn ? itmBaseQty : -itmBaseQty;
           stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
           if (stockItm.branchStock) {
             stockItm.branchStock = { ...stockItm.branchStock, [oldBr]: stockItm.quantity };
@@ -503,12 +558,12 @@ export function processPurchaseInvoice(
           if (!wasReturn) {
             stockItm.fifoLayers = (stockItm.fifoLayers || []).filter((l) => l.invoiceId !== targetOldId);
           } else {
-            // Re-add returned qty into layer
-            const layerCost = round2(Number(itm.costPrice || itm.price || stockItm.avgCost || stockItm.purchasePrice || 0));
+            const rawUnitCost = itm.costPrice ? Number(itm.costPrice) / itmFactor : (itm.price ? Number(itm.price) / itmFactor : Number(stockItm.avgCost || stockItm.purchasePrice || 0));
+            const layerCost = round2(rawUnitCost);
             if (layerCost > 0) {
               stockItm.fifoLayers = [
                 ...(stockItm.fifoLayers || []),
-                { id: `layer_revert_pret_${targetOldId}_${Date.now()}`, date: dateStr, remainingQty: itm.qty, unitCost: layerCost },
+                { id: `layer_revert_pret_${targetOldId}_${Date.now()}`, date: dateStr, remainingQty: itmBaseQty, unitCost: layerCost },
               ];
             }
           }
@@ -519,7 +574,7 @@ export function processPurchaseInvoice(
             type: 'adjustment',
             qty: qtyDiff,
             price: itm.price,
-            total: Math.abs(qtyDiff) * itm.price,
+            total: Math.abs(itm.qty) * itm.price,
             note: `تسوية وإعادة رصيد المخزن قبل تعديل فاتورة المشتريات #${oldInv.id}`,
           });
         }
@@ -550,7 +605,9 @@ export function processPurchaseInvoice(
       data.cashTransactions = data.cashTransactions.filter(
         (tx) => tx.invoiceId !== targetOldId || (tx.syncId && tx.syncId.includes('_inst_'))
       );
-      data.journalEntries = data.journalEntries.filter((je) => je.reference !== `PUR-INV-${targetOldId}`);
+      data.journalEntries = data.journalEntries.filter(
+        (je) => je.reference !== `PUR-INV-${targetOldId}` && je.reference !== `NEG-COGS-PUR-${targetOldId}`
+      );
       data.purchaseInvoices = data.purchaseInvoices.filter((i) => i.id !== targetOldId);
     }
   }
@@ -615,8 +672,22 @@ export function processPurchaseInvoice(
     supp.updatedAt = now.toISOString();
   }
 
-  // 3. 📦 Inventory & FIFO / Negative-Stock Settlement / Sticky Last Purchase Price
+  // 3. 📦 Inventory & FIFO / Multi-UOM / Negative-Stock Retroactive Settlement / Sticky Last Purchase Price
+  let totalRetroactiveCogs = 0;
+  const retroactiveSettlements: NonNullable<PurchaseInvoice['retroactiveSettlements']> = [];
+
   const enrichedPurItems = (invoice.items || []).map((item, idx) => {
+    const factor = Math.max(0.0001, Number(item.unitFactor || 1));
+    const invQty = Number(item.qty || 0);
+    const baseQty = round2(
+      item.baseQty !== undefined && Number(item.baseQty) > 0 ? Number(item.baseQty) : invQty * factor
+    );
+    const totalLineCost = item.qty > 0 && item.total > 0 ? Number(item.total) : invQty * (Number(item.price) || 0);
+    const unitPurchaseCost = round2(
+      baseQty > 0 ? totalLineCost / baseQty : (Number(item.price) || 0) / factor
+    );
+    const lastBuyPrice = round2(Number(item.price || 0) > 0 ? Number(item.price) / factor : unitPurchaseCost);
+
     let stockItem = data.items.find(
       (i) =>
         (item.itemId && i.id === item.itemId) ||
@@ -634,13 +705,13 @@ export function processPurchaseInvoice(
         code: fallbackCode,
         name: item.name,
         category: item.category,
-        unit: item.unit || 'قطعة',
+        unit: factor === 1 ? (item.unit || 'قطعة') : 'قطعة',
         quantity: 0,
         branchStock: { [invBranchId]: 0 },
-        purchasePrice: round2(item.price || 0),
-        costPrice: round2(item.price || 0),
-        avgCost: round2(item.price || 0),
-        salePrice: item.salePrice && item.salePrice > 0 ? round2(item.salePrice) : 0,
+        purchasePrice: lastBuyPrice,
+        costPrice: unitPurchaseCost || lastBuyPrice,
+        avgCost: unitPurchaseCost || lastBuyPrice,
+        salePrice: item.salePrice && item.salePrice > 0 ? round2(item.salePrice / factor) : 0,
         fifoLayers: [],
         movements: [],
         createdAt: now.toISOString(),
@@ -652,22 +723,77 @@ export function processPurchaseInvoice(
     ensureBaselineFifoLayerIfNeeded(stockItem, dateStr);
 
     const prevQty = Number(stockItem.quantity || 0);
-    const qtyChange = isReturn ? -item.qty : item.qty;
-    const unitPurchaseCost = round2(
-      item.qty > 0 && item.total > 0 ? item.total / item.qty : (item.price || 0)
-    );
-    const lastBuyPrice = round2(Number(item.price || 0) > 0 ? Number(item.price) : unitPurchaseCost);
+    const qtyChange = isReturn ? -baseQty : baseQty;
 
     if (!isReturn) {
-      const newQty = round2(prevQty + item.qty);
+      const newQty = round2(prevQty + baseQty);
       stockItem.quantity = newQty;
       if (stockItem.branchStock) {
-        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: newQty };
+        stockItem.branchStock = { ...stockItmBranchSafe(stockItem.branchStock), [invBranchId]: newQty };
       }
 
-      // If previous stock was negative (sold before buying), settle negative deficit first;
-      // only any positive remainder stays in FIFO inventory layers!
-      const settledAvailableQty = round2(Math.min(item.qty, Math.max(0, newQty)));
+      // Settle negative deficit retroactively in COGS & FIFO layers
+      const settledAvailableQty = round2(Math.min(baseQty, Math.max(0, newQty)));
+
+      if (prevQty < 0 && unitPurchaseCost > 0) {
+        let deficitToSettleBase = round2(Math.min(baseQty, Math.abs(prevQty)));
+        const sortedSales = data.salesInvoices
+          .filter((si) => si && si.status !== 'cancelled' && !si.type.startsWith('return_'))
+          .slice()
+          .sort((a, b) => {
+            const da = String(a.date || '');
+            const db = String(b.date || '');
+            return da !== db ? da.localeCompare(db) : a.id - b.id;
+          });
+
+        for (const sInv of sortedSales) {
+          if (deficitToSettleBase <= 0.001) break;
+          const sBranch = sInv.branchId || mainBranchId;
+          const sameBranch = sBranch === invBranchId;
+          if (!sameBranch) continue;
+
+          (sInv.items || []).forEach((sLine, lineIdx) => {
+            if (deficitToSettleBase <= 0.001) return;
+            const itemMatches =
+              (sLine.itemId && sLine.itemId === stockItem!.id) ||
+              (sLine.code && stockItem!.code && sLine.code.trim().toLowerCase() === stockItem!.code.trim().toLowerCase()) ||
+              sLine.name.trim().toLowerCase() === stockItem!.name.trim().toLowerCase();
+            if (!itemMatches) return;
+
+            const sLineFactor = Math.max(0.0001, Number(sLine.unitFactor || 1));
+            const sLineBaseQty = round2(
+              sLine.baseQty !== undefined && Number(sLine.baseQty) > 0 ? Number(sLine.baseQty) : Number(sLine.qty || 0) * sLineFactor
+            );
+            const pendingBase =
+              sLine.uncostedQty !== undefined
+                ? Number(sLine.uncostedQty)
+                : sLine.costMissing && Number(sLine.costPrice || 0) <= 0
+                ? sLineBaseQty
+                : 0;
+
+            if (pendingBase <= 0.001) return;
+
+            const settleBase = round2(Math.min(deficitToSettleBase, pendingBase));
+            const addCogs = round2(settleBase * unitPurchaseCost);
+            const prevCogs = Number(sLine.costPrice || 0) * Number(sLine.qty || 0);
+            const newLineCogs = round2(prevCogs + addCogs);
+
+            sLine.costPrice = Number(sLine.qty || 0) > 0 ? round2(newLineCogs / Number(sLine.qty)) : 0;
+            const remUncosted = round2(Math.max(0, pendingBase - settleBase));
+            sLine.uncostedQty = remUncosted > 0.001 ? remUncosted : 0;
+            sLine.costMissing = remUncosted > 0.001;
+
+            totalRetroactiveCogs = round2(totalRetroactiveCogs + addCogs);
+            retroactiveSettlements.push({
+              saleInvoiceId: sInv.id,
+              lineIndex: lineIdx,
+              settledBaseQty: settleBase,
+              settledCogs: addCogs,
+            });
+            deficitToSettleBase = round2(deficitToSettleBase - settleBase);
+          });
+        }
+      }
 
       if (unitPurchaseCost > 0 && settledAvailableQty > 0) {
         stockItem.fifoLayers = [
@@ -687,10 +813,18 @@ export function processPurchaseInvoice(
         });
       }
 
-      // Always keep last purchase price sticky on the item until user changes it again
+      // Always keep last purchase price sticky on the item (in base unit + matching altUnit if applicable)
       if (lastBuyPrice > 0) {
         stockItem.purchasePrice = lastBuyPrice;
         stockItem.costPrice = unitPurchaseCost > 0 ? unitPurchaseCost : lastBuyPrice;
+        if (stockItem.altUnits && item.unit) {
+          const uLower = item.unit.trim().toLowerCase();
+          stockItem.altUnits = stockItem.altUnits.map((au) =>
+            au.name.trim().toLowerCase() === uLower
+              ? { ...au, buyPrice: round2(Number(item.price || 0) > 0 ? Number(item.price) : unitPurchaseCost * factor) }
+              : au
+          );
+        }
       }
       const computedAvg = recomputeItemAvgCost(stockItem);
       stockItem.avgCost = computedAvg > 0 ? computedAvg : round2(unitPurchaseCost || lastBuyPrice);
@@ -699,8 +833,9 @@ export function processPurchaseInvoice(
       stockItem.updatedAt = now.toISOString();
 
       if (item.salePrice && item.salePrice > 0) {
-        stockItem.salePrice = round2(item.salePrice);
-        stockItem.normalSellingPrice = round2(item.salePrice);
+        const baseSale = round2(item.salePrice / factor);
+        stockItem.salePrice = baseSale;
+        stockItem.normalSellingPrice = baseSale;
       }
       if (item.category && item.category.trim() && item.category !== 'بدون تصنيف') {
         stockItem.category = item.category.trim();
@@ -717,12 +852,12 @@ export function processPurchaseInvoice(
       }
     } else {
       // Purchase return: reduce quantity algebraically and remove from newest/matching FIFO layers
-      const newQty = round2(prevQty - item.qty);
+      const newQty = round2(prevQty - baseQty);
       stockItem.quantity = newQty;
       if (stockItem.branchStock) {
-        stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: newQty };
+        stockItem.branchStock = { ...stockItmBranchSafe(stockItem.branchStock), [invBranchId]: newQty };
       }
-      let remToDeduct = item.qty;
+      let remToDeduct = baseQty;
       const layers = [...(stockItem.fifoLayers || [])];
       for (let li = layers.length - 1; li >= 0 && remToDeduct > 0; li--) {
         if (layers[li].remainingQty <= 0) continue;
@@ -735,6 +870,7 @@ export function processPurchaseInvoice(
     }
 
     const moveType: ItemMovement['type'] = isReturn ? 'return_purchase' : 'purchase';
+    const unitInfoNote = factor !== 1 ? ` (${invQty} ${item.unit || 'وحدة'} = ${baseQty} أساسية)` : '';
     const negSettleNote =
       !isReturn && prevQty < 0
         ? stockItem.quantity >= 0
@@ -742,15 +878,15 @@ export function processPurchaseInvoice(
           : ` [سداد جزئي للرصيد السالب (${prevQty} → ${stockItem.quantity})]`
         : '';
     const noteText = isReturn
-      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للمورد ${cleanSuppName} - فاتورة #${invoice.id}`
-      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من المورد ${cleanSuppName} - فاتورة #${invoice.id}${negSettleNote}`;
+      ? `مرتجع شراء (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للمورد ${cleanSuppName} - فاتورة #${invoice.id}${unitInfoNote}`
+      : `شراء وتوريد (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من المورد ${cleanSuppName} - فاتورة #${invoice.id}${unitInfoNote}${negSettleNote}`;
 
     stockItem.movements.push({
       date: dateStr,
       type: moveType,
       qty: qtyChange,
       price: item.price,
-      total: round2(Math.abs(qtyChange) * item.price),
+      total: round2(Math.abs(invQty) * item.price),
       note: noteText,
     });
 
@@ -758,8 +894,15 @@ export function processPurchaseInvoice(
       ...item,
       itemId: stockItem.id,
       code: stockItem.code || item.code,
+      unitFactor: factor,
+      baseQty,
+      costPrice: round2(unitPurchaseCost * factor),
     };
   });
+
+  function stockItmBranchSafe(bs: Record<string, number>) {
+    return bs || {};
+  }
 
   // 4. Store normalized invoice
   const normalizedInvoice: PurchaseInvoice = {
@@ -772,6 +915,7 @@ export function processPurchaseInvoice(
     items: enrichedPurItems,
     paidAmount: effectivePaidTotal,
     remainingAmount: effectiveRemaining,
+    retroactiveSettlements: retroactiveSettlements.length > 0 ? retroactiveSettlements : undefined,
   };
   data.purchaseInvoices = [normalizedInvoice, ...data.purchaseInvoices];
   if (!isEditing && invoice.id >= data.nextPurchaseNumber) {
@@ -960,6 +1104,40 @@ export function processPurchaseInvoice(
   });
   data.nextJournalId = nextJid + 1;
 
+  if (totalRetroactiveCogs > 0) {
+    const retJid = data.nextJournalId || 1001;
+    const retLines: JournalLine[] = [
+      {
+        accountCode: '5101',
+        accountName: 'تكلفة البضاعة المباعة (Cost of Goods Sold - COGS)',
+        debit: totalRetroactiveCogs,
+        credit: 0,
+        note: `تسوية تكلفة مبيعات سالبة سابقة بأثر رجعي من فاتورة مشتريات #${invoice.id}`,
+      },
+      {
+        accountCode: '1106',
+        accountName: 'مخزون البضاعة (Merchandise Inventory)',
+        debit: 0,
+        credit: totalRetroactiveCogs,
+        note: `تسوية مخزون المبيعات السالبة بأثر رجعي من فاتورة مشتريات #${invoice.id}`,
+      },
+    ];
+    assertJournalBalanced(retLines, `NEG-COGS-PUR-${invoice.id}`);
+    data.journalEntries.push({
+      id: retJid,
+      date: dateStr,
+      entryNumber: `JV-RET-${invoice.id}`,
+      reference: `NEG-COGS-PUR-${invoice.id}`,
+      description: `قيد تسوية تكلفة المبيعات السالبة بأثر رجعي - فاتورة مشتريات #${invoice.id}`,
+      lines: retLines,
+      source: 'purchase',
+      createdBy: invoice.createdBy || 'مدير النظام',
+      createdAt: new Date().toISOString(),
+      isApproved: true,
+    });
+    data.nextJournalId = retJid + 1;
+  }
+
   // 7. Authoritative treasury & subledger reconciliation
   const reconciled = reconcileTreasuryCashBox(data);
   data.cashBox = reconciled.cashBox;
@@ -981,12 +1159,23 @@ export function processSaleInvoice(
     ? (oldInvoiceId || invoice.id)
     : (appData.salesInvoices.some((i) => i.id === invoice.id) ? invoice.id : undefined);
 
+  const now = new Date();
+  const dateStr = invoice.date || now.toISOString().split('T')[0];
+  assertPeriodUnlocked(appData, dateStr, isEditing ? 'تعديل فاتورة مبيعات' : 'حفظ فاتورة مبيعات');
+  if (targetOldId) {
+    const existingOld = (appData.salesInvoices || []).find((i) => i.id === targetOldId);
+    if (existingOld) {
+      assertPeriodUnlocked(appData, existingOld.date, 'تعديل فاتورة مبيعات من فترة مقفلة');
+    }
+  }
+
   const data: AppData = {
     ...appData,
     items: (appData.items || []).map((i) => ({
       ...i,
       movements: [...(i.movements || [])],
       fifoLayers: [...(i.fifoLayers || []).map((l) => ({ ...l }))],
+      altUnits: i.altUnits ? i.altUnits.map((u) => ({ ...u })) : undefined,
     })),
     customers: (appData.customers || []).map((c) => ({ ...c, transactions: [...(c.transactions || [])] })),
     productPrices: (appData.productPrices || []).map((p) => ({ ...p })),
@@ -996,8 +1185,6 @@ export function processSaleInvoice(
   };
 
   const isReturn = invoice.type.startsWith('return_');
-  const now = new Date();
-  const dateStr = invoice.date || now.toISOString().split('T')[0];
   const timeStr = invoice.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const mainBranchId = getMainBranchId(data.branches);
   const invBranchId = invoice.branchId || data.activeBranchId || mainBranchId;
@@ -1020,20 +1207,26 @@ export function processSaleInvoice(
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
         );
         if (stockItm) {
-          const qtyDiff = wasReturn ? -itm.qty : itm.qty;
+          const itmFactor = Math.max(0.0001, Number(itm.unitFactor || 1));
+          const itmBaseQty = round2(
+            itm.baseQty !== undefined && Number(itm.baseQty) > 0 ? Number(itm.baseQty) : Number(itm.qty || 0) * itmFactor
+          );
+          const qtyDiff = wasReturn ? -itmBaseQty : itmBaseQty;
           stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
           if (stockItm.branchStock) {
             stockItm.branchStock = { ...stockItm.branchStock, [oldBr]: stockItm.quantity };
           }
 
           if (!wasReturn) {
-            const restoreCost = round2(Number(itm.costPrice || stockItm.avgCost || stockItm.purchasePrice || 0));
+            const restoreCost = round2(
+              itm.costPrice ? Number(itm.costPrice) / itmFactor : Number(stockItm.avgCost || stockItm.purchasePrice || 0)
+            );
             if (restoreCost > 0) {
               stockItm.fifoLayers = [
                 {
                   id: `layer_revert_sale_${targetOldId}_${idx}_${Date.now()}`,
                   date: oldInv.date || dateStr,
-                  remainingQty: itm.qty,
+                  remainingQty: itmBaseQty,
                   unitCost: restoreCost,
                 },
                 ...(stockItm.fifoLayers || []),
@@ -1049,7 +1242,7 @@ export function processSaleInvoice(
             type: 'adjustment',
             qty: qtyDiff,
             price: itm.price,
-            total: Math.abs(qtyDiff) * itm.price,
+            total: Math.abs(itm.qty) * itm.price,
             note: `تسوية وإعادة رصيد المخزن قبل تعديل فاتورة المبيعات #${oldInv.id}`,
           });
         }
@@ -1098,9 +1291,15 @@ export function processSaleInvoice(
   const effectiveRemaining = round2(Math.max(0, totalNet - effectivePaidTotal));
   const debtAddedByInvoice = round2(Math.max(0, totalNet - effectiveInitialPaid));
 
-  // 2. 📦 Inventory Posting, Auto-Creating New Items (Negative Stock Allowed), Sticky Sale Price & Real FIFO/Avg COGS
+  // 2. 📦 Inventory Posting, Multi-UOM, Negative Stock Tracking, Sticky Sale Price & Real FIFO/Avg COGS
   let totalInvoiceCogs = 0;
   const enrichedItems = (invoice.items || []).map((item, idx) => {
+    const factor = Math.max(0.0001, Number(item.unitFactor || 1));
+    const lineQty = Number(item.qty || 0);
+    const baseQty = round2(
+      item.baseQty !== undefined && Number(item.baseQty) > 0 ? Number(item.baseQty) : lineQty * factor
+    );
+
     let stockItem = data.items.find(
       (i) =>
         (item.itemId && i.id === item.itemId) ||
@@ -1110,9 +1309,8 @@ export function processSaleInvoice(
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
     );
     if (!stockItem) {
-      // Brand-new unpurchased item sold directly: create in inventory cleanly (quantity starts at 0 then goes negative)
-      const explicitCost = round2(Number(item.costPrice || 0));
-      const cleanSalePrice = round2(Number(item.price || 0));
+      const explicitCost = round2(Number(item.costPrice || 0) / factor);
+      const cleanSalePrice = round2(Number(item.price || 0) / factor);
       const fallbackCode = item.code?.trim() || `ITM-${String(data.items.length + 1).padStart(3, '0')}`;
       stockItem = {
         id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1121,7 +1319,7 @@ export function processSaleInvoice(
         code: fallbackCode,
         name: item.name,
         category: item.category || 'عام',
-        unit: item.unit || 'قطعة',
+        unit: factor === 1 ? (item.unit || 'قطعة') : 'قطعة',
         quantity: 0,
         branchStock: { [invBranchId]: 0 },
         purchasePrice: explicitCost,
@@ -1139,12 +1337,18 @@ export function processSaleInvoice(
       data.items.push(stockItem);
     }
 
-    // Sticky Sale Price: always update the item's sale price to the latest price sold at until changed again
-    const soldUnitPrice = round2(Number(item.price || 0));
-    if (!isReturn && soldUnitPrice > 0) {
-      stockItem.salePrice = soldUnitPrice;
-      stockItem.normalSellingPrice = soldUnitPrice;
-      (stockItem as any).price = soldUnitPrice;
+    // Sticky Sale Price: always update base salePrice (+ altUnit salePrice if applicable)
+    const soldUnitPriceBase = round2(Number(item.price || 0) / factor);
+    if (!isReturn && soldUnitPriceBase > 0) {
+      stockItem.salePrice = soldUnitPriceBase;
+      stockItem.normalSellingPrice = soldUnitPriceBase;
+      (stockItem as any).price = soldUnitPriceBase;
+      if (stockItem.altUnits && item.unit) {
+        const uLower = item.unit.trim().toLowerCase();
+        stockItem.altUnits = stockItem.altUnits.map((au) =>
+          au.name.trim().toLowerCase() === uLower ? { ...au, salePrice: round2(Number(item.price || 0)) } : au
+        );
+      }
       stockItem.lastPriceUpdate = dateStr;
       stockItem.lastPriceUpdatedBy = invoice.updatedBy || invoice.createdBy || 'مدير النظام';
       stockItem.updatedAt = now.toISOString();
@@ -1154,7 +1358,7 @@ export function processSaleInvoice(
         if (pIdx >= 0) {
           data.productPrices[pIdx] = {
             ...data.productPrices[pIdx],
-            normalSellingPrice: soldUnitPrice,
+            normalSellingPrice: soldUnitPriceBase,
             updatedAt: dateStr,
             updatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
           };
@@ -1164,19 +1368,20 @@ export function processSaleInvoice(
 
     ensureBaselineFifoLayerIfNeeded(stockItem, dateStr);
     const methodForItem: 'fifo' | 'avg' = stockItem.costMethod || globalCostMethod;
-    const lineQty = Number(item.qty || 0);
     let lineCogs = 0;
     let costMissing = false;
+    let uncostedQty = 0;
 
     if (!isReturn) {
-      // Sale deduction (allows going negative when unpurchased / out of stock) + FIFO/Avg cost consumption
-      stockItem.quantity = round2((stockItem.quantity || 0) - lineQty);
+      stockItem.quantity = round2((stockItem.quantity || 0) - baseQty);
       if (stockItem.branchStock) {
         stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: stockItem.quantity };
       }
 
-      const currentAvg = round2(Number(stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || item.costPrice || 0));
-      let remainingNeed = lineQty;
+      const currentAvg = round2(
+        Number(stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || (item.costPrice ? Number(item.costPrice) / factor : 0))
+      );
+      let remainingNeed = baseQty;
       const updatedLayers: FifoCostLayer[] = [];
 
       for (const layer of stockItem.fifoLayers || []) {
@@ -1198,29 +1403,37 @@ export function processSaleInvoice(
           lineCogs += remainingNeed * currentAvg;
         } else {
           costMissing = true;
+          uncostedQty = round2(remainingNeed);
         }
       }
 
-      if (lineCogs <= 0) costMissing = true;
+      if (lineCogs <= 0 && baseQty > 0) {
+        costMissing = true;
+        if (uncostedQty <= 0) uncostedQty = round2(baseQty);
+      }
       stockItem.avgCost = recomputeItemAvgCost(stockItem);
     } else {
-      // Sales return: restore stock & FIFO layer
-      stockItem.quantity = round2((stockItem.quantity || 0) + lineQty);
+      // Sales return: restore stock & FIFO layer in base units
+      stockItem.quantity = round2((stockItem.quantity || 0) + baseQty);
       if (stockItem.branchStock) {
         stockItem.branchStock = { ...stockItem.branchStock, [invBranchId]: stockItem.quantity };
       }
       const returnUnitCost = round2(
-        Number(item.costPrice || stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || 0)
+        Number(
+          item.costPrice
+            ? Number(item.costPrice) / factor
+            : stockItem.avgCost || stockItem.purchasePrice || stockItem.costPrice || 0
+        )
       );
       if (returnUnitCost > 0) {
-        lineCogs = round2(lineQty * returnUnitCost);
+        lineCogs = round2(baseQty * returnUnitCost);
         stockItem.fifoLayers = [
           ...(stockItem.fifoLayers || []),
           {
             id: `layer_sret_${invoice.id}_${idx}_${Date.now()}`,
             invoiceId: invoice.id,
             date: dateStr,
-            remainingQty: lineQty,
+            remainingQty: baseQty,
             unitCost: returnUnitCost,
           },
         ];
@@ -1234,18 +1447,19 @@ export function processSaleInvoice(
     totalInvoiceCogs = round2(totalInvoiceCogs + lineCogs);
     const unitCostOut = lineQty > 0 ? round2(lineCogs / lineQty) : 0;
 
-    const qtyChange = isReturn ? lineQty : -lineQty;
+    const qtyChange = isReturn ? baseQty : -baseQty;
     const moveType: ItemMovement['type'] = isReturn ? 'return_sale' : 'sale';
+    const unitInfoNote = factor !== 1 ? ` (${lineQty} ${item.unit || 'وحدة'} = ${baseQty} أساسية)` : '';
     const noteText = isReturn
-      ? `مرتجع بيع (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من العميل ${invoice.customerName} - فاتورة #${invoice.id}`
-      : `بيع (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للعميل ${invoice.customerName} - فاتورة #${invoice.id}${stockItem.quantity < 0 ? ' [بيع بالسالب]' : ''}`;
+      ? `مرتجع بيع (${invoice.type === 'return_nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] من العميل ${invoice.customerName} - فاتورة #${invoice.id}${unitInfoNote}`
+      : `بيع (${invoice.type === 'nagdi' ? 'نقدي' : 'آجل'}) فرع [${invBranchId}] للعميل ${invoice.customerName} - فاتورة #${invoice.id}${unitInfoNote}${stockItem.quantity < 0 ? ' [بيع بالسالب]' : ''}`;
 
     stockItem.movements.push({
       date: dateStr,
       type: moveType,
       qty: qtyChange,
       price: item.price,
-      total: round2(Math.abs(qtyChange) * item.price),
+      total: round2(Math.abs(lineQty) * item.price),
       note: noteText,
     });
 
@@ -1253,8 +1467,11 @@ export function processSaleInvoice(
       ...item,
       itemId: stockItem.id,
       code: stockItem.code || item.code,
+      unitFactor: factor,
+      baseQty,
       costPrice: unitCostOut,
       costMissing,
+      uncostedQty: uncostedQty > 0 ? uncostedQty : undefined,
     };
   });
 
@@ -1596,6 +1813,10 @@ export function processPurchasePayment(
     syncId?: string;
   }
 ): AppData {
+  const now = new Date();
+  const dateStr = params.date || now.toISOString().split('T')[0];
+  assertPeriodUnlocked(appData, dateStr, 'سداد دفعة فاتورة مشتريات');
+
   const data: AppData = {
     ...appData,
     cashTransactions: [...(appData.cashTransactions || [])],
@@ -1619,8 +1840,6 @@ export function processPurchasePayment(
   const payAmt = round2(Math.min(rem, params.amount));
   if (payAmt <= 0) return data;
 
-  const now = new Date();
-  const dateStr = params.date || now.toISOString().split('T')[0];
   const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const mainBranchId = getMainBranchId(data.branches);
   const targetBranch = params.branchId || inv.branchId || mainBranchId;
@@ -1733,6 +1952,10 @@ export function processSalePayment(
     syncId?: string;
   }
 ): AppData {
+  const now = new Date();
+  const dateStr = params.date || now.toISOString().split('T')[0];
+  assertPeriodUnlocked(appData, dateStr, 'تحصيل دفعة فاتورة مبيعات');
+
   const data: AppData = {
     ...appData,
     cashTransactions: [...(appData.cashTransactions || [])],
@@ -1756,8 +1979,6 @@ export function processSalePayment(
   const payAmt = round2(Math.min(rem, params.amount));
   if (payAmt <= 0) return data;
 
-  const now = new Date();
-  const dateStr = params.date || now.toISOString().split('T')[0];
   const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const mainBranchId = getMainBranchId(data.branches);
   const targetBranch = params.branchId || inv.branchId || mainBranchId;
@@ -1882,6 +2103,7 @@ export function saveCashVoucher(
   if (!amt || amt <= 0) {
     throw new Error('قيمة السند يجب أن تكون أكبر من صفر.');
   }
+  assertPeriodUnlocked(appData, params.date, params.id ? 'تعديل سند نقدية' : 'حفظ سند نقدية');
 
   let data: AppData = {
     ...appData,
@@ -2119,6 +2341,10 @@ export function deleteCashVoucher(
   voucherId: number,
   skipTombstone: boolean = false
 ): AppData {
+  const target = (appData.cashTransactions || []).find((t) => t.id === voucherId);
+  if (!target) return appData;
+  assertPeriodUnlocked(appData, target.date, skipTombstone ? 'تعديل سند نقدية' : 'حذف سند نقدية');
+
   const data: AppData = {
     ...appData,
     cashTransactions: [...(appData.cashTransactions || [])],
@@ -2129,9 +2355,6 @@ export function deleteCashVoucher(
     journalEntries: [...(appData.journalEntries || [])],
     deletedRecords: { ...(appData.deletedRecords || {}) },
   };
-
-  const target = data.cashTransactions.find((t) => t.id === voucherId);
-  if (!target) return data;
 
   const amt = round2(target.amount || 0);
 
@@ -2221,6 +2444,7 @@ export function saveTreasuryMovement(
     user?: any;
   }
 ): AppData {
+  assertPeriodUnlocked(appData, params.date, 'تسجيل حركة خزينة');
   const amt = round2(params.amount);
   const data: AppData = {
     ...appData,
@@ -2459,6 +2683,10 @@ export function saveTreasuryMovement(
  */
 export function deletePurchaseInvoice(appData: AppData, invoiceId: number | string): AppData {
   const numId = Number(invoiceId);
+  const targetInv = (appData.purchaseInvoices || []).find((i) => i.id === numId || String(i.id) === String(invoiceId));
+  if (!targetInv) return appData;
+  assertPeriodUnlocked(appData, targetInv.date, 'حذف فاتورة مشتريات');
+
   const data: AppData = {
     ...appData,
     items: (appData.items || []).map((i) => ({
@@ -2470,10 +2698,29 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
     cashTransactions: [...(appData.cashTransactions || [])],
     journalEntries: [...(appData.journalEntries || [])],
     purchaseInvoices: [...(appData.purchaseInvoices || [])],
+    salesInvoices: (appData.salesInvoices || []).map((si) => ({
+      ...si,
+      items: (si.items || []).map((li) => ({ ...li })),
+    })),
   };
 
   const inv = data.purchaseInvoices.find((i) => i.id === numId || String(i.id) === String(invoiceId));
   if (!inv) return data;
+
+  if (inv.retroactiveSettlements && inv.retroactiveSettlements.length > 0) {
+    inv.retroactiveSettlements.forEach((rs) => {
+      const sInv = data.salesInvoices.find((si) => si.id === rs.saleInvoiceId);
+      const line = sInv?.items?.[rs.lineIndex];
+      if (line) {
+        const nextUncosted = round2(Number(line.uncostedQty || 0) + rs.settledBaseQty);
+        const prevCogs = Number(line.costPrice || 0) * Number(line.qty || 0);
+        const nextCogs = round2(Math.max(0, prevCogs - rs.settledCogs));
+        line.uncostedQty = nextUncosted;
+        line.costMissing = nextUncosted > 0.001 || nextCogs <= 0;
+        line.costPrice = Number(line.qty || 0) > 0 ? round2(nextCogs / Number(line.qty)) : 0;
+      }
+    });
+  }
 
   const isReturn = inv.type.startsWith('return_');
   const mainBranchId = getMainBranchId(data.branches);
@@ -2490,7 +2737,11 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
           (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
     );
     if (stockItm) {
-      const qtyDiff = isReturn ? itm.qty : -itm.qty;
+      const itmFactor = Math.max(0.0001, Number(itm.unitFactor || 1));
+      const itmBaseQty = round2(
+        itm.baseQty !== undefined && Number(itm.baseQty) > 0 ? Number(itm.baseQty) : Number(itm.qty || 0) * itmFactor
+      );
+      const qtyDiff = isReturn ? itmBaseQty : -itmBaseQty;
       stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
       if (stockItm.branchStock) {
         stockItm.branchStock = { ...stockItm.branchStock, [invBr]: stockItm.quantity };
@@ -2498,11 +2749,12 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
       if (!isReturn) {
         stockItm.fifoLayers = (stockItm.fifoLayers || []).filter((l) => l.invoiceId !== inv.id);
       } else {
-        const layerCost = round2(Number(itm.costPrice || itm.price || stockItm.avgCost || stockItm.purchasePrice || 0));
+        const rawCost = itm.costPrice ? Number(itm.costPrice) / itmFactor : (itm.price ? Number(itm.price) / itmFactor : Number(stockItm.avgCost || stockItm.purchasePrice || 0));
+        const layerCost = round2(rawCost);
         if (layerCost > 0) {
           stockItm.fifoLayers = [
             ...(stockItm.fifoLayers || []),
-            { id: `layer_del_pret_${inv.id}_${idx}`, date: dateStr, remainingQty: itm.qty, unitCost: layerCost },
+            { id: `layer_del_pret_${inv.id}_${idx}`, date: dateStr, remainingQty: itmBaseQty, unitCost: layerCost },
           ];
         }
       }
@@ -2512,7 +2764,7 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
         type: 'adjustment',
         qty: qtyDiff,
         price: itm.price,
-        total: Math.abs(qtyDiff) * itm.price,
+        total: Math.abs(itm.qty) * itm.price,
         note: `تسوية وإلغاء أثر فاتورة المشتريات المحذوفة #${inv.id}`,
       });
     }
@@ -2531,7 +2783,10 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
 
   data.cashTransactions = data.cashTransactions.filter((tx) => tx.invoiceId !== inv.id);
   data.journalEntries = data.journalEntries.filter(
-    (je) => je.reference !== `PUR-INV-${inv.id}` && !je.reference?.startsWith(`PUR-PAY-${inv.id}-`)
+    (je) =>
+      je.reference !== `PUR-INV-${inv.id}` &&
+      je.reference !== `NEG-COGS-PUR-${inv.id}` &&
+      !je.reference?.startsWith(`PUR-PAY-${inv.id}-`)
   );
   data.purchaseInvoices = data.purchaseInvoices.filter((i) => i.id !== inv.id);
 
@@ -2547,6 +2802,10 @@ export function deletePurchaseInvoice(appData: AppData, invoiceId: number | stri
  */
 export function deleteSaleInvoice(appData: AppData, invoiceId: number | string): AppData {
   const numId = Number(invoiceId);
+  const targetInv = (appData.salesInvoices || []).find((i) => i.id === numId || String(i.id) === String(invoiceId));
+  if (!targetInv) return appData;
+  assertPeriodUnlocked(appData, targetInv.date, 'حذف فاتورة مبيعات');
+
   const data: AppData = {
     ...appData,
     items: (appData.items || []).map((i) => ({
@@ -2578,16 +2837,22 @@ export function deleteSaleInvoice(appData: AppData, invoiceId: number | string):
           (i.branchId === invBr || (!i.branchId && invBr === mainBranchId)))
     );
     if (stockItm) {
-      const qtyDiff = isReturn ? -itm.qty : itm.qty;
+      const itmFactor = Math.max(0.0001, Number(itm.unitFactor || 1));
+      const itmBaseQty = round2(
+        itm.baseQty !== undefined && Number(itm.baseQty) > 0 ? Number(itm.baseQty) : Number(itm.qty || 0) * itmFactor
+      );
+      const qtyDiff = isReturn ? -itmBaseQty : itmBaseQty;
       stockItm.quantity = round2((stockItm.quantity || 0) + qtyDiff);
       if (stockItm.branchStock) {
         stockItm.branchStock = { ...stockItm.branchStock, [invBr]: stockItm.quantity };
       }
       if (!isReturn) {
-        const restoreCost = round2(Number(itm.costPrice || stockItm.avgCost || stockItm.purchasePrice || 0));
+        const restoreCost = round2(
+          itm.costPrice ? Number(itm.costPrice) / itmFactor : Number(stockItm.avgCost || stockItm.purchasePrice || 0)
+        );
         if (restoreCost > 0) {
           stockItm.fifoLayers = [
-            { id: `layer_del_sale_${inv.id}_${idx}`, date: inv.date || dateStr, remainingQty: itm.qty, unitCost: restoreCost },
+            { id: `layer_del_sale_${inv.id}_${idx}`, date: inv.date || dateStr, remainingQty: itmBaseQty, unitCost: restoreCost },
             ...(stockItm.fifoLayers || []),
           ];
         }
@@ -2600,7 +2865,7 @@ export function deleteSaleInvoice(appData: AppData, invoiceId: number | string):
         type: 'adjustment',
         qty: qtyDiff,
         price: itm.price,
-        total: Math.abs(qtyDiff) * itm.price,
+        total: Math.abs(itm.qty) * itm.price,
         note: `تسوية وإعادة بضاعة فاتورة المبيعات المحذوفة #${inv.id}`,
       });
     }
@@ -2803,9 +3068,14 @@ export function computeFinancialStatementsFromLedger(appData: AppData): LedgerFi
       else grossSales = round2(grossSales + netExVat);
 
       const invCost = (inv.items || []).reduce((s, line) => {
+        if (Number(line.costPrice || 0) > 0) {
+          return s + Number(line.costPrice) * (Number(line.qty) || 0);
+        }
         const master = (appData.items || []).find((m) => (line.itemId && m.id === line.itemId) || m.name === line.name);
-        const unitCost = Number(line.costPrice || master?.avgCost || master?.purchasePrice || master?.costPrice || 0);
-        return s + unitCost * (Number(line.qty) || 0);
+        const unitCost = Number(master?.avgCost || master?.purchasePrice || master?.costPrice || 0);
+        const factor = Math.max(0.0001, Number(line.unitFactor || 1));
+        const baseQ = line.baseQty !== undefined ? Number(line.baseQty) : (Number(line.qty) || 0) * factor;
+        return s + unitCost * baseQ;
       }, 0);
       totalCOGS = round2(totalCOGS + (isRet ? -invCost : invCost));
     });

@@ -325,16 +325,20 @@ export const PaymentVouchersClassic: React.FC<PaymentVouchersClassicProps> = ({
   const handleDeletePayment = (t: CashTransaction) => {
     if (!confirm(`هل أنت متأكد من إلغاء وحذف سند الصرف #${t.id} بقيمة ${t.amount} ج.م؟ سيتم استرجاع النقدية للخزينة.`)) return;
 
-    const updatedData = deleteCashVoucher(appData, t.id, false);
+    try {
+      const updatedData = deleteCashVoucher(appData, t.id, false);
 
-    onUpdateData(updatedData, {
-      action: 'delete_payment',
-      module: 'سندات الصرف',
-      details: `إلغاء وحذف سند صرف #${t.id} بقيمة ${t.amount} ج.م`,
-      deletedId: t.id,
-    });
-    showToast(`تم إلغاء سند الصرف #${t.id} واسترجاع النقدية للخزينة بنجاح`, 'info');
-    if (editingId === t.id) resetForm();
+      onUpdateData(updatedData, {
+        action: 'delete_payment',
+        module: 'سندات الصرف',
+        details: `إلغاء وحذف سند صرف #${t.id} بقيمة ${t.amount} ج.م`,
+        deletedId: t.id,
+      });
+      showToast(`تم إلغاء سند الصرف #${t.id} واسترجاع النقدية للخزينة بنجاح`, 'info');
+      if (editingId === t.id) resetForm();
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف سند الصرف', 'error');
+    }
   };
 
   // Export to Excel

@@ -1,6 +1,7 @@
-import { AppData } from '../types';
+import { AppData, User } from '../types';
 import { getScopedAppDataForBranch } from './branchIsolation';
 import { computeFinancialStatementsFromLedger } from './accountingEngine';
+import { hasPermission } from './permissions';
 
 export const vendorReports = [
   'بيانات ودليل الموردين',
@@ -267,7 +268,8 @@ export function generateReportData(
   group: string,
   rawReportName: string,
   filters: ReportFilters,
-  rawAppData: AppData
+  rawAppData: AppData,
+  explicitUser?: User | null
 ): ReportResult {
   let reportName = rawReportName || '';
   try {
@@ -277,6 +279,13 @@ export function generateReportData(
     }
   } catch {}
   reportName = reportName.replace(/_/g, ' ').trim();
+
+  const resolvedUser =
+    explicitUser !== undefined
+      ? explicitUser
+      : rawAppData.users?.find((u) => u.id === rawAppData.currentUser) || rawAppData.users?.[0];
+  const canViewCost = hasPermission(resolvedUser, 'view_cost_price');
+  const maskedCost = '*** محجوب';
 
   const targetBranch = filters.branchId !== undefined ? filters.branchId : (rawAppData.activeBranchId || 'all');
   const appData = (targetBranch && targetBranch !== 'all')
@@ -636,6 +645,69 @@ export function generateReportData(
       return result;
     }
 
+    // Supplier Debt Aging Analysis (4 buckets: 0-30, 31-60, 61-90, +90)
+    if (reportName.includes('أعمار')) {
+      result.columns = [
+        'المورد',
+        'رقم الهاتف',
+        '0-30 يوم',
+        '31-60 يوم',
+        '61-90 يوم',
+        '+90 يوم',
+        'إجمالي المستحق (ج.م)',
+        'كشف الحساب',
+      ];
+      const nowMs = today.getTime();
+      let grandTotal = 0;
+      suppliers.forEach((s) => {
+        const bal = Number(s.balance) || 0;
+        if (bal <= 0) return;
+        let b0_30 = 0;
+        let b31_60 = 0;
+        let b61_90 = 0;
+        let b90plus = 0;
+        const unpaidVendorInvoices = (appData.purchaseInvoices || []).filter(
+          (inv) =>
+            inv.status !== 'cancelled' &&
+            !inv.type.startsWith('return_') &&
+            (inv.supplierId === s.id ||
+              inv.supplierName?.trim().toLowerCase() === s.name.trim().toLowerCase()) &&
+            (inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0))) > 0
+        );
+        unpaidVendorInvoices.forEach((inv) => {
+          const rem = inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0));
+          const invDate = new Date(inv.date || today);
+          const ageDays = Math.max(0, Math.floor((nowMs - invDate.getTime()) / (1000 * 3600 * 24)));
+          if (ageDays <= 30) b0_30 += rem;
+          else if (ageDays <= 60) b31_60 += rem;
+          else if (ageDays <= 90) b61_90 += rem;
+          else b90plus += rem;
+        });
+        const allocated = b0_30 + b31_60 + b61_90 + b90plus;
+        if (bal > allocated) {
+          b0_30 += bal - allocated;
+        }
+        grandTotal += bal;
+        addRow(
+          [
+            s.name,
+            s.phone || '-',
+            b0_30.toFixed(2),
+            b31_60.toFixed(2),
+            b61_90.toFixed(2),
+            b90plus.toFixed(2),
+            bal.toFixed(2),
+            '🔍 عرض كشف الحساب',
+          ],
+          { supplierName: s.name }
+        );
+      });
+      result.total = grandTotal;
+      result.count = result.rows.length;
+      result.title = 'تقرير أعمار ديون والتزامات الموردين (4 شرائح)';
+      return result;
+    }
+
     // Default Vendors Directory / Balances List
     result.columns = ['المورد', 'رقم الهاتف', 'الرصيد الحقيقي (ج.م)', 'عدد فواتير الشراء', 'التفاصيل'];
     suppliers.forEach((s) => {
@@ -902,42 +974,55 @@ export function generateReportData(
       return result;
     }
 
-    // Debt Aging Analysis (Real invoice-date aging buckets)
-    if (reportName.includes('أعمار الديون')) {
-      result.columns = ['العميل', 'رقم الهاتف', 'الرصيد القائم (0-30 يوم)', 'المتأخر (31-60 يوم)', 'المتأخر (أكثر من 60 يوم)', 'إجمالي الدين (ج.م)', 'كشف الحساب'];
+    // Debt Aging Analysis (4 buckets: 0-30, 31-60, 61-90, +90)
+    if (reportName.includes('أعمار')) {
+      result.columns = [
+        'العميل',
+        'رقم الهاتف',
+        '0-30 يوم',
+        '31-60 يوم',
+        '61-90 يوم',
+        '+90 يوم',
+        'إجمالي الدين (ج.م)',
+        'كشف الحساب',
+      ];
       const nowMs = today.getTime();
       customers.forEach((c) => {
         const bal = Number(c.balance) || 0;
         if (bal <= 0) return;
-        let current = 0;
-        let mid = 0;
-        let late = 0;
+        let b0_30 = 0;
+        let b31_60 = 0;
+        let b61_90 = 0;
+        let b90plus = 0;
         const unpaidCustInvoices = (appData.salesInvoices || []).filter(
           (inv) =>
             inv.status !== 'cancelled' &&
             !inv.type.startsWith('return_') &&
-            inv.customerName?.trim().toLowerCase() === c.name.trim().toLowerCase() &&
+            (inv.customerId === c.id ||
+              inv.customerName?.trim().toLowerCase() === c.name.trim().toLowerCase()) &&
             (inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0))) > 0
         );
         unpaidCustInvoices.forEach((inv) => {
           const rem = inv.remainingAmount ?? Math.max(0, (inv.total || 0) - (inv.paidAmount || 0));
           const invDate = new Date(inv.date || today);
           const ageDays = Math.max(0, Math.floor((nowMs - invDate.getTime()) / (1000 * 3600 * 24)));
-          if (ageDays <= 30) current += rem;
-          else if (ageDays <= 60) mid += rem;
-          else late += rem;
+          if (ageDays <= 30) b0_30 += rem;
+          else if (ageDays <= 60) b31_60 += rem;
+          else if (ageDays <= 90) b61_90 += rem;
+          else b90plus += rem;
         });
-        const allocated = current + mid + late;
+        const allocated = b0_30 + b31_60 + b61_90 + b90plus;
         if (bal > allocated) {
-          current += bal - allocated;
+          b0_30 += bal - allocated;
         }
         addRow(
           [
             c.name,
             c.phone || '-',
-            current.toFixed(2),
-            mid.toFixed(2),
-            late.toFixed(2),
+            b0_30.toFixed(2),
+            b31_60.toFixed(2),
+            b61_90.toFixed(2),
+            b90plus.toFixed(2),
             bal.toFixed(2),
             '🔍 عرض كشف الحساب',
           ],
@@ -946,7 +1031,7 @@ export function generateReportData(
       });
       result.total = customers.reduce((s, x) => s + ((x.balance || 0) > 0 ? x.balance : 0), 0);
       result.count = result.rows.length;
-      result.title = 'تقرير تحليلي أعمار ديون العملاء والتأخيرات';
+      result.title = 'تقرير تحليلي أعمار ديون العملاء (4 شرائح)';
       return result;
     }
 
@@ -966,7 +1051,8 @@ export function generateReportData(
           salesTotal += sign * (inv.total || 0);
           const invCost = (inv.items || []).reduce((iSum, line) => {
             const master = appData.items.find((x) => (line.itemId && x.id === line.itemId) || x.name === line.name);
-            const uCost = Number(line.costPrice ?? (master?.avgCost || master?.purchasePrice || master?.costPrice || 0));
+            const factor = Number(line.unitFactor || 1);
+            const uCost = Number(line.costPrice ?? ((master?.avgCost || master?.purchasePrice || master?.costPrice || 0) * factor));
             return iSum + uCost * (Number(line.qty) || 0);
           }, 0);
           realCost += sign * invCost;
@@ -979,15 +1065,15 @@ export function generateReportData(
             c.name,
             cInvoices.length.toString(),
             salesTotal.toFixed(2),
-            realCost.toFixed(2),
-            profit.toFixed(2),
-            `${margin.toFixed(1)}%`,
+            canViewCost ? realCost.toFixed(2) : maskedCost,
+            canViewCost ? profit.toFixed(2) : maskedCost,
+            canViewCost ? `${margin.toFixed(1)}%` : '***',
             '🔍 تحليل الربحية',
           ],
           { customerName: c.name }
         );
       });
-      result.total = totalAllCustomerProfit;
+      result.total = canViewCost ? totalAllCustomerProfit : 0;
       result.count = result.rows.length;
       result.title = 'تقرير تحليل أرباح العملاء وصافي العائد';
       return result;
@@ -1213,12 +1299,14 @@ export function generateReportData(
     if (reportName.includes('أرباح')) {
       let totalProfit = 0;
       sales.forEach((inv) => {
+        const sign = inv.type?.startsWith('return_') ? -1 : 1;
         inv.items.forEach((it) => {
           if (itemName && it.name !== itemName) return;
-          const foundItem = appData.items.find((x) => x.name === it.name);
-          const costPrice = foundItem ? foundItem.purchasePrice : it.price * 0.8;
-          const itemCost = costPrice * it.qty;
-          const itemRevenue = it.total || it.qty * it.price;
+          const foundItem = appData.items.find((x) => (it.itemId && x.id === it.itemId) || x.name === it.name);
+          const factor = Number(it.unitFactor || 1);
+          const costPrice = Number(it.costPrice ?? (foundItem ? (foundItem.avgCost || foundItem.purchasePrice || 0) * factor : 0));
+          const itemCost = sign * costPrice * it.qty;
+          const itemRevenue = sign * (it.total || it.qty * it.price);
           const itemProfit = itemRevenue - itemCost;
 
           totalProfit += itemProfit;
@@ -1230,8 +1318,8 @@ export function generateReportData(
               it.name,
               it.qty.toString(),
               itemRevenue.toFixed(2),
-              itemCost.toFixed(2),
-              itemProfit.toFixed(2),
+              canViewCost ? itemCost.toFixed(2) : maskedCost,
+              canViewCost ? itemProfit.toFixed(2) : maskedCost,
               '👁️ فتح الفاتورة',
             ],
             { invoiceId: inv.id, invoiceType: 'sale', customerName: inv.customerName, itemName: it.name }
@@ -1240,7 +1328,7 @@ export function generateReportData(
       });
 
       result.columns = ['رقم الفاتورة', 'التاريخ', 'العميل', 'الصنف', 'الكمية', 'الإيراد (ج.م)', 'التكلفة (ج.م)', 'صافي الربح (ج.م)', 'معاينة'];
-      result.total = totalProfit;
+      result.total = canViewCost ? totalProfit : 0;
       result.count = result.rows.length;
       return result;
     }
@@ -1588,12 +1676,12 @@ export function generateReportData(
           it.name,
           it.category || 'عام',
           (it.quantity || 0).toString(),
-          (it.purchasePrice || 0).toFixed(2),
-          cost.toFixed(2),
-          `${share.toFixed(1)}%`
+          canViewCost ? (it.purchasePrice || 0).toFixed(2) : maskedCost,
+          canViewCost ? cost.toFixed(2) : maskedCost,
+          canViewCost ? `${share.toFixed(1)}%` : '***'
         ], { itemName: it.name });
       });
-      result.total = totalInventoryCost;
+      result.total = canViewCost ? totalInventoryCost : 0;
       result.count = items.length;
       result.title = 'تقرير تقييم المخزون بسعر الشراء والتكلفة الفعلية';
       return result;
@@ -1617,7 +1705,7 @@ export function generateReportData(
           qty.toString(),
           sellPrice.toFixed(2),
           marketVal.toFixed(2),
-          potentialProfit.toFixed(2)
+          canViewCost ? potentialProfit.toFixed(2) : maskedCost
         ], { itemName: it.name });
       });
       result.total = totalMarketVal;
@@ -1733,12 +1821,12 @@ export function generateReportData(
           it.name,
           it.category || 'عام',
           qty.toString(),
-          (it.purchasePrice || 0).toFixed(2),
-          cost.toFixed(2),
+          canViewCost ? (it.purchasePrice || 0).toFixed(2) : maskedCost,
+          canViewCost ? cost.toFixed(2) : maskedCost,
           sold === 0 ? '❌ راكد بدون أي حركة' : `بطيء جداً (${sold} قطع)`
         ], { itemName: it.name });
       });
-      result.total = stagnantItems.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0);
+      result.total = canViewCost ? stagnantItems.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0) : 0;
       result.count = stagnantItems.length;
       result.title = 'تقرير الأصناف الراكدة وبطيئة الحركة ورأس المال المجمد';
       return result;
@@ -1782,7 +1870,8 @@ export function generateReportData(
         inv.items.forEach((it) => {
           if (!statsMap[it.name]) statsMap[it.name] = { qty: 0, revenue: 0, cost: 0, profit: 0 };
           const itemObj = appData.items.find((x) => (it.itemId && x.id === it.itemId) || x.name === it.name);
-          const cPrice = Number(it.costPrice ?? (itemObj ? (itemObj.avgCost || itemObj.purchasePrice || 0) : 0));
+          const factor = Number(it.unitFactor || 1);
+          const cPrice = Number(it.costPrice ?? (itemObj ? (itemObj.avgCost || itemObj.purchasePrice || 0) * factor : 0));
           const rev = sign * (it.total || (it.qty * it.price));
           const cst = sign * (it.qty * cPrice);
           statsMap[it.name].qty += sign * it.qty;
@@ -1800,12 +1889,12 @@ export function generateReportData(
           iName,
           st.qty.toString(),
           st.revenue.toFixed(2),
-          st.cost.toFixed(2),
-          st.profit.toFixed(2),
-          `${margin.toFixed(1)}%`
+          canViewCost ? st.cost.toFixed(2) : maskedCost,
+          canViewCost ? st.profit.toFixed(2) : maskedCost,
+          canViewCost ? `${margin.toFixed(1)}%` : '***'
         ], { itemName: iName });
       });
-      result.total = sorted.reduce((s, x) => s + x[1].profit, 0);
+      result.total = canViewCost ? sorted.reduce((s, x) => s + x[1].profit, 0) : 0;
       result.count = sorted.length;
       result.title = 'تقرير الأصناف الأكثر ربحية ومعدل دوران المبيعات';
       return result;
@@ -1821,7 +1910,7 @@ export function generateReportData(
           it.name,
           it.category || 'عام',
           '0',
-          (it.purchasePrice || 0).toFixed(2),
+          canViewCost ? (it.purchasePrice || 0).toFixed(2) : maskedCost,
           (it.salePrice || it.price || 0).toFixed(2),
           '🔴 بحاجة لأمر شراء فوري'
         ], { itemName: it.name });
@@ -1923,14 +2012,14 @@ export function generateReportData(
         it.category || 'عام',
         it.unit || 'قطعة',
         qty.toString(),
-        (it.purchasePrice || 0).toFixed(2),
+        canViewCost ? (it.purchasePrice || 0).toFixed(2) : maskedCost,
         (it.salePrice || it.price || 0).toFixed(2),
-        cost.toFixed(2),
+        canViewCost ? cost.toFixed(2) : maskedCost,
         qty <= 0 ? '🔴 منتهي' : qty <= (it.minStockAlert || 5) ? '⚠️ منخفض' : '🟢 متوفر'
       ], { itemName: it.name });
     });
 
-    result.total = totalStockVal;
+    result.total = canViewCost ? totalStockVal : 0;
     result.count = items.length;
     result.title = 'تقرير أرصدة المخزون الحالية والكميات المتاحة';
     return result;
@@ -1963,7 +2052,8 @@ export function generateReportData(
         periodNetSales += sign * ((inv.total || 0) - (inv.tax || 0));
         const invCost = (inv.items || []).reduce((s, line) => {
           const master = appData.items.find((x) => (line.itemId && x.id === line.itemId) || x.name === line.name);
-          const uCost = Number(line.costPrice ?? (master?.avgCost || master?.purchasePrice || 0));
+          const factor = Number(line.unitFactor || 1);
+          const uCost = Number(line.costPrice ?? ((master?.avgCost || master?.purchasePrice || 0) * factor));
           return s + uCost * (Number(line.qty) || 0);
         }, 0);
         periodCogs += sign * invCost;
@@ -1974,12 +2064,27 @@ export function generateReportData(
 
       result.columns = ['بند قائمة الدخل والربحية', 'القيمة المحققة (ج.م)', 'النسبة المئوية % من المبيعات', 'التقييم المحاسبي'];
       addRow(['1. صافي إيرادات المبيعات (دون ضريبة)', periodNetSales.toFixed(2), '100.0%', 'إيرادات النشاط الرئيسي']);
-      addRow(['2. تكلفة البضاعة المباعة الفعلية (COGS)', `(${periodCogs.toFixed(2)})`, `${periodNetSales > 0 ? ((periodCogs / periodNetSales) * 100).toFixed(1) : 0}%`, 'تكلفة النشاط الفعلية FIFO']);
-      addRow(['3. إجمالي مجمل الربح (Gross Profit)', grossProfit.toFixed(2), `${periodNetSales > 0 ? ((grossProfit / periodNetSales) * 100).toFixed(1) : 0}%`, grossProfit >= 0 ? '🟢 فائض تجاري' : '🔴 عجز']);
+      addRow([
+        '2. تكلفة البضاعة المباعة الفعلية (COGS)',
+        canViewCost ? `(${periodCogs.toFixed(2)})` : maskedCost,
+        canViewCost ? `${periodNetSales > 0 ? ((periodCogs / periodNetSales) * 100).toFixed(1) : 0}%` : '***',
+        'تكلفة النشاط الفعلية FIFO'
+      ]);
+      addRow([
+        '3. إجمالي مجمل الربح (Gross Profit)',
+        canViewCost ? grossProfit.toFixed(2) : maskedCost,
+        canViewCost ? `${periodNetSales > 0 ? ((grossProfit / periodNetSales) * 100).toFixed(1) : 0}%` : '***',
+        canViewCost ? (grossProfit >= 0 ? '🟢 فائض تجاري' : '🔴 عجز') : 'محجوب بالصلاحيات'
+      ]);
       addRow(['4. المصروفات التشغيلية والعمومية', `(${totalExpenses.toFixed(2)})`, `${periodNetSales > 0 ? ((totalExpenses / periodNetSales) * 100).toFixed(1) : 0}%`, 'أعباء تشغيلية (دون سداد الموردين)']);
-      addRow(['5. صافي الربح التشغيلي', netProfit.toFixed(2), `${profitMargin.toFixed(1)}%`, netProfit >= 0 ? '✅ صافي أرباح' : '❌ صافي خسارة']);
+      addRow([
+        '5. صافي الربح التشغيلي',
+        canViewCost ? netProfit.toFixed(2) : maskedCost,
+        canViewCost ? `${profitMargin.toFixed(1)}%` : '***',
+        canViewCost ? (netProfit >= 0 ? '✅ صافي أرباح' : '❌ صافي خسارة') : 'محجوب بالصلاحيات'
+      ]);
 
-      result.total = netProfit;
+      result.total = canViewCost ? netProfit : 0;
       result.count = result.rows.length;
       result.title = 'تقرير قائمة الأرباح والخسائر الشاملة (P&L)';
       return result;
@@ -2080,7 +2185,11 @@ export function generateReportData(
     addRow(['إجمالي مبيعات الفترة', totalSales.toFixed(2), 'مبيعات نقدية وآجلة']);
     addRow(['إجمالي مشتريات الفترة', totalPurchases.toFixed(2), 'مشتريات نقدية وآجلة']);
     addRow(['إجمالي المصروفات والمسحوبات', totalExpenses.toFixed(2), 'مصروفات تشغيلية وعمومية']);
-    addRow(['قيمة المخزون الإجمالي', appData.items.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0).toFixed(2), 'بسعر التكلفة والشراء']);
+    addRow([
+      'قيمة المخزون الإجمالي',
+      canViewCost ? appData.items.reduce((s, it) => s + (it.quantity || 0) * (it.purchasePrice || 0), 0).toFixed(2) : maskedCost,
+      'بسعر التكلفة والشراء'
+    ]);
     addRow(['إجمالي السيولة النقدية والبنكية', ((appData.cashBox?.drawer || 0) + (appData.cashBox?.vodafone || 0) + (appData.cashBox?.instapay || 0) + (appData.cashBox?.bank || 0)).toFixed(2), 'خزائن + بنوك']);
 
     result.total = totalSales;
@@ -2368,7 +2477,8 @@ export function generateReportData(
         monthlyData[ym].rev += sign * (i.total || 0);
         const invCost = i.items.reduce((s, it) => {
           const itObj = appData.items.find((x) => (it.itemId && x.id === it.itemId) || x.name === it.name);
-          const uCost = Number(it.costPrice ?? (itObj ? (itObj.avgCost || itObj.purchasePrice || 0) : 0));
+          const factor = Number(it.unitFactor || 1);
+          const uCost = Number(it.costPrice ?? ((itObj ? (itObj.avgCost || itObj.purchasePrice || 0) : 0) * factor));
           return s + it.qty * uCost;
         }, 0);
         monthlyData[ym].cost += sign * invCost;
@@ -2382,12 +2492,12 @@ export function generateReportData(
         addRow([
           ym,
           st.rev.toFixed(2),
-          st.cost.toFixed(2),
-          profit.toFixed(2),
-          `${margin.toFixed(1)}%`
+          canViewCost ? st.cost.toFixed(2) : maskedCost,
+          canViewCost ? profit.toFixed(2) : maskedCost,
+          canViewCost ? `${margin.toFixed(1)}%` : '***'
         ]);
       });
-      result.total = totalGrossProfit;
+      result.total = canViewCost ? totalGrossProfit : 0;
       result.count = Object.keys(monthlyData).length;
       result.title = 'تحليل هوامش الربحية الإجمالية الشهرية';
       return result;
@@ -2409,11 +2519,11 @@ export function generateReportData(
           it.name,
           it.category || 'عام',
           (it.quantity || 0).toString(),
-          (it.purchasePrice || 0).toFixed(2),
-          cost.toFixed(2)
+          canViewCost ? (it.purchasePrice || 0).toFixed(2) : maskedCost,
+          canViewCost ? cost.toFixed(2) : maskedCost
         ], { itemName: it.name });
       });
-      result.total = frozenTotal;
+      result.total = canViewCost ? frozenTotal : 0;
       result.count = stagnant.length;
       result.title = 'تقرير الأصناف الراكدة وبطيئة الحركة ورأس المال المحتجز';
       return result;
@@ -2577,13 +2687,13 @@ export function generateReportData(
     result.columns = ['المؤشر التنفيذي الرئيسي', 'القيمة الفعلية (ج.م)', 'الوصف والتحليل المالي'];
     addRow(['إجمالي مبيعات المؤسسة', salesSum.toFixed(2), `محقق عبر ${appData.salesInvoices.length} فاتورة بيع`]);
     addRow(['إجمالي مشتريات المؤسسة', purchaseSum.toFixed(2), `محقق عبر ${appData.purchaseInvoices.length} فاتورة شراء`]);
-    addRow(['قيمة المخزون السلعي الحالي', stockCostSum.toFixed(2), `مجموع ${appData.items.length} صنف ومادة`]);
+    addRow(['قيمة المخزون السلعي الحالي', canViewCost ? stockCostSum.toFixed(2) : maskedCost, `مجموع ${appData.items.length} صنف ومادة`]);
     addRow(['إجمالي السيولة الجاهزة المتاحة', cashTotal.toFixed(2), 'خزائن نقدية + محافظ إلكترونية + بنوك']);
     addRow(['مديونيات ومستحقات على العملاء', custDebts.toFixed(2), `مطلوبة من ${appData.customers.length} عميل`]);
     addRow(['التزامات ومستحقات للموردين', suppDebts.toFixed(2), `واجبة السداد لـ ${appData.suppliers.length} مورد`]);
-    addRow(['صافي رأس المال العامل (Working Capital)', workingCapital.toFixed(2), workingCapital >= 0 ? '🟢 ملاءة مالية ممتازة' : '🔴 نقص في رأس المال العامل']);
+    addRow(['صافي رأس المال العامل (Working Capital)', canViewCost ? workingCapital.toFixed(2) : maskedCost, canViewCost ? (workingCapital >= 0 ? '🟢 ملاءة مالية ممتازة' : '🔴 نقص في رأس المال العامل') : 'محجوب بالصلاحيات']);
 
-    result.total = workingCapital;
+    result.total = canViewCost ? workingCapital : 0;
     result.count = result.rows.length;
     result.title = 'الملخص التنفيذي المالي الشامل للمؤسسة';
     return result;
@@ -2600,7 +2710,7 @@ export function generateReportData(
   [
     ['إجمالي مبيعات الفواتير', totalSalesVal.toFixed(2), appData.salesInvoices.length.toString()],
     ['إجمالي مشتريات الفواتير', totalPurchaseVal.toFixed(2), appData.purchaseInvoices.length.toString()],
-    ['قيمة المخزون الإجمالية بسعر الشراء', stockVal.toFixed(2), appData.items.length.toString()],
+    ['قيمة المخزون الإجمالية بسعر الشراء', canViewCost ? stockVal.toFixed(2) : maskedCost, appData.items.length.toString()],
     ['رصيد نقدية الدرج', (appData.cashBox?.drawer || 0).toFixed(2), 'نقدي'],
     ['رصيد فودافون كاش', (appData.cashBox?.vodafone || 0).toFixed(2), 'محفظة إلكترونية'],
     ['رصيد إنستاباي', (appData.cashBox?.instapay || 0).toFixed(2), 'إنستاباي'],

@@ -482,7 +482,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ pageId, onNavigate, on
     }
   };
 
-  const reportData = generateReportData(groupKey, reportName, currentFilters, appData);
+  const currentUserObj =
+    appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0];
+  const reportData = generateReportData(groupKey, reportName, currentFilters, appData, currentUserObj);
 
   const handleExportExcel = () => {
     try {

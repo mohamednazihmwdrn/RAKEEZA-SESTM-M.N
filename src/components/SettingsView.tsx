@@ -46,6 +46,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     currencySymbol: 'ج.م',
     fiscalYear: '2026',
     country: 'مصر',
+    periodLockDate: appData.settings?.periodLockDate || appData.fiscalLockDate || '',
+    preventBelowCostSale: appData.settings?.preventBelowCostSale ?? false,
+    enforceCreditLimit: appData.settings?.enforceCreditLimit || 'warn',
+    supervisorPin: appData.settings?.supervisorPin || '1234',
     ...appData.settings,
   });
 
@@ -247,7 +251,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleSave = async () => {
     setIsSaving(true);
-    const updatedData = { ...appData, settings };
+    const cleanedPeriodLock = (settings.periodLockDate || '').trim();
+    const normalizedSettings: Settings = {
+      ...settings,
+      periodLockDate: cleanedPeriodLock || undefined,
+      enforceCreditLimit: settings.enforceCreditLimit || 'warn',
+      supervisorPin: (settings.supervisorPin || '1234').trim() || '1234',
+    };
+    const updatedData: AppData = {
+      ...appData,
+      settings: normalizedSettings,
+      fiscalLockDate: cleanedPeriodLock || undefined,
+    };
     onUpdateData(updatedData);
 
     if (settings.logo) {
@@ -778,7 +793,101 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 🖨️ 5. RAKEEZA Universal Printing Engine Settings */}
+      {/* 🛡️ 5. Security, Period Locking, Below-Cost Guard & Credit Limit Controls */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <h4 className="text-[#1a237e] font-black text-sm sm:text-base flex items-center gap-2">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>الأمان وإقفال الفترات وضبط التسعير والائتمان</span>
+          </h4>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              تاريخ قفل الفترة المحاسبية (Period Lock)
+            </label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={settings.periodLockDate || ''}
+                onChange={(e) => setSettings({ ...settings, periodLockDate: e.target.value })}
+                className="flex-1 min-w-0 p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono"
+              />
+              {settings.periodLockDate && (
+                <button
+                  type="button"
+                  onClick={() => setSettings({ ...settings, periodLockDate: '' })}
+                  className="px-2.5 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold hover:bg-rose-100 shrink-0 cursor-pointer"
+                  title="إلغاء قفل الفترة"
+                >
+                  فتح
+                </button>
+              )}
+            </div>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              يمنع إضافة أو تعديل أو حذف أي فاتورة أو سند بتاريخ يساوي أو يسبق هذا التاريخ.
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              منع البيع بأقل من سعر التكلفة
+            </label>
+            <select
+              value={settings.preventBelowCostSale ? 'yes' : 'no'}
+              onChange={(e) => setSettings({ ...settings, preventBelowCostSale: e.target.value === 'yes' })}
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none bg-slate-50 font-bold"
+            >
+              <option value="no">معطل (السماح بالبيع بحرية)</option>
+              <option value="yes">مفعل (يتطلب كود المدير أو صلاحية استثنائية)</option>
+            </select>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              يحمي هامش الربح في شاشة المبيعات ونقطة البيع POS.
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              إجراء تجاوز حد الائتمان للعملاء
+            </label>
+            <select
+              value={settings.enforceCreditLimit || 'warn'}
+              onChange={(e) =>
+                setSettings({ ...settings, enforceCreditLimit: e.target.value as 'warn' | 'block' | 'pin' })
+              }
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none bg-slate-50 font-bold"
+            >
+              <option value="warn">تحذير وإتاحة التأكيد للمستخدم</option>
+              <option value="pin">طلب كود اعتماد المدير (PIN) عند التجاوز</option>
+              <option value="block">منع حفظ الفاتورة الآجلة نهائياً</option>
+            </select>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              يطبق عند تجاوز مديونية العميل للسقف الائتماني المحدد له.
+            </span>
+          </div>
+
+          <div>
+            <label className="block font-bold text-slate-700 mb-1">
+              كود اعتماد المدير / المشرف (PIN)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
+              value={settings.supervisorPin ?? '1234'}
+              onChange={(e) => setSettings({ ...settings, supervisorPin: e.target.value })}
+              placeholder="1234"
+              className="w-full p-2.5 border-2 border-slate-200 rounded-xl focus:border-[#1a237e] focus:outline-none font-mono text-center font-bold"
+            />
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              يستخدم لتجاوز قيود التكلفة أو حد الائتمان عند التفعيل.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 🖨️ 6. RAKEEZA Universal Printing Engine Settings */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
         <h4 className="text-[#1a237e] font-black text-sm sm:text-base flex items-center gap-2 border-b border-slate-100 pb-3">
           <span>🖨️</span> إعدادات محرك الطباعة الموحد RAKEEZA UNIVERSAL PRINT ENGINE

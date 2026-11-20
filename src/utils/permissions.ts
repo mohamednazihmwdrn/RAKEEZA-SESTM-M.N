@@ -19,6 +19,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
   { id: 'sales_delete', name: 'حذف وإلغاء فواتير المبيعات (منع/سماح)', category: 'المبيعات', description: 'صلاحية حذف أو إلغاء فواتير المبيعات واسترجاع المخزون', actionType: 'delete' },
   { id: 'apply_discounts', name: 'تطبيق الخصومات اليدوية بالفاتورة', category: 'المبيعات', description: 'منح خصومات إضافية على بنود أو إجمالي الفاتورة', actionType: 'edit' },
   { id: 'change_prices', name: 'تعديل سعر البيع يدوياً بالفاتورة', category: 'المبيعات', description: 'تغيير سعر بيع الصنف عن السعر المحدد في السيستم', actionType: 'edit' },
+  { id: 'allow_below_cost_sale', name: 'السماح بالبيع بأقل من سعر التكلفة', category: 'المبيعات', description: 'تخطي قفل منع البيع بأقل من التكلفة بدون كود المدير', actionType: 'approve' },
   { id: 'sales_returns', name: 'تسجيل واعتماد مرتجعات المبيعات', category: 'المبيعات', description: 'إصدار مرتجع بيع نقدي أو آجل واسترجاع المخزون', actionType: 'approve' },
   { id: 'sales_export', name: 'تصدير وطباعة فواتير المبيعات', category: 'المبيعات', description: 'طباعة وتصدير فواتير البيع إلى Excel و PDF', actionType: 'export' },
   { id: 'quotes_orders', name: 'عروض الأسعار والطلبيات', category: 'المبيعات', description: 'إنشاء ومتابعة عروض الأسعار وأوامر التوريد', actionType: 'create' },
@@ -190,8 +191,13 @@ export function hasPermission(user: User | undefined, permissionId: string): boo
   // 7. Default role-based fallbacks if granular permissions not explicitly saved yet
   const role = user.role;
   if (role === 'cashier') {
-    // By default, cashier CANNOT view cost price and CANNOT delete invoices!
-    if (permissionId === 'view_cost_price' || permissionId === 'sales_delete' || permissionId === 'delete_invoices') {
+    // By default, cashier CANNOT view cost price, allow below cost, or delete invoices!
+    if (
+      permissionId === 'view_cost_price' ||
+      permissionId === 'allow_below_cost_sale' ||
+      permissionId === 'sales_delete' ||
+      permissionId === 'delete_invoices'
+    ) {
       return false;
     }
     const cashierAllowed = [
@@ -232,8 +238,13 @@ export function hasPermission(user: User | undefined, permissionId: string): boo
     return !accountantDisallowed.includes(permissionId);
   }
   if (role === 'sales_rep') {
-    // Sales rep cannot view cost price and cannot delete invoices by default
-    if (permissionId === 'view_cost_price' || permissionId === 'sales_delete' || permissionId === 'delete_invoices') {
+    // Sales rep cannot view cost price, allow below cost, or delete invoices by default
+    if (
+      permissionId === 'view_cost_price' ||
+      permissionId === 'allow_below_cost_sale' ||
+      permissionId === 'sales_delete' ||
+      permissionId === 'delete_invoices'
+    ) {
       return false;
     }
     const repAllowed = [

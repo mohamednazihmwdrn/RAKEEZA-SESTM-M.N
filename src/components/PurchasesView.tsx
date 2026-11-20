@@ -606,6 +606,8 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     });
     setActiveModal(null);
     showToast(`تم حفظ ${isReturn ? 'مرتجع' : 'فاتورة'} مشتريات رقم #${newInvoice.id} بنجاح`, 'success');
+  } catch (err: any) {
+    showToast(err?.message || 'تعذر حفظ فاتورة المشتريات', 'error');
   } finally {
     setIsSubmitting(false);
   }
@@ -616,17 +618,21 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ appData, onUpdateD
     const invToDelete = appData.purchaseInvoices.find((i) => i.id === id);
     if (!invToDelete) return;
 
-    const updatedData = deletePurchaseInvoice(appData, id);
-    if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
-    updatedData.deletedRecords[`purchaseInvoices_${id}`] = Date.now();
+    try {
+      const updatedData = deletePurchaseInvoice(appData, id);
+      if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
+      updatedData.deletedRecords[`purchaseInvoices_${id}`] = Date.now();
 
-    onUpdateData(updatedData, {
-      action: 'delete_purchase',
-      module: 'المشتريات',
-      details: `تم حذف ${invToDelete.type.startsWith('return_') ? 'مرتجع' : 'فاتورة'} الشراء رقم #${id} وتسوية رصيد المخزون وحساب المورد والخزينة`,
-      deletedId: id,
-    });
-    showToast(`تم حذف فاتورة المشتريات رقم #${id} وتسوية المخزون وحساب المورد والخزينة بنجاح`, 'success');
+      onUpdateData(updatedData, {
+        action: 'delete_purchase',
+        module: 'المشتريات',
+        details: `تم حذف ${invToDelete.type.startsWith('return_') ? 'مرتجع' : 'فاتورة'} الشراء رقم #${id} وتسوية رصيد المخزون وحساب المورد والخزينة`,
+        deletedId: id,
+      });
+      showToast(`تم حذف فاتورة المشتريات رقم #${id} وتسوية المخزون وحساب المورد والخزينة بنجاح`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف فاتورة المشتريات', 'error');
+    }
   };
 
   const handleOpenPayModal = (inv: PurchaseInvoice) => {

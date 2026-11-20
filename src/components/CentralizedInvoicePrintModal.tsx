@@ -15,7 +15,12 @@ import {
 } from '../services/centralizedPrintService';
 import { exportElementToPdf } from '../utils/pdfExport';
 import { tafqeetNumber } from '../utils/tafqeet';
-import { Printer, Download, X, Check, Eye, ShieldCheck, FileCheck } from 'lucide-react';
+import { Printer, Download, X, Check, Eye, ShieldCheck, FileCheck, MessageCircle } from 'lucide-react';
+import {
+  cleanPhoneNumber,
+  generateUniversalDocumentWhatsAppMessage,
+  openWhatsAppChat,
+} from '../services/whatsappService';
 
 interface CentralizedInvoicePrintModalProps {
   defaultSettings?: Settings;
@@ -575,6 +580,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const [selectedSize, setSelectedSize] = useState<UniversalPaperSize>('a5-portrait');
   const [includeBatchSummary, setIncludeBatchSummary] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showWhatsappPrompt, setShowWhatsappPrompt] = useState(false);
+  const [whatsappPhoneInput, setWhatsappPhoneInput] = useState('');
   const printSheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -583,6 +590,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       setSelectedSize(normalizePaperSizeOption(payload.preferredPaperSize));
       setIncludeBatchSummary(!!payload.includeSummarySheet);
       setActiveTab('preview');
+      setShowWhatsappPrompt(false);
+      setWhatsappPhoneInput('');
       setIsOpen(true);
     });
 
@@ -739,8 +748,32 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         activePayload.onClose();
       } catch {}
     }
+    setShowWhatsappPrompt(false);
+    setWhatsappPhoneInput('');
     setIsOpen(false);
     setActivePayload(null);
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!activePayload) return;
+    const rawPhone = activePayload.partyPhone && activePayload.partyPhone !== '-' ? activePayload.partyPhone : '';
+    const cleaned = cleanPhoneNumber(rawPhone);
+    if (cleaned) {
+      const msg = generateUniversalDocumentWhatsAppMessage(activePayload);
+      openWhatsAppChat(cleaned, msg);
+      setShowWhatsappPrompt(false);
+    } else {
+      setWhatsappPhoneInput('');
+      setShowWhatsappPrompt((prev) => !prev);
+    }
+  };
+
+  const handleConfirmWhatsappSend = (skipPhone = false) => {
+    if (!activePayload) return;
+    const msg = generateUniversalDocumentWhatsAppMessage(activePayload);
+    openWhatsAppChat(skipPhone ? '' : whatsappPhoneInput.trim(), msg);
+    setShowWhatsappPrompt(false);
+    setWhatsappPhoneInput('');
   };
 
   const handleSelectPaperSize = (size: UniversalPaperSize) => {
@@ -1039,6 +1072,17 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                onClick={handleShareWhatsApp}
+                className="min-h-[40px] px-2.5 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                title="مشاركة وإرسال عبر واتساب"
+                aria-label="إرسال عبر واتساب"
+              >
+                <MessageCircle className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">واتساب</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleSavePdf}
                 disabled={isExportingPdf}
                 className="w-10 h-10 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-50 shrink-0"
@@ -1056,6 +1100,46 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               >
                 <Printer className="w-4 h-4 shrink-0" />
                 <span>{isInvoiceKind ? 'طباعة الفاتورة' : 'طباعة'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline WhatsApp Phone Input Popover when partyPhone is missing */}
+        {!isBatchMode && showWhatsappPrompt && (
+          <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs">
+            <span className="font-bold text-emerald-900 shrink-0">📲 أدخل رقم الواتساب:</span>
+            <input
+              type="tel"
+              dir="ltr"
+              value={whatsappPhoneInput}
+              onChange={(e) => setWhatsappPhoneInput(e.target.value)}
+              placeholder="010..."
+              className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-emerald-300 rounded-lg font-mono text-slate-900 focus:outline-none focus:border-emerald-600"
+              autoFocus
+            />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleConfirmWhatsappSend(false)}
+                disabled={!cleanPhoneNumber(whatsappPhoneInput)}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold cursor-pointer"
+              >
+                إرسال
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmWhatsappSend(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-semibold cursor-pointer"
+              >
+                فتح واتساب مباشرة
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWhatsappPrompt(false)}
+                className="px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+              >
+                ✕
               </button>
             </div>
           </div>
@@ -1225,6 +1309,18 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
               : `طباعة المستند الآن (${selectedSizeMeta.shortLabel})`}
           </span>
         </button>
+
+        {!isBatchMode && (
+          <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            className="w-11 h-11 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition cursor-pointer shrink-0"
+            title="إرسال عبر واتساب"
+            aria-label="إرسال عبر واتساب"
+          >
+            <MessageCircle className="w-4 h-4" />
+          </button>
+        )}
 
         <button
           type="button"

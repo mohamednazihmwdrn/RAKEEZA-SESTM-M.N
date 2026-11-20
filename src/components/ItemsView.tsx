@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppData, Item } from '../types';
+import { AppData, Item, ItemAltUnit } from '../types';
 import { Modal } from './Modal';
 import { exportToExcel } from '../utils/excelExport';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { TableActionButtons } from './TableActionButtons';
-import { Trash2, DownloadCloud, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Layers, GitBranch, RefreshCw } from 'lucide-react';
+import { Trash2, DownloadCloud, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Layers, GitBranch, RefreshCw, Camera, Plus } from 'lucide-react';
 import {
   getBranchItems,
   getMainBranchId,
   syncMissingBranchItems,
 } from '../utils/branchIsolation';
+import { hasPermission } from '../utils/permissions';
+import { BarcodeCameraModal } from './BarcodeCameraModal';
 
 interface ItemsViewProps {
   appData: AppData;
@@ -45,6 +47,14 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   const [unit, setUnit] = useState('قطعة');
   const [code, setCode] = useState('');
   const [itemLastPurchaseDate, setItemLastPurchaseDate] = useState('');
+  const [altUnits, setAltUnits] = useState<ItemAltUnit[]>([]);
+  const [scannerTarget, setScannerTarget] = useState<null | 'search' | 'modal'>(null);
+
+  const currentUserObj = useMemo(
+    () => appData.users?.find((u) => u.id === appData.currentUser) || appData.users?.[0],
+    [appData.users, appData.currentUser]
+  );
+  const canViewCost = useMemo(() => hasPermission(currentUserObj, 'view_cost_price'), [currentUserObj]);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -194,7 +204,9 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
           item.name?.toLowerCase().includes(s) ||
           item.description?.toLowerCase().includes(s) ||
           item.code?.toLowerCase().includes(s) ||
-          item.category?.toLowerCase().includes(s);
+          item.barcode?.toLowerCase().includes(s) ||
+          item.category?.toLowerCase().includes(s) ||
+          item.altUnits?.some((u) => u.barcode?.toLowerCase().includes(s));
         if (!matches) return false;
       }
 
@@ -253,6 +265,42 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     const totalQty = filteredItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
     const totalInventoryValue = filteredItems.reduce((sum, i) => sum + ((i.quantity || 0) * (i.purchasePrice || 0)), 0);
 
+    const kpis = [
+      { title: 'إجمالي عدد الأصناف', value: `${filteredItems.length} صنف` },
+      { title: 'إجمالي الكميات بالمخزن', value: `${(totalQty || 0).toLocaleString('en-US')}` },
+    ];
+    if (canViewCost) {
+      kpis.push({
+        title: 'القيمة الإجمالية بسعر الشراء',
+        value: `${(totalInventoryValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م`,
+      });
+    }
+
+    const columns = canViewCost
+      ? ['#', 'اسم الصنف', 'الوصف / الفئة', 'الكمية الحالية', 'سعر الشراء', 'سعر البيع', 'إجمالي القيمة']
+      : ['#', 'اسم الصنف', 'الوصف / الفئة', 'الكمية الحالية', 'سعر البيع'];
+
+    const rows = filteredItems.map((item, idx) =>
+      canViewCost
+        ? [
+            idx + 1,
+            item.name,
+            item.description || '-',
+            item.quantity,
+            `${item.purchasePrice.toFixed(2)} ج.م`,
+            `${item.salePrice.toFixed(2)} ج.م`,
+            `${(item.quantity * item.purchasePrice).toFixed(2)} ج.م`,
+          ]
+        : [idx + 1, item.name, item.description || '-', item.quantity, `${item.salePrice.toFixed(2)} ج.م`]
+    );
+
+    const summary = canViewCost
+      ? [
+          { label: 'إجمالي الكميات بالمخزن', value: totalQty.toString() },
+          { label: 'إجمالي قيمة المخزون التقديرية', value: `${totalInventoryValue.toFixed(2)} ج.م`, isTotal: true },
+        ]
+      : [{ label: 'إجمالي الكميات بالمخزن', value: totalQty.toString(), isTotal: true }];
+
     openUnifiedPrintWindow(
       {
         reportTitle: 'كشف جرد وأرصدة المخزون السلعي',
@@ -261,25 +309,10 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
         branch: 'المخزن الرئيسي',
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        kpis: [
-          { title: 'إجمالي عدد الأصناف', value: `${filteredItems.length} صنف` },
-          { title: 'إجمالي الكميات بالمخزن', value: `${(totalQty || 0).toLocaleString('en-US')}` },
-          { title: 'القيمة الإجمالية بسعر الشراء', value: `${(totalInventoryValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م` },
-        ],
-        columns: ['#', 'اسم الصنف', 'الوصف / الفئة', 'الكمية الحالية', 'سعر الشراء', 'سعر البيع', 'إجمالي القيمة'],
-        rows: filteredItems.map((item, idx) => [
-          idx + 1,
-          item.name,
-          item.description || '-',
-          item.quantity,
-          `${item.purchasePrice.toFixed(2)} ج.م`,
-          `${item.salePrice.toFixed(2)} ج.م`,
-          `${(item.quantity * item.purchasePrice).toFixed(2)} ج.م`,
-        ]),
-        summary: [
-          { label: 'إجمالي الكميات بالمخزن', value: totalQty.toString() },
-          { label: 'إجمالي قيمة المخزون التقديرية', value: `${totalInventoryValue.toFixed(2)} ج.م`, isTotal: true },
-        ],
+        kpis,
+        columns,
+        rows,
+        summary,
         footerNote: 'تم استخراج كشف الجرد واعتماده من إدارة المخازن والمستودعات',
       },
       appData.settings,
@@ -289,31 +322,37 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
 
   // Export Items to Excel
   const handleExportItemsExcel = () => {
+    const excelColumns: any[] = [
+      { header: 'كود الصنف', key: 'id', width: 12 },
+      { header: 'اسم الصنف', key: 'name', width: 28 },
+      { header: 'الوصف / المواصفات', key: 'description', width: 25 },
+      { header: 'الكمية بالمخزن', key: 'quantity', width: 15 },
+    ];
+    if (canViewCost) {
+      excelColumns.push({
+        header: 'سعر الشراء (ج.م)',
+        getValue: (item: Item) => item.purchasePrice.toFixed(2),
+        width: 18,
+      });
+    }
+    excelColumns.push({
+      header: 'سعر البيع (ج.م)',
+      getValue: (item: Item) => item.salePrice.toFixed(2),
+      width: 18,
+    });
+    if (canViewCost) {
+      excelColumns.push({
+        header: 'إجمالي القيمة بسعر الشراء',
+        getValue: (item: Item) => (item.quantity * item.purchasePrice).toFixed(2),
+        width: 22,
+      });
+    }
+
     exportToExcel({
       filename: `مخزون_الأصناف_${new Date().toISOString().split('T')[0]}`,
       sheetName: 'الأصناف والمخزون',
       data: filteredItems,
-      columns: [
-        { header: 'كود الصنف', key: 'id', width: 12 },
-        { header: 'اسم الصنف', key: 'name', width: 28 },
-        { header: 'الوصف / المواصفات', key: 'description', width: 25 },
-        { header: 'الكمية بالمخزن', key: 'quantity', width: 15 },
-        {
-          header: 'سعر الشراء (ج.م)',
-          getValue: (item: Item) => item.purchasePrice.toFixed(2),
-          width: 18,
-        },
-        {
-          header: 'سعر البيع (ج.م)',
-          getValue: (item: Item) => item.salePrice.toFixed(2),
-          width: 18,
-        },
-        {
-          header: 'إجمالي القيمة بسعر الشراء',
-          getValue: (item: Item) => (item.quantity * item.purchasePrice).toFixed(2),
-          width: 22,
-        },
-      ],
+      columns: excelColumns,
       companyName: appData.settings?.companyName || 'المنظومة المحاسبية المعتمدة',
       reportTitle: 'كشف جرد الأصناف والمخزون السلعي',
     });
@@ -332,6 +371,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setSalePrice('0');
     setWholesalePrice('0');
     setItemLastPurchaseDate('');
+    setAltUnits([]);
     setIsModalOpen(true);
   };
 
@@ -347,6 +387,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     setSalePrice(item.salePrice?.toString() || '0');
     setWholesalePrice((item.wholesalePrice ?? item.wholesaleSellingPrice ?? 0).toString());
     setItemLastPurchaseDate(item.lastPurchaseDate || '');
+    setAltUnits(item.altUnits ? item.altUnits.map((u) => ({ ...u })) : []);
     setIsModalOpen(true);
   };
 
@@ -357,13 +398,24 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
     }
 
     const updatedData = { ...appData };
-    const pPrice = parseFloat(purchasePrice) || 0;
+    const pPrice = editingItem && !canViewCost ? Number(editingItem.purchasePrice || 0) : (parseFloat(purchasePrice) || 0);
     const sPrice = parseFloat(salePrice) || (pPrice > 0 ? Number((pPrice * 1.25).toFixed(2)) : 0);
     const parsedWPrice = parseFloat(wholesalePrice);
     const wPrice = !isNaN(parsedWPrice) && parsedWPrice > 0 ? parsedWPrice : Number((sPrice * 0.92).toFixed(2));
     const qVal = parseFloat(qty) || 0;
     const currentUser = appData.users.find((u) => u.id === appData.currentUser) || appData.users[0];
     const nowIso = new Date().toISOString();
+    const cleanedAltUnits = altUnits
+      .filter((u) => u.name.trim() && Number(u.factor) > 0)
+      .map((u) => ({
+        ...u,
+        name: u.name.trim(),
+        factor: Number(u.factor),
+        barcode: u.barcode?.trim() || undefined,
+        buyPrice: Number(u.buyPrice || 0) > 0 ? Number(u.buyPrice) : undefined,
+        salePrice: Number(u.salePrice || 0) > 0 ? Number(u.salePrice) : undefined,
+        wholesalePrice: Number(u.wholesalePrice || 0) > 0 ? Number(u.wholesalePrice) : undefined,
+      }));
 
     if (editingItem) {
       const idx = updatedData.items.findIndex((i) => i.id === editingItem.id);
@@ -374,6 +426,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
           name: name.trim(),
           category: category.trim(),
           unit: unit.trim() || 'قطعة',
+          altUnits: cleanedAltUnits.length > 0 ? cleanedAltUnits : undefined,
           code: code.trim() || updatedData.items[idx].code,
           description: desc.trim(),
           quantity: qVal,
@@ -399,6 +452,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
         name: name.trim(),
         category: category.trim(),
         unit: unit.trim() || 'قطعة',
+        altUnits: cleanedAltUnits.length > 0 ? cleanedAltUnits : undefined,
         description: desc.trim(),
         quantity: qVal,
         purchasePrice: pPrice,
@@ -663,14 +717,23 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
               </>
             )}
           </div>
-          <div className="w-full sm:w-auto min-w-0 sm:min-w-[240px]">
+          <div className="w-full sm:w-auto min-w-0 sm:min-w-[260px] flex items-center gap-1.5">
             <input
               type="text"
-              placeholder="🔍 بحث باسم الصنف، الكود، التصنيف..."
+              placeholder="🔍 بحث باسم الصنف، الكود، الباركود..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full min-h-[42px] px-3.5 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-[#1a237e] focus:outline-none"
+              className="flex-1 min-w-0 min-h-[42px] px-3.5 py-2 border-2 border-gray-200 rounded-xl text-xs focus:border-[#1a237e] focus:outline-none"
             />
+            <button
+              type="button"
+              onClick={() => setScannerTarget('search')}
+              className="w-[42px] h-[42px] rounded-xl border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 flex items-center justify-center shrink-0 transition cursor-pointer"
+              title="مسح الباركود بالكاميرا"
+              aria-label="مسح الباركود بالكاميرا"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -810,23 +873,35 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                       <div className="text-xs text-slate-500 italic">{item.description}</div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center">
-                      <div>
-                        <div className="text-[10px] text-slate-500">سعر الشراء</div>
-                        <div className="font-bold text-slate-800 text-xs mt-0.5">
-                          {item.purchasePrice > 0 ? `${item.purchasePrice.toFixed(2)} ج.م` : <span className="text-amber-700 text-[10px]">بانتظار الشراء</span>}
+                    <div className={`grid ${canViewCost ? 'grid-cols-3' : 'grid-cols-2'} gap-2 bg-slate-50 p-2.5 rounded-xl text-center`}>
+                      {canViewCost && (
+                        <div>
+                          <div className="text-[10px] text-slate-500">سعر الشراء</div>
+                          <div className="font-bold text-slate-800 text-xs mt-0.5">
+                            {item.purchasePrice > 0 ? `${item.purchasePrice.toFixed(2)} ج.م` : <span className="text-amber-700 text-[10px]">بانتظار الشراء</span>}
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div>
                         <div className="text-[10px] text-slate-500">سعر البيع</div>
                         <div className="font-bold text-indigo-900 text-xs mt-0.5">
                           {item.salePrice > 0 ? `${item.salePrice.toFixed(2)} ج.م` : <span className="text-slate-400 text-[10px]">0.00 ج.م</span>}
                         </div>
                       </div>
-                      <div>
-                        <div className="text-[10px] text-slate-500">قيمة المخزون</div>
-                        <div className="font-black text-emerald-700 text-xs mt-0.5">{totalVal.toFixed(2)} ج.م</div>
-                      </div>
+                      {canViewCost ? (
+                        <div>
+                          <div className="text-[10px] text-slate-500">قيمة المخزون</div>
+                          <div className="font-black text-emerald-700 text-xs mt-0.5">{totalVal.toFixed(2)} ج.م</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-[10px] text-slate-500">الوحدات</div>
+                          <div className="font-bold text-slate-700 text-xs mt-0.5">
+                            {item.unit || 'قطعة'}
+                            {item.altUnits && item.altUnits.length > 0 ? ` + ${item.altUnits.length}` : ''}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Date of Purchase */}
@@ -872,9 +947,9 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                   <th className="p-3">التصنيف / الفئة</th>
                   <th className="p-3">الوحدة</th>
                   <th className="p-3">الكمية الحالية</th>
-                  <th className="p-3">سعر الشراء (ج.م)</th>
+                  {canViewCost && <th className="p-3">سعر الشراء (ج.م)</th>}
                   <th className="p-3">سعر البيع (ج.م)</th>
-                  <th className="p-3">قيمة المخزون</th>
+                  {canViewCost && <th className="p-3">قيمة المخزون</th>}
                   <th className="p-3">تاريخ الشراء</th>
                   <th className="p-3 rounded-l-lg">الإجراءات</th>
                 </tr>
@@ -882,7 +957,7 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
               <tbody className="divide-y divide-gray-100">
                 {paginatedItems.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="text-center py-8 text-gray-400">
+                    <td colSpan={canViewCost ? 11 : 9} className="text-center py-8 text-gray-400">
                       لا توجد أصناف مسجلة تطابق معايير البحث
                     </td>
                   </tr>
@@ -930,17 +1005,21 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="p-3 font-mono">
-                          {item.purchasePrice > 0 ? (
-                            item.purchasePrice.toFixed(2)
-                          ) : (
-                            <span className="text-slate-400 text-xs">0.00</span>
-                          )}
-                        </td>
+                        {canViewCost && (
+                          <td className="p-3 font-mono">
+                            {item.purchasePrice > 0 ? (
+                              item.purchasePrice.toFixed(2)
+                            ) : (
+                              <span className="text-slate-400 text-xs">0.00</span>
+                            )}
+                          </td>
+                        )}
                         <td className="p-3 font-mono font-semibold text-indigo-900">
                           {item.salePrice > 0 ? item.salePrice.toFixed(2) : <span className="text-slate-400 text-xs">0.00</span>}
                         </td>
-                        <td className="p-3 font-mono font-bold text-[#2e7d32]">{totalVal.toFixed(2)}</td>
+                        {canViewCost && (
+                          <td className="p-3 font-mono font-bold text-[#2e7d32]">{totalVal.toFixed(2)}</td>
+                        )}
                         <td className="p-3 text-xs">
                           {item.lastPurchaseDate ? (
                             <span className="font-mono font-bold text-indigo-950 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
@@ -1201,13 +1280,17 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
               <div key={item.id} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
                 <div className="flex items-center justify-between font-bold">
                   <span className="text-slate-900">{item.name}</span>
-                  <span className="text-[#2e7d32] font-mono">
-                    {((item.quantity || 0) * (item.purchasePrice || 0)).toFixed(2)} ج.م
-                  </span>
+                  {canViewCost && (
+                    <span className="text-[#2e7d32] font-mono">
+                      {((item.quantity || 0) * (item.purchasePrice || 0)).toFixed(2)} ج.م
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                   <span>الكمية: <strong className="font-mono text-slate-800">{item.quantity}</strong></span>
-                  <span>سعر الشراء: <strong className="font-mono text-slate-800">{item.purchasePrice.toFixed(2)} ج.م</strong></span>
+                  {canViewCost && (
+                    <span>سعر الشراء: <strong className="font-mono text-slate-800">{item.purchasePrice.toFixed(2)} ج.م</strong></span>
+                  )}
                 </div>
               </div>
             ))}
@@ -1221,22 +1304,26 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                   <tr key={item.id}>
                     <td className="p-3 font-bold">{item.name}</td>
                     <td className="p-3">{item.quantity}</td>
-                    <td className="p-3">{item.purchasePrice.toFixed(2)} ج.م</td>
-                    <td className="p-3 font-bold text-[#2e7d32]">
-                      {((item.quantity || 0) * (item.purchasePrice || 0)).toFixed(2)} ج.م
-                    </td>
+                    {canViewCost && <td className="p-3">{item.purchasePrice.toFixed(2)} ج.م</td>}
+                    {canViewCost && (
+                      <td className="p-3 font-bold text-[#2e7d32]">
+                        {((item.quantity || 0) * (item.purchasePrice || 0)).toFixed(2)} ج.م
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="bg-slate-100 p-3 rounded-xl text-center font-bold text-base text-[#1a237e]">
-            إجمالي قيمة كامل المخزون الحالية:{' '}
-            {appData.items
-              .reduce((sum, item) => sum + (item.quantity || 0) * (item.purchasePrice || 0), 0)
-              .toFixed(2)}{' '}
-            ج.م
-          </div>
+          {canViewCost && (
+            <div className="bg-slate-100 p-3 rounded-xl text-center font-bold text-base text-[#1a237e]">
+              إجمالي قيمة كامل المخزون الحالية:{' '}
+              {appData.items
+                .reduce((sum, item) => sum + (item.quantity || 0) * (item.purchasePrice || 0), 0)
+                .toFixed(2)}{' '}
+              ج.م
+            </div>
+          )}
         </div>
       )}
 
@@ -1286,13 +1373,23 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">كود الصنف / الباركود</label>
-                  <input
-                    type="text"
-                    placeholder="ITM-0001..."
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="w-full min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 font-mono text-center focus:outline-none"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="ITM-0001..."
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      className="flex-1 min-w-0 min-h-[40px] px-3 py-2 bg-[#162238] border border-slate-700 focus:border-blue-500 rounded-xl text-white placeholder:text-slate-400 font-mono text-center focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setScannerTarget('modal')}
+                      className="w-[40px] h-[40px] rounded-xl bg-blue-600/20 border border-blue-500/50 text-blue-300 hover:bg-blue-600/30 flex items-center justify-center shrink-0 cursor-pointer"
+                      title="مسح الباركود بالكاميرا"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">التصنيف / الفئة</label>
@@ -1345,6 +1442,121 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                 />
               </div>
 
+              {/* Multi-UOM (وحدات إضافية مثل كرتونة / باكت) */}
+              <div className="bg-[#132038] border border-slate-700/80 rounded-xl p-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-200">📦 الوحدات الإضافية (تعدد الوحدات - كرتونة / دستة)</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAltUnits((prev) => [
+                        ...prev,
+                        { id: `u_${Date.now()}_${prev.length}`, name: 'كرتونة', factor: 12, barcode: '', salePrice: 0, buyPrice: 0 },
+                      ])
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>إضافة وحدة</span>
+                  </button>
+                </div>
+
+                {altUnits.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">يمكنك ربط وحدات كبرى (مثل كرتونة = 12 {unit || 'قطعة'}) بأسعار وباركود مستقل.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {altUnits.map((au, uIdx) => (
+                      <div key={au.id} className="bg-[#0f172a] border border-slate-700/80 rounded-lg p-2.5 space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-slate-400 mb-0.5">اسم الوحدة</label>
+                            <input
+                              type="text"
+                              value={au.name}
+                              onChange={(e) =>
+                                setAltUnits((prev) => prev.map((x, idx) => (idx === uIdx ? { ...x, name: e.target.value } : x)))
+                              }
+                              placeholder="كرتونة..."
+                              className="w-full px-2 py-1.5 bg-[#162238] border border-slate-700 rounded-lg text-white text-xs focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-400 mb-0.5">المعامل ({unit || 'قطعة'})</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="any"
+                              value={au.factor || ''}
+                              onChange={(e) =>
+                                setAltUnits((prev) =>
+                                  prev.map((x, idx) => (idx === uIdx ? { ...x, factor: parseFloat(e.target.value) || 1 } : x))
+                                )
+                              }
+                              className="w-full px-2 py-1.5 bg-[#162238] border border-slate-700 rounded-lg text-white font-mono text-center text-xs focus:outline-none"
+                            />
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <label className="block text-[10px] text-slate-400 mb-0.5">باركود الوحدة</label>
+                            <input
+                              type="text"
+                              value={au.barcode || ''}
+                              onChange={(e) =>
+                                setAltUnits((prev) => prev.map((x, idx) => (idx === uIdx ? { ...x, barcode: e.target.value } : x)))
+                              }
+                              placeholder="اختياري..."
+                              className="w-full px-2 py-1.5 bg-[#162238] border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
+                          <div>
+                            <label className="block text-[10px] text-slate-400 mb-0.5">سعر بيع الوحدة</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={au.salePrice || ''}
+                              onChange={(e) =>
+                                setAltUnits((prev) =>
+                                  prev.map((x, idx) => (idx === uIdx ? { ...x, salePrice: parseFloat(e.target.value) || 0 } : x))
+                                )
+                              }
+                              placeholder={((parseFloat(salePrice) || 0) * (au.factor || 1)).toFixed(0)}
+                              className="w-full px-2 py-1.5 bg-[#162238] border border-slate-700 rounded-lg text-emerald-300 font-mono text-center text-xs focus:outline-none"
+                            />
+                          </div>
+                          {canViewCost && (
+                            <div>
+                              <label className="block text-[10px] text-slate-400 mb-0.5">سعر شراء الوحدة</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={au.buyPrice || ''}
+                                onChange={(e) =>
+                                  setAltUnits((prev) =>
+                                    prev.map((x, idx) => (idx === uIdx ? { ...x, buyPrice: parseFloat(e.target.value) || 0 } : x))
+                                  )
+                                }
+                                placeholder={((parseFloat(purchasePrice) || 0) * (au.factor || 1)).toFixed(0)}
+                                className="w-full px-2 py-1.5 bg-[#162238] border border-slate-700 rounded-lg text-rose-300 font-mono text-center text-xs focus:outline-none"
+                              />
+                            </div>
+                          )}
+                          <div className={canViewCost ? '' : 'sm:col-span-2'}>
+                            <button
+                              type="button"
+                              onClick={() => setAltUnits((prev) => prev.filter((_, idx) => idx !== uIdx))}
+                              className="w-full py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-700/60 text-rose-200 text-xs font-bold cursor-pointer"
+                            >
+                              حذف الوحدة
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* 2x2 Pricing & Stock Box */}
               <div className="bg-[#132038] border border-blue-600/40 rounded-xl p-3 space-y-2.5 tabular-nums">
                 <div className="grid grid-cols-2 gap-2.5">
@@ -1360,13 +1572,19 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">سعر الشراء (ج.م)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={purchasePrice}
-                      onChange={(e) => setPurchasePrice(e.target.value)}
-                      className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-slate-700 focus:border-blue-500 rounded-lg text-rose-300 font-mono font-bold text-center focus:outline-none"
-                    />
+                    {canViewCost ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={purchasePrice}
+                        onChange={(e) => setPurchasePrice(e.target.value)}
+                        className="w-full min-h-[40px] px-2.5 py-1.5 bg-[#0f172a] border border-slate-700 focus:border-blue-500 rounded-lg text-rose-300 font-mono font-bold text-center focus:outline-none"
+                      />
+                    ) : (
+                      <div className="w-full min-h-[40px] px-2.5 py-2 bg-[#0f172a] border border-slate-700 rounded-lg text-slate-400 font-mono text-center">
+                        *** محجوب
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
@@ -1558,6 +1776,22 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
           </div>
         </div>
       </Modal>
+
+      <BarcodeCameraModal
+        isOpen={scannerTarget !== null}
+        title={scannerTarget === 'modal' ? 'مسح باركود الصنف' : 'البحث بالباركود عبر الكاميرا'}
+        onClose={() => setScannerTarget(null)}
+        onDetected={(scanned) => {
+          if (scannerTarget === 'search') {
+            setSearchTerm(scanned);
+            showToast(`تم قراءة الباركود: ${scanned}`, 'success');
+          } else if (scannerTarget === 'modal') {
+            setCode(scanned);
+            showToast(`تم تعيين كود الباركود: ${scanned}`, 'success');
+          }
+          setScannerTarget(null);
+        }}
+      />
     </div>
   );
 };

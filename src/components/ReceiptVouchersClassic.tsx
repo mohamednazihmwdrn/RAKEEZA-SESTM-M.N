@@ -302,16 +302,20 @@ export const ReceiptVouchersClassic: React.FC<ReceiptVouchersClassicProps> = ({
   const handleDeleteReceipt = (t: CashTransaction) => {
     if (!confirm(`هل أنت متأكد من إلغاء وحذف سند القبض #${t.id} بقيمة ${t.amount} ج.م؟ سيتم استرجاع رصيد الخزينة والعميل.`)) return;
 
-    const updatedData = deleteCashVoucher(appData, t.id, false);
+    try {
+      const updatedData = deleteCashVoucher(appData, t.id, false);
 
-    onUpdateData(updatedData, {
-      action: 'delete_receipt',
-      module: 'سندات القبض',
-      details: `إلغاء وحذف سند قبض #${t.id} بقيمة ${t.amount} ج.م`,
-      deletedId: t.id,
-    });
-    showToast(`تم إلغاء سند القبض #${t.id} وتعديل رصيد الخزينة والعميل بنجاح`, 'info');
-    if (editingId === t.id) resetForm();
+      onUpdateData(updatedData, {
+        action: 'delete_receipt',
+        module: 'سندات القبض',
+        details: `إلغاء وحذف سند قبض #${t.id} بقيمة ${t.amount} ج.م`,
+        deletedId: t.id,
+      });
+      showToast(`تم إلغاء سند القبض #${t.id} وتعديل رصيد الخزينة والعميل بنجاح`, 'info');
+      if (editingId === t.id) resetForm();
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف سند القبض', 'error');
+    }
   };
 
   // Export to Excel

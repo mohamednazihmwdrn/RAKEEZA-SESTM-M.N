@@ -737,6 +737,8 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     });
     setActiveModal(null);
     showToast(`تم حفظ ${isReturn ? 'مرتجع' : 'فاتورة'} مبيعات رقم #${newInvoice.id} بنجاح`, 'success');
+  } catch (err: any) {
+    showToast(err?.message || 'تعذر حفظ الفاتورة', 'error');
   } finally {
     setIsSubmitting(false);
   }
@@ -747,17 +749,21 @@ export const SalesView: React.FC<SalesViewProps> = ({ appData, onUpdateData, sho
     const invToDelete = appData.salesInvoices.find((i) => i.id === id);
     if (!invToDelete) return;
 
-    const updatedData = deleteSaleInvoice(appData, id);
-    if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
-    updatedData.deletedRecords[`salesInvoices_${id}`] = Date.now();
+    try {
+      const updatedData = deleteSaleInvoice(appData, id);
+      if (!updatedData.deletedRecords) updatedData.deletedRecords = {};
+      updatedData.deletedRecords[`salesInvoices_${id}`] = Date.now();
 
-    onUpdateData(updatedData, {
-      action: 'delete_invoice',
-      module: 'المبيعات',
-      details: `حذف ${invToDelete.type.startsWith('return_') ? 'مرتجع' : 'فاتورة'} مبيعات رقم #${id} وتسوية المخزون والخزينة والعميل`,
-      deletedId: id,
-    });
-    showToast(`تم حذف الفاتورة رقم #${id} وإعادة كميات الأصناف كاملة إلى رصيد المخزن وتسوية الحسابات والخزينة بدقة`, 'success');
+      onUpdateData(updatedData, {
+        action: 'delete_invoice',
+        module: 'المبيعات',
+        details: `حذف ${invToDelete.type.startsWith('return_') ? 'مرتجع' : 'فاتورة'} مبيعات رقم #${id} وتسوية المخزون والخزينة والعميل`,
+        deletedId: id,
+      });
+      showToast(`تم حذف الفاتورة رقم #${id} وإعادة كميات الأصناف كاملة إلى رصيد المخزن وتسوية الحسابات والخزينة بدقة`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'تعذر حذف الفاتورة', 'error');
+    }
   };
 
   const handleOpenPayModal = (inv: SaleInvoice) => {
