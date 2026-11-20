@@ -61,6 +61,19 @@ function parseNumericValue(val: string | number | undefined): number {
   return Number.isFinite(num) ? num : 0;
 }
 
+function isRawInternalId(val: string | number | undefined | null): boolean {
+  if (val === undefined || val === null) return false;
+  const s = String(val).trim();
+  return /^[cs]\d{10,}_[a-z0-9]+$/i.test(s);
+}
+
+function sanitizeDisplaySerial(val: string | number | undefined | null, fallback = ''): string {
+  if (val === undefined || val === null) return fallback;
+  const s = String(val).trim();
+  if (!s || isRawInternalId(s)) return fallback;
+  return s;
+}
+
 function chunkRows<T>(items: T[], perPage: number): T[][] {
   if (!items || items.length === 0) return [[]];
   if (perPage <= 0 || items.length <= perPage) return [items];
@@ -96,7 +109,6 @@ const SCOPED_PRINT_CSS = `
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-width: 100%;
 }
 .rp-root.rp-a5 .rp-page {
   width: 148mm;
@@ -177,7 +189,8 @@ const SCOPED_PRINT_CSS = `
   font-weight: 700;
   line-height: 1.4;
   color: var(--rp-navy);
-  word-break: break-word;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .rp-branch {
   font-size: 8.5pt;
@@ -202,6 +215,7 @@ const SCOPED_PRINT_CSS = `
   font-size: 8.8pt;
   color: #344354;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .rp-meta {
   display: grid;
@@ -253,17 +267,24 @@ const SCOPED_PRINT_CSS = `
   text-align: center;
   vertical-align: middle;
   word-break: normal;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
 }
 .rp-table th {
   background: #e9eef3;
   color: #152536;
   font-weight: 700;
   border-bottom: 2px solid #647384;
+  white-space: nowrap;
 }
 .rp-table td.rp-item-cell {
   text-align: right;
   font-weight: 600;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.rp-table td.rp-num-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .rp-table tbody tr:nth-child(even) {
   background: #fafbfc;
@@ -396,79 +417,47 @@ const SCOPED_PRINT_CSS = `
   margin-top: 2mm;
 }
 
-/* Mobile viewport auto-scale fit (Zero Horizontal Scroll) */
-@media screen and (max-width: 640px) {
-  .rp-root.rp-a5 .rp-page,
-  .rp-root.rp-a4 .rp-page {
-    width: 100%;
-    min-height: auto;
-    padding: 3mm;
-  }
-  .rp-frame {
-    padding: 2.5mm;
-  }
-  .rp-head {
-    grid-template-columns: 1fr 18mm 1fr;
-    gap: 1.5mm;
-  }
-  .rp-company {
-    font-size: 10.5pt;
-  }
-  .rp-phones {
-    font-size: 7.5pt;
-  }
-  .rp-logo {
-    min-height: 14mm;
-  }
-  .rp-logo img {
-    max-width: 17mm;
-    max-height: 14mm;
-  }
-  .rp-logo-placeholder {
-    width: 16mm;
-    height: 14mm;
-    font-size: 6.5pt;
-  }
-  .rp-title-row h1 {
-    font-size: 11.5pt;
-  }
-  .rp-meta-col {
-    padding: 1.5mm;
-    font-size: 7.5pt;
-  }
-  .rp-meta-center {
-    font-size: 9pt;
-  }
-  .rp-root.rp-thermal .rp-page {
-    max-width: 100%;
-  }
-  .rp-phones div {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .rp-meta-col {
-    overflow-wrap: anywhere;
-  }
-  .rp-table {
-    font-size: 7.2pt;
-    width: 100%;
-  }
-  .rp-table th,
-  .rp-table td {
-    padding: 1mm 0.7mm;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-  .rp-totals {
-    width: 85%;
-    font-size: 8.5pt;
-  }
-  .rp-total-line.rp-main {
-    font-size: 10.5pt;
-  }
-  .rp-data-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
+/* Structured Thermal Ledger Blocks (Prevents >4-col table cramming on 80mm rolls) */
+.rp-th-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8mm;
+  margin-bottom: 2.5mm;
+}
+.rp-th-entry {
+  border: 1px solid #aeb9c3;
+  border-radius: 1.5mm;
+  padding: 1.6mm 2mm;
+  background: #ffffff;
+  font-size: 7.8pt;
+  line-height: 1.55;
+}
+.rp-th-entry:nth-child(even) {
+  background: #f8fafc;
+}
+.rp-th-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2mm;
+  border-bottom: 1px dashed #e2e8f0;
+  padding: 0.6mm 0;
+}
+.rp-th-row:last-child {
+  border-bottom: 0;
+}
+.rp-th-k {
+  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rp-th-v {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* Thermal 80mm overrides */
@@ -835,6 +824,14 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           margin: 0 !important;
           background: #ffffff !important;
         }
+        .rp-scale-outer,
+        .rp-scale-inner {
+          width: 100% !important;
+          height: auto !important;
+          transform: none !important;
+          overflow: visible !important;
+          margin: 0 !important;
+        }
         #rakeeza-universal-print-sheet,
         #rakeeza-batch-print-container {
           position: static !important;
@@ -888,7 +885,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     if (!printSheetRef.current || isExportingPdf) return;
     setIsExportingPdf(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 90));
+      await new Promise((resolve) => setTimeout(resolve, 140));
 
       let format: 'a4' | 'a5' | 'thermal' = 'a5';
       if (selectedSize === 'a4-portrait' || selectedSize === 'a4-landscape') {
@@ -898,7 +895,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       }
 
       const docTitle = activePayload?.title?.replace(/\s+/g, '_') || 'مستند';
-      const docNum = activePayload?.docNumber ? `_${activePayload.docNumber}` : '';
+      const cleanNum = sanitizeDisplaySerial(activePayload?.docNumber);
+      const docNum = cleanNum ? `_${cleanNum}` : '';
       const filename = `${docTitle}${docNum}_${new Date().toISOString().split('T')[0]}.pdf`;
 
       await exportElementToPdf(printSheetRef.current, filename, {
@@ -924,8 +922,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
 
   const isBatchMode = activePayload.kind === 'batch_invoices' && Array.isArray(activePayload.documents);
   const batchDocs = activePayload.documents || [];
-  const docSerial =
-    activePayload.docNumber !== undefined && activePayload.docNumber !== '' ? `${activePayload.docNumber}` : '1';
+  const docSerial = sanitizeDisplaySerial(activePayload.docNumber);
   const isThermal = selectedSize === 'thermal-80' || selectedSize === 'thermal-58';
   const isA4 = selectedSize === 'a4-portrait' || selectedSize === 'a4-landscape';
   const rootSizeClass = isThermal ? 'rp-thermal' : isA4 ? 'rp-a4' : 'rp-a5';
@@ -943,8 +940,8 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   const modalHeaderTitle = isBatchMode
     ? `معاينة وطباعة (${activePayload.title})`
     : isInvoiceKind
-    ? `معاينة الفاتورة (${docSerial})`
-    : `${activePayload.title} (${docSerial})`;
+    ? `معاينة الفاتورة${docSerial ? ` (${docSerial})` : ''}`
+    : `${activePayload.title}${docSerial ? ` (${docSerial})` : ''}`;
 
   const modalContent = (
     <div
@@ -1091,55 +1088,61 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
       {/* Preview Body */}
       <div className="rakeeza-print-scroll-wrap flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-5 flex justify-center items-start bg-[#edf1f5]">
         {activeTab === 'preview' ? (
-          isBatchMode ? (
-            <div
-              id="rakeeza-batch-print-container"
-              ref={printSheetRef}
-              className={`rp-root ${rootSizeClass}`}
-            >
-              {batchDocs.map((docPayload, idx) => {
-                const docSettings: Settings = docPayload.settings || settings;
-                const docCur = docSettings.currencySymbol || currencySymbol;
-                return (
-                  <React.Fragment key={`${docPayload.docNumber || idx}-${idx}`}>
-                    <UnifiedPaginatedDocument
-                      payload={docPayload}
-                      settings={docSettings}
-                      currencySymbol={docCur}
-                      currencyName={docCur === 'ج.م' ? 'جنيه مصري' : docCur}
-                      isThermal={isThermal}
-                      isA4={isA4}
-                      batchPositionLabel={`مستند ${idx + 1} من ${batchDocs.length}`}
-                    />
-                  </React.Fragment>
-                );
-              })}
+          <ScaledPrintViewport
+            paperKind={isThermal ? 'thermal' : isA4 ? 'a4' : 'a5'}
+            forceFullScale={isExportingPdf}
+            resetKey={`${selectedSize}-${activePayload.kind}-${docSerial}-${batchDocs.length}-${includeBatchSummary}`}
+          >
+            {isBatchMode ? (
+              <div
+                id="rakeeza-batch-print-container"
+                ref={printSheetRef}
+                className={`rp-root ${rootSizeClass}`}
+              >
+                {batchDocs.map((docPayload, idx) => {
+                  const docSettings: Settings = docPayload.settings || settings;
+                  const docCur = docSettings.currencySymbol || currencySymbol;
+                  return (
+                    <React.Fragment key={`${docPayload.docNumber || idx}-${idx}`}>
+                      <UnifiedPaginatedDocument
+                        payload={docPayload}
+                        settings={docSettings}
+                        currencySymbol={docCur}
+                        currencyName={docCur === 'ج.م' ? 'جنيه مصري' : docCur}
+                        isThermal={isThermal}
+                        isA4={isA4}
+                        batchPositionLabel={`مستند ${idx + 1} من ${batchDocs.length}`}
+                      />
+                    </React.Fragment>
+                  );
+                })}
 
-              {includeBatchSummary && activePayload.batchSummary && (
-                <BatchSummaryPages
-                  summary={activePayload.batchSummary}
+                {includeBatchSummary && activePayload.batchSummary && (
+                  <BatchSummaryPages
+                    summary={activePayload.batchSummary}
+                    settings={settings}
+                    isThermal={isThermal}
+                    isA4={isA4}
+                  />
+                )}
+              </div>
+            ) : (
+              <div
+                id="rakeeza-universal-print-sheet"
+                ref={printSheetRef}
+                className={`rp-root ${rootSizeClass}`}
+              >
+                <UnifiedPaginatedDocument
+                  payload={activePayload}
                   settings={settings}
+                  currencySymbol={currencySymbol}
+                  currencyName={currencyName}
                   isThermal={isThermal}
                   isA4={isA4}
                 />
-              )}
-            </div>
-          ) : (
-            <div
-              id="rakeeza-universal-print-sheet"
-              ref={printSheetRef}
-              className={`rp-root ${rootSizeClass}`}
-            >
-              <UnifiedPaginatedDocument
-                payload={activePayload}
-                settings={settings}
-                currencySymbol={currencySymbol}
-                currencyName={currencyName}
-                isThermal={isThermal}
-                isA4={isA4}
-              />
-            </div>
-          )
+              </div>
+            )}
+          </ScaledPrintViewport>
         ) : (
           <div className="bg-white text-slate-900 p-4 sm:p-6 rounded-xl shadow-sm max-w-2xl w-full border border-slate-200">
             <div className="flex items-center gap-2.5 border-b border-slate-200 pb-3 mb-4">
@@ -1148,7 +1151,7 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
                 <h3 className="text-sm sm:text-base font-bold text-slate-900">
                   {isBatchMode
                     ? `التدقيق والتوثيق المحاسبي للسجل (${batchDocs.length} مستند)`
-                    : `التدقيق والتوثيق المحاسبي للمستند (${docSerial})`}
+                    : `التدقيق والتوثيق المحاسبي للمستند${docSerial ? ` (${docSerial})` : ''}`}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   مراجعة القراءة المحاسبية دون أي تعديل على الأرصدة أو القيود المسجلة
@@ -1246,6 +1249,124 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
   );
 
   return createPortal(modalContent, document.body);
+};
+
+/* ============================================================================
+ * Proportional Mobile & Desktop Paper Viewport (True WYSIWYG, Zero Text Break)
+ * ============================================================================ */
+
+const NATURAL_PAPER_PX: Record<'a5' | 'a4' | 'thermal', number> = {
+  a5: 560,
+  a4: 794,
+  thermal: 303,
+};
+
+const ScaledPrintViewport: React.FC<{
+  paperKind: 'a5' | 'a4' | 'thermal';
+  forceFullScale?: boolean;
+  resetKey?: string;
+  children: React.ReactNode;
+}> = ({ paperKind, forceFullScale, resetKey, children }) => {
+  const outerWrapRef = useRef<HTMLDivElement>(null);
+  const innerSheetRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState<number>(1);
+  const [contentHeight, setContentHeight] = useState<number>(0);
+
+  const naturalWidth = NATURAL_PAPER_PX[paperKind];
+
+  useEffect(() => {
+    const outer = outerWrapRef.current;
+    const inner = innerSheetRef.current;
+    if (!outer || !inner) return;
+
+    const recalc = () => {
+      const parentEl = outer.parentElement;
+      const availWidth = parentEl
+        ? Math.max(200, parentEl.clientWidth - (window.innerWidth < 640 ? 16 : 40))
+        : Math.max(200, window.innerWidth - 24);
+      const nextScale = forceFullScale
+        ? 1
+        : Math.min(1, Math.max(0.28, availWidth / naturalWidth));
+      setScale(nextScale);
+      setContentHeight(inner.scrollHeight || inner.offsetHeight || 0);
+    };
+
+    recalc();
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(recalc);
+      if (outer.parentElement) ro.observe(outer.parentElement);
+      ro.observe(inner);
+    }
+    window.addEventListener('resize', recalc);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', recalc);
+    };
+  }, [naturalWidth, forceFullScale, resetKey]);
+
+  const effectiveScale = forceFullScale ? 1 : scale;
+  const scaledW = Math.floor(naturalWidth * effectiveScale);
+  const scaledH = contentHeight > 0 ? Math.ceil(contentHeight * effectiveScale) : undefined;
+
+  return (
+    <div
+      ref={outerWrapRef}
+      dir="ltr"
+      className="rp-scale-outer shrink-0 mx-auto"
+      style={{
+        width: `${scaledW}px`,
+        height: scaledH ? `${scaledH}px` : 'auto',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      <div
+        ref={innerSheetRef}
+        className="rp-scale-inner"
+        style={{
+          width: `${naturalWidth}px`,
+          transform: effectiveScale < 0.998 ? `scale(${effectiveScale})` : 'none',
+          transformOrigin: 'top left',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const ThermalLedgerRows: React.FC<{
+  cols: string[];
+  rows: Array<Array<string | number | null | undefined>>;
+  emptyText: string;
+}> = ({ cols, rows, emptyText }) => {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="rp-th-entry" style={{ textAlign: 'center', color: '#66717d', padding: '4mm 2mm' }}>
+        {emptyText}
+      </div>
+    );
+  }
+  return (
+    <div className="rp-th-list">
+      {rows.map((row, rIdx) => (
+        <div key={rIdx} className="rp-th-entry">
+          {cols.map((colName, cIdx) => {
+            const val = row[cIdx];
+            if (val === null || val === undefined || val === '' || val === '-') return null;
+            return (
+              <div key={cIdx} className="rp-th-row">
+                <span className="rp-th-k">{colName}:</span>
+                <span className="rp-th-v">{val}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
 };
 
 /* ============================================================================
@@ -1349,7 +1470,7 @@ const DocumentPageShell: React.FC<{
   const companyName = settings.companyName || 'المنظومة المحاسبية';
 
   return (
-    <article className="rp-page">
+    <article className="rp-page rakeeza-print-doc-page">
       <div className="rp-frame">
         <DocumentHeader
           settings={settings}
@@ -1379,7 +1500,7 @@ const DocumentPageShell: React.FC<{
 
         <footer className="rp-foot">
           <span>{companyName}</span>
-          <span>{docSerial && docSerial !== '-' ? `رقم ${docSerial}` : ''}</span>
+          <span>{docSerial && docSerial !== '-' && !isRawInternalId(docSerial) ? `رقم ${docSerial}` : ''}</span>
           <span className="page-num">
             {pageIndex + 1} / {totalPages}
           </span>
@@ -1416,7 +1537,7 @@ const UnifiedPaginatedDocument: React.FC<{
   const now = new Date();
   const printDate = payload.date || now.toISOString().split('T')[0];
   const printTime = payload.time || now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-  const docSerial = payload.docNumber !== undefined && payload.docNumber !== '' ? `${payload.docNumber}` : '1';
+  const docSerial = sanitizeDisplaySerial(payload.docNumber, '1');
   const branchName = payload.branch || 'الفرع الرئيسي';
   const kind = payload.kind;
 
@@ -1650,9 +1771,9 @@ const UnifiedPaginatedDocument: React.FC<{
                               </div>
                             )}
                           </td>
-                          <td>{it.qty}</td>
-                          <td dir="ltr">{fmtSmart(it.price)}</td>
-                          <td dir="ltr" style={{ fontWeight: 700 }}>
+                          <td className="rp-num-cell">{it.qty}</td>
+                          <td className="rp-num-cell" dir="ltr">{fmtSmart(it.price)}</td>
+                          <td className="rp-num-cell" dir="ltr" style={{ fontWeight: 700 }}>
                             {fmtSmart(it.total)}
                           </td>
                         </tr>
@@ -1665,9 +1786,9 @@ const UnifiedPaginatedDocument: React.FC<{
                   <thead>
                     <tr>
                       <th style={{ width: '6%' }}>م</th>
-                      <th style={{ width: '32%' }}>اسم الصنف</th>
-                      <th style={{ width: '22%' }}>البيان / المواصفات</th>
-                      <th style={{ width: '10%' }}>العدد</th>
+                      <th style={{ width: '34%' }}>اسم الصنف</th>
+                      <th style={{ width: '20%' }}>البيان</th>
+                      <th style={{ width: '10%' }}>الكمية</th>
                       <th style={{ width: '14%' }}>السعر</th>
                       <th style={{ width: '16%' }}>الإجمالي</th>
                     </tr>
@@ -1687,7 +1808,7 @@ const UnifiedPaginatedDocument: React.FC<{
                             : it.unit || 'قطعة';
                         return (
                           <tr key={idx}>
-                            <td>{startNum + idx + 1}</td>
+                            <td className="rp-num-cell">{startNum + idx + 1}</td>
                             <td className="rp-item-cell">{it.name}</td>
                             <td>
                               {descText}
@@ -1697,9 +1818,9 @@ const UnifiedPaginatedDocument: React.FC<{
                                 </div>
                               )}
                             </td>
-                            <td>{it.qty}</td>
-                            <td dir="ltr">{fmtMoney(it.price, currencySymbol)}</td>
-                            <td dir="ltr" style={{ fontWeight: 700 }}>
+                            <td className="rp-num-cell">{it.qty}</td>
+                            <td className="rp-num-cell" dir="ltr">{fmtMoney(it.price, currencySymbol)}</td>
+                            <td className="rp-num-cell" dir="ltr" style={{ fontWeight: 700 }}>
                               {fmtMoney(it.total ?? Number(it.qty) * Number(it.price), currencySymbol)}
                             </td>
                           </tr>
@@ -1895,38 +2016,46 @@ const UnifiedPaginatedDocument: React.FC<{
 
               <div className="rp-section">كشف حركة الحساب</div>
 
-              <table className="rp-table">
-                <thead>
-                  <tr>
-                    {cols.map((c, idx) => (
-                      <th key={idx}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {chunk.length === 0 ? (
+              {isThermal && cols.length > 4 ? (
+                <ThermalLedgerRows
+                  cols={cols}
+                  rows={chunk}
+                  emptyText="لا توجد حركات مسجلة خلال هذه الفترة"
+                />
+              ) : (
+                <table className="rp-table">
+                  <thead>
                     <tr>
-                      <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
-                        لا توجد حركات مسجلة خلال هذه الفترة
-                      </td>
+                      {cols.map((c, idx) => (
+                        <th key={idx}>{c}</th>
+                      ))}
                     </tr>
-                  ) : (
-                    chunk.map((row, rIdx) => (
-                      <tr key={rIdx}>
-                        {cols.map((_, cIdx) => (
-                          <td
-                            key={cIdx}
-                            className={cIdx === 1 ? 'rp-item-cell' : ''}
-                            dir={cIdx >= 3 ? 'ltr' : undefined}
-                          >
-                            {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                          </td>
-                        ))}
+                  </thead>
+                  <tbody>
+                    {chunk.length === 0 ? (
+                      <tr>
+                        <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
+                          لا توجد حركات مسجلة خلال هذه الفترة
+                        </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      chunk.map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          {cols.map((_, cIdx) => (
+                            <td
+                              key={cIdx}
+                              className={cIdx === 1 ? 'rp-item-cell' : cIdx === 0 || cIdx >= 3 ? 'rp-num-cell' : ''}
+                              dir={cIdx >= 3 ? 'ltr' : undefined}
+                            >
+                              {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
 
               {isLastPage && (
                 <>
@@ -2059,34 +2188,42 @@ const UnifiedPaginatedDocument: React.FC<{
 
               <div className="rp-section">حركات الوردية واليومية</div>
 
-              <table className="rp-table">
-                <thead>
-                  <tr>
-                    {cols.map((c, idx) => (
-                      <th key={idx}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {chunk.length === 0 ? (
+              {isThermal && cols.length > 4 ? (
+                <ThermalLedgerRows
+                  cols={cols}
+                  rows={chunk}
+                  emptyText="لا توجد حركات مسجلة خلال هذا اليوم"
+                />
+              ) : (
+                <table className="rp-table">
+                  <thead>
                     <tr>
-                      <td colSpan={cols.length} style={{ color: '#66717d', padding: '4mm' }}>
-                        لا توجد حركات مسجلة خلال هذا اليوم
-                      </td>
+                      {cols.map((c, idx) => (
+                        <th key={idx}>{c}</th>
+                      ))}
                     </tr>
-                  ) : (
-                    chunk.map((row, rIdx) => (
-                      <tr key={rIdx}>
-                        {cols.map((_, cIdx) => (
-                          <td key={cIdx} className={cIdx === 0 || cIdx === 1 ? 'rp-item-cell' : ''}>
-                            {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                          </td>
-                        ))}
+                  </thead>
+                  <tbody>
+                    {chunk.length === 0 ? (
+                      <tr>
+                        <td colSpan={cols.length} style={{ color: '#66717d', padding: '4mm' }}>
+                          لا توجد حركات مسجلة خلال هذا اليوم
+                        </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      chunk.map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          {cols.map((_, cIdx) => (
+                            <td key={cIdx} className={cIdx === 0 || cIdx === 1 ? 'rp-item-cell' : 'rp-num-cell'}>
+                              {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
 
               {isLastPage && (
                 <>
@@ -2231,40 +2368,48 @@ const UnifiedPaginatedDocument: React.FC<{
 
             <div className="rp-section">{payload.subTitle || payload.title}</div>
 
-            <table className="rp-table">
-              <thead>
-                <tr>
-                  {cols.map((c, idx) => (
-                    <th key={idx}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {chunk.length === 0 ? (
+            {isThermal && cols.length > 4 ? (
+              <ThermalLedgerRows
+                cols={cols}
+                rows={chunk}
+                emptyText="لا توجد بيانات متاحة لهذا التقرير"
+              />
+            ) : (
+              <table className="rp-table">
+                <thead>
                   <tr>
-                    <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
-                      لا توجد بيانات متاحة لهذا التقرير
-                    </td>
+                    {cols.map((c, idx) => (
+                      <th key={idx}>{c}</th>
+                    ))}
                   </tr>
-                ) : (
-                  chunk.map((row, rIdx) => (
-                    <tr key={rIdx}>
-                      {cols.map((_, cIdx) => {
-                        const cell = row[cIdx];
-                        return (
-                          <td
-                            key={cIdx}
-                            className={cIdx === 0 || (cols.length >= 4 && cIdx === 1) ? 'rp-item-cell' : ''}
-                          >
-                            {cell !== null && cell !== undefined ? cell : '—'}
-                          </td>
-                        );
-                      })}
+                </thead>
+                <tbody>
+                  {chunk.length === 0 ? (
+                    <tr>
+                      <td colSpan={cols.length} style={{ color: '#66717d', padding: '5mm' }}>
+                        لا توجد بيانات متاحة لهذا التقرير
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    chunk.map((row, rIdx) => (
+                      <tr key={rIdx}>
+                        {cols.map((_, cIdx) => {
+                          const cell = row[cIdx];
+                          return (
+                            <td
+                              key={cIdx}
+                              className={cIdx === 0 || (cols.length >= 4 && cIdx === 1) ? 'rp-item-cell' : 'rp-num-cell'}
+                            >
+                              {cell !== null && cell !== undefined ? cell : '—'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
 
             {isLastPage && (
               <>
@@ -2349,26 +2494,34 @@ const BatchSummaryPages: React.FC<{
 
             <div className="rp-section">{summary.subtitle || summary.title}</div>
 
-            <table className="rp-table">
-              <thead>
-                <tr>
-                  {cols.map((c, idx) => (
-                    <th key={idx}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {chunk.map((row, rIdx) => (
-                  <tr key={rIdx}>
-                    {cols.map((_, cIdx) => (
-                      <td key={cIdx} className={cIdx === 3 ? 'rp-item-cell' : ''}>
-                        {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                      </td>
+            {isThermal && cols.length > 4 ? (
+              <ThermalLedgerRows
+                cols={cols}
+                rows={chunk}
+                emptyText="لا توجد مستندات"
+              />
+            ) : (
+              <table className="rp-table">
+                <thead>
+                  <tr>
+                    {cols.map((c, idx) => (
+                      <th key={idx}>{c}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {chunk.map((row, rIdx) => (
+                    <tr key={rIdx}>
+                      {cols.map((_, cIdx) => (
+                        <td key={cIdx} className={cIdx === 3 ? 'rp-item-cell' : 'rp-num-cell'}>
+                          {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </DocumentPageShell>
         );
       })}

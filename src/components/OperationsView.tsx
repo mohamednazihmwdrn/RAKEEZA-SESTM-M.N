@@ -1250,11 +1250,11 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
             <div className="space-y-2">
               {journalLines.map((line, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2.5 rounded-xl border border-slate-200">
-                  <div className="col-span-5">
+                  <div className="col-span-12 sm:col-span-5">
                     <select
                       value={line.accountCode}
                       onChange={(e) => handleLineChange(idx, 'accountCode', e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold"
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold min-w-0"
                     >
                       {appData.accounts.map((acc) => (
                         <option key={acc.code} value={acc.code}>
@@ -1263,7 +1263,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input
                       type="number"
                       placeholder="مدين"
@@ -1272,7 +1272,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                       className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-emerald-700"
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-5 sm:col-span-3">
                     <input
                       type="number"
                       placeholder="دائن"
@@ -1281,10 +1281,10 @@ export const OperationsView: React.FC<OperationsViewProps> = ({
                       className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono font-bold text-rose-700"
                     />
                   </div>
-                  <div className="col-span-1 text-center">
+                  <div className="col-span-2 sm:col-span-1 text-center">
                     <button
                       onClick={() => handleRemoveLine(idx)}
-                      className="text-rose-600 hover:text-rose-800 font-bold text-sm cursor-pointer"
+                      className="text-rose-600 hover:text-rose-800 font-bold text-sm cursor-pointer p-1.5"
                       title="حذف السطر"
                     >
                       ✕

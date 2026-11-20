@@ -817,11 +817,12 @@ export function printStatementWindow(
     }
 
     if (compiled) {
-      let runBal = compiled.previousBalance || 0;
+      const prevBal = Number(compiled.previousBalance || 0);
+      let runBal = prevBal;
       let totalDeb = 0;
       let totalCred = 0;
 
-      const rows = compiled.transactions.map((t) => {
+      const rows = (compiled.transactions || []).map((t) => {
         const d = Number(t.debit || 0);
         const c = Number(t.credit || 0);
         totalDeb += d;
@@ -844,18 +845,21 @@ export function printStatementWindow(
         ? appData?.customers?.find((c) => c.name === compiled?.accountName)
         : appData?.suppliers?.find((s) => s.name === compiled?.accountName);
       const partyPhone = partyRecord?.phone || '';
+      const rawCode = partyRecord?.code || compiled.accountCode || '';
+      const isRawInternalId = /^[cs]\d{10,}_/i.test(rawCode);
+      const cleanDocCode = isRawInternalId ? (isCust ? 'CUST-STMT' : 'SUPP-STMT') : rawCode || '-';
 
       openUniversalPrint({
         kind: 'account_statement',
         title: `كشف حساب ${isCust ? 'عميل' : 'مورد'}`,
         subTitle: compiled.accountName,
-        docNumber: compiled.accountCode || '-',
+        docNumber: cleanDocCode,
         partyName: compiled.accountName,
-        partyCode: compiled.accountCode,
+        partyCode: isRawInternalId ? '-' : cleanDocCode,
         partyPhone,
         partyLabel: isCust ? 'العميل' : 'المورد',
         period: { from: compiled.dateFrom, to: compiled.dateTo },
-        openingBalance: compiled.previousBalance || 0,
+        openingBalance: prevBal,
         totalDebit: totalDeb,
         totalCredit: totalCred,
         closingBalance: runBal,
@@ -865,12 +869,12 @@ export function printStatementWindow(
         columns: ['التاريخ', 'البيان', 'رقم المستند', 'مدين', 'دائن', 'الرصيد'],
         rows,
         kpis: [
-          { title: 'رصيد سابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { title: 'رصيد سابق', value: `${prevBal.toFixed(2)} ${curSymbol}` },
           { title: 'إجمالي الحركة', value: `${(totalDeb + totalCred).toFixed(2)} ${curSymbol}` },
           { title: 'الرصيد النهائي', value: `${runBal.toFixed(2)} ${curSymbol}` },
         ],
         summaries: [
-          { label: 'رصيد سابق', value: `${compiled.previousBalance.toFixed(2)} ${curSymbol}` },
+          { label: 'رصيد سابق', value: `${prevBal.toFixed(2)} ${curSymbol}` },
           { label: 'إجمالي المدين (+)', value: `${totalDeb.toFixed(2)} ${curSymbol}` },
           { label: 'إجمالي الدائن (-)', value: `${totalCred.toFixed(2)} ${curSymbol}` },
           {

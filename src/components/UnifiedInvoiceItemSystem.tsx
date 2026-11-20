@@ -512,31 +512,32 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
       const s = (itemObj.spec || '').trim();
       let targetIdx = -1;
 
+      const isSameUnifiedItem = (r: InvoiceItemUnified): boolean => {
+        const rName = (r.name || '').trim().toLowerCase();
+        const tName = (itemObj.name || '').trim().toLowerCase();
+        if (!rName || !tName || rName !== tName) return false;
+        if (r.itemId && itemObj.itemId && String(r.itemId) !== String(itemObj.itemId)) return false;
+        if (
+          r.code &&
+          itemObj.code &&
+          !r.code.startsWith('ITM-ADHOC-') &&
+          !itemObj.code.startsWith('ITM-ADHOC-') &&
+          r.code.trim().toLowerCase() !== itemObj.code.trim().toLowerCase()
+        ) {
+          return false;
+        }
+        return true;
+      };
+
       if (s !== '') {
-        // إذا كُتب له وصف أو بيان مخصص: يتطابق فقط إذا كان هناك بند بنفس الوصف تماماً
-        targetIdx = updated.findIndex((r) => {
-          const isSame =
-            (r.code && itemObj.code && r.code.trim().toLowerCase() === itemObj.code.trim().toLowerCase()) ||
-            (r.itemId && itemObj.itemId && String(r.itemId) === String(itemObj.itemId)) ||
-            (r.name && itemObj.name && r.name.trim().toLowerCase() === itemObj.name.trim().toLowerCase());
-          return isSame && (r.spec || '').trim() === s;
-        });
+        // إذا كُتب له وصف أو بيان مخصص: يتطابق فقط إذا كان هناك بند بنفس الاسم والوصف تماماً
+        targetIdx = updated.findIndex((r) => isSameUnifiedItem(r) && (r.spec || '').trim() === s);
       } else {
-        // إذا لم يُكتب أي وصف أو بيان: يزيد العدد على البند القائم (الخالي من الوصف)
-        targetIdx = updated.findIndex((r) => {
-          const isSame =
-            (r.code && itemObj.code && r.code.trim().toLowerCase() === itemObj.code.trim().toLowerCase()) ||
-            (r.itemId && itemObj.itemId && String(r.itemId) === String(itemObj.itemId)) ||
-            (r.name && itemObj.name && r.name.trim().toLowerCase() === itemObj.name.trim().toLowerCase());
-          return isSame && (r.spec || '').trim() === '';
-        });
+        // إذا لم يُكتب أي وصف أو بيان: يزيد العدد على البند القائم بنفس الاسم (الخالي من الوصف)
+        targetIdx = updated.findIndex((r) => isSameUnifiedItem(r) && (r.spec || '').trim() === '');
 
         if (targetIdx === -1) {
-          targetIdx = updated.findIndex((r) =>
-            (r.code && itemObj.code && r.code.trim().toLowerCase() === itemObj.code.trim().toLowerCase()) ||
-            (r.itemId && itemObj.itemId && String(r.itemId) === String(itemObj.itemId)) ||
-            (r.name && itemObj.name && r.name.trim().toLowerCase() === itemObj.name.trim().toLowerCase())
-          );
+          targetIdx = updated.findIndex((r) => isSameUnifiedItem(r));
         }
       }
 
@@ -851,105 +852,98 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
               </table>
             </div>
 
-            {/* Mobile Touch-Friendly Cards View */}
-            <div className="block md:hidden p-2.5 space-y-2.5 max-h-[380px] overflow-y-auto">
-              {currentInvoiceItems.map((item, index) => {
-                const catalogMatch = fullCatalog.find((c) => c.code === item.code) || {
-                  code: item.code,
-                  name: item.name,
-                  category: 'عام',
-                  stock: 0,
-                  cashPrice: item.price,
-                  wholesalePrice: item.price,
-                  buyPrice: item.price,
-                };
-                return (
-                  <div
-                    key={index}
-                    className="flex flex-col gap-2.5 bg-white p-3.5 rounded-xl border-2 border-slate-300 shadow-xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-black text-black text-sm">{item.name}</span>
-                        </div>
-                        {item.spec && (
-                          <p className="text-xs text-slate-800 mt-1 line-clamp-2">
-                            البيان: <span className="text-black font-bold">{item.spec}</span>
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-left shrink-0">
-                        <div className="flex items-center gap-1">
+            {/* Mobile Aligned 5-Column Items Table (< md — Zero Horizontal Scroll) */}
+            <div className="block md:hidden max-h-[380px] overflow-y-auto overflow-x-hidden">
+              <table className="invoice-items-grid-table w-full table-fixed border-collapse text-center">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-800 text-[11px] font-bold border-b border-slate-300 sticky top-0 z-10">
+                    <th className="py-2 px-1 text-right pr-2 w-[27%] border-l border-slate-200 whitespace-nowrap">اسم الصنف</th>
+                    <th className="py-2 px-1 w-[19%] border-l border-slate-200 whitespace-nowrap">البيان</th>
+                    <th className="py-2 px-1 w-[16%] border-l border-slate-200 whitespace-nowrap">الكمية</th>
+                    <th className="py-2 px-1 w-[18%] border-l border-slate-200 whitespace-nowrap">السعر</th>
+                    <th className="py-2 px-1 w-[20%] whitespace-nowrap">الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white text-[11.5px]">
+                  {currentInvoiceItems.map((item, index) => {
+                    const catalogMatch = fullCatalog.find((c) => c.code === item.code) || {
+                      code: item.code,
+                      name: item.name,
+                      category: 'عام',
+                      stock: 0,
+                      cashPrice: item.price,
+                      wholesalePrice: item.price,
+                      buyPrice: item.price,
+                    };
+                    return (
+                      <tr key={index} className="bg-white">
+                        <td className="py-2 px-1.5 text-right align-top border-l border-slate-200">
+                          <div className="font-bold text-slate-900 break-words leading-snug">
+                            <span className="text-[10px] font-mono text-slate-400 ml-1">#{index + 1}</span>
+                            {item.name}
+                          </div>
+                          {(item.discVal > 0 || item.taxVal > 0) && (
+                            <div className="text-[9.5px] text-blue-700 font-medium mt-0.5 tabular-nums">
+                              {item.discVal > 0 ? `خصم ${item.discVal}${item.discType === 'percent' ? '%' : ' ج'} ` : ''}
+                              {item.taxVal > 0 ? `ضريبة ${item.taxVal}${item.taxType === 'percent' ? '%' : ' ج'}` : ''}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(catalogMatch, index)}
+                              className="p-1 rounded bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer"
+                              title="تعديل الصنف"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="p-1 rounded bg-rose-50 text-rose-700 border border-rose-200 cursor-pointer"
+                              title="حذف"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-2 px-1 text-center text-slate-600 border-l border-slate-200 break-words">
+                          {item.spec && item.spec.trim() !== '' ? item.spec : '—'}
+                        </td>
+                        <td className="py-1.5 px-0.5 border-l border-slate-200">
+                          <input
+                            type="number"
+                            min="0.001"
+                            step="any"
+                            value={item.qty}
+                            onChange={(e) => updateTableItemQty(index, e.target.value)}
+                            className="compact-table-input w-full h-8 text-center font-mono font-semibold text-slate-900 border border-slate-300 rounded bg-white"
+                          />
+                        </td>
+                        <td className="py-1.5 px-0.5 border-l border-slate-200">
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.price}
+                            onChange={(e) => updateTableItemPrice(index, e.target.value)}
+                            className="compact-table-input w-full h-8 text-center font-mono font-semibold text-slate-900 border border-slate-300 rounded bg-white"
+                          />
+                        </td>
+                        <td className="py-1.5 px-0.5">
                           <input
                             type="number"
                             step="any"
                             value={item.total}
                             onChange={(e) => updateTableItemTotal(index, e.target.value)}
-                            title="تعديل الإجمالي يقسم تلقائياً على العدد ويضبط سعر الوحدة"
-                            className="w-24 h-8 text-center font-mono font-black text-emerald-950 border-2 border-emerald-500 rounded bg-emerald-50/80 text-xs"
+                            title="تعديل الإجمالي يقسم تلقائياً على العدد ويضبط سعر الوحدة فوراً"
+                            className="compact-table-input w-full h-8 text-center font-mono font-bold text-emerald-950 border border-emerald-400 rounded bg-emerald-50/80"
                           />
-                          <span className="text-[10px] font-black text-emerald-800">ج.م</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-black bg-slate-50 p-2 rounded-lg border border-slate-300 font-bold gap-1.5 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-slate-600">العدد:</span>
-                        <input
-                          type="number"
-                          min="0.001"
-                          step="any"
-                          value={item.qty}
-                          onChange={(e) => updateTableItemQty(index, e.target.value)}
-                          className="w-14 h-7 text-center font-mono font-black text-black border border-slate-300 rounded bg-white text-xs"
-                        />
-                        <span>×</span>
-                        <span className="text-[11px] text-slate-600">السعر:</span>
-                        <input
-                          type="number"
-                          step="any"
-                          value={item.price}
-                          onChange={(e) => updateTableItemPrice(index, e.target.value)}
-                          className="w-20 h-7 text-center font-mono font-black text-black border border-slate-300 rounded bg-white text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        {item.discVal > 0 && (
-                          <span className="text-black font-black bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
-                            خصم: {item.discVal}{item.discType === 'percent' ? '%' : ' ج'}
-                          </span>
-                        )}
-                        {item.taxVal > 0 && (
-                          <span className="text-black font-black bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded">
-                            ضريبة: {item.taxVal}{item.taxType === 'percent' ? '%' : ' ج'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(catalogMatch, index)}
-                        className="min-h-[40px] px-3.5 py-1.5 bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-950 border border-blue-400 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors touch-manipulation cursor-pointer"
-                      >
-                        <Edit className="w-4 h-4" />
-                        <span>تعديل الصنف</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="min-h-[40px] px-3.5 py-1.5 bg-rose-100 hover:bg-rose-200 active:bg-rose-300 text-rose-950 border border-rose-400 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors touch-manipulation cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>حذف</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -1107,11 +1101,11 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
 
           <div className="flex flex-col gap-2">
             {paymentRows.map((row) => (
-              <div key={row.id} className="flex items-center gap-2">
+              <div key={row.id} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 <select
                   value={row.method}
                   onChange={(e) => updatePaymentRowMethod(row.id, e.target.value)}
-                  className="w-40 sm:w-56 min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
+                  className="flex-1 sm:flex-none sm:w-56 min-w-0 min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 cursor-pointer"
                 >
                   {PAYMENT_METHODS.map((m) => (
                     <option key={m} value={m}>
@@ -1127,14 +1121,14 @@ export const UnifiedInvoiceItemSystem: React.FC<UnifiedInvoiceItemSystemProps> =
                   value={row.amount === 0 ? '' : row.amount}
                   placeholder="المبلغ المدفوع (0.00)"
                   onChange={(e) => updatePaymentRowAmount(row.id, e.target.value)}
-                  className="flex-1 min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
+                  className="flex-1 min-w-[110px] min-h-[40px] px-3 py-2 bg-white border border-slate-300 rounded-lg text-base sm:text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-600 font-mono"
                 />
 
                 {paymentRows.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removePaymentRow(row.id)}
-                    className="w-10 h-10 flex items-center justify-center text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+                    className="w-10 h-10 shrink-0 flex items-center justify-center text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer"
                     title="حذف طريقة الدفع"
                   >
                     <X className="w-4 h-4" />

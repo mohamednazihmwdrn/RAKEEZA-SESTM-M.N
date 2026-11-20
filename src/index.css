@@ -105,8 +105,14 @@ textarea,
     max-width: 100%;
   }
 
-  input, select, textarea {
+  input:not(.compact-table-input), select, textarea {
     font-size: 16px !important;
+  }
+
+  .compact-table-input,
+  .invoice-items-grid-table input {
+    font-size: 12px !important;
+    padding: 3px 2px !important;
   }
 
   .overflow-x-auto {

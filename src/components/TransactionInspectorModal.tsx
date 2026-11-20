@@ -535,14 +535,14 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
                   {/* 4. جدول المحتوى المتناسق بدقة */}
                   {data.items && data.items.length > 0 ? (
                     <div className="w-full mb-2">
-                      <table className="w-full border-collapse border-[1.5px] border-black text-[11px] table-fixed">
+                      <table className="w-full border-collapse border-[1.5px] border-black text-[10px] sm:text-[11px] table-fixed">
                         <thead>
-                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[11.5px]">
-                            <th className="border-[1.5px] border-black p-1.5 text-right pr-2 w-[34%]">اسم الصنف</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[22%]">البيان</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[10%]">العدد</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[16%]">السعر</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[18%]">الإجمالي</th>
+                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[10px] sm:text-[11.5px]">
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-right pr-1.5 sm:pr-2 w-[31%] whitespace-nowrap">اسم الصنف</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[21%] whitespace-nowrap">البيان</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[12%] whitespace-nowrap">الكمية</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[17%] whitespace-nowrap">السعر</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[19%] whitespace-nowrap">الإجمالي</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -554,19 +554,19 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
 
                             return (
                               <tr key={idx} className="border-b border-black">
-                                <td className="border-[1.5px] border-black p-1 text-right pr-2 font-bold break-words">
+                                <td className="border-[1.5px] border-black p-1 text-right pr-1.5 sm:pr-2 font-bold break-words">
                                   {it.name}
                                 </td>
-                                <td className="border-[1.5px] border-black p-1 text-center text-[10px] text-slate-700 break-words">
+                                <td className="border-[1.5px] border-black p-1 text-center text-[9.5px] sm:text-[10px] text-slate-700 break-words">
                                   {desc}
                                 </td>
-                                <td className="border-[1.5px] border-black p-1 text-center font-bold">
+                                <td className="border-[1.5px] border-black p-1 text-center font-bold whitespace-nowrap tabular-nums">
                                   {qty}
                                 </td>
-                                <td className="border-[1.5px] border-black p-1 text-center">
+                                <td className="border-[1.5px] border-black p-1 text-center whitespace-nowrap tabular-nums">
                                   {price.toFixed(2)}
                                 </td>
-                                <td className="border-[1.5px] border-black p-1 text-center font-extrabold">
+                                <td className="border-[1.5px] border-black p-1 text-center font-extrabold whitespace-nowrap tabular-nums">
                                   {itemTotal.toFixed(2)}
                                 </td>
                               </tr>
@@ -608,22 +608,22 @@ export const TransactionInspectorModal: React.FC<TransactionInspectorModalProps>
                     </div>
                   ) : type === 'journal' && data.lines && data.lines.length > 0 ? (
                     <div className="w-full mb-2">
-                      <table className="w-full border-collapse border-[1.5px] border-black text-[11px] table-fixed">
+                      <table className="w-full border-collapse border-[1.5px] border-black text-[10px] sm:text-[11px] table-fixed">
                         <thead>
-                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[11.5px]">
-                            <th className="border-[1.5px] border-black p-1.5 text-right pr-2 w-[35%]">اسم الحساب</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[25%]">البيان</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[20%]">مدين</th>
-                            <th className="border-[1.5px] border-black p-1.5 text-center w-[20%]">دائن</th>
+                          <tr className="bg-[#e6e6e6] text-black font-extrabold text-[10px] sm:text-[11.5px]">
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-right pr-1.5 sm:pr-2 w-[35%] whitespace-nowrap">اسم الحساب</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[25%] whitespace-nowrap">البيان</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[20%] whitespace-nowrap">مدين</th>
+                            <th className="border-[1.5px] border-black p-1 sm:p-1.5 text-center w-[20%] whitespace-nowrap">دائن</th>
                           </tr>
                         </thead>
                         <tbody>
                           {data.lines.map((l: any, idx: number) => (
                             <tr key={idx} className="border-b border-black">
-                              <td className="border-[1.5px] border-black p-1 text-right pr-2 font-bold">{l.accountName || 'حساب'}</td>
-                              <td className="border-[1.5px] border-black p-1 text-center text-[10px] text-slate-700">{l.notes || l.description || '-'}</td>
-                              <td className="border-[1.5px] border-black p-1 text-center font-bold">{l.debit > 0 ? Number(l.debit).toLocaleString() : '-'}</td>
-                              <td className="border-[1.5px] border-black p-1 text-center font-bold">{l.credit > 0 ? Number(l.credit).toLocaleString() : '-'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-right pr-1.5 sm:pr-2 font-bold break-words">{l.accountName || 'حساب'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center text-[9.5px] sm:text-[10px] text-slate-700 break-words">{l.notes || l.description || '-'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center font-bold whitespace-nowrap tabular-nums">{l.debit > 0 ? Number(l.debit).toLocaleString() : '-'}</td>
+                              <td className="border-[1.5px] border-black p-1 text-center font-bold whitespace-nowrap tabular-nums">{l.credit > 0 ? Number(l.credit).toLocaleString() : '-'}</td>
                             </tr>
                           ))}
                         </tbody>

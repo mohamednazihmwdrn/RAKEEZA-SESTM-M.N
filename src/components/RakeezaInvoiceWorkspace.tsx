@@ -49,6 +49,54 @@ export interface WorkspacePayRow {
   amount: number;
 }
 
+export function findMatchingInvoiceRowIndex(
+  rows: WorkspaceItemRow[],
+  resolvedName: string,
+  matchedCatalog: { code?: string; itemId?: string | number },
+  spec: string,
+  hasLineMods: boolean
+): number {
+  if (hasLineMods) return -1;
+  const targetName = resolvedName.trim().toLowerCase();
+  const targetCode = (matchedCatalog.code || '').trim().toLowerCase();
+  const targetId = matchedCatalog.itemId !== undefined && matchedCatalog.itemId !== null ? String(matchedCatalog.itemId) : '';
+  const targetSpec = spec.trim();
+
+  const isSameItem = (r: WorkspaceItemRow): boolean => {
+    const rName = (r.name || '').trim().toLowerCase();
+    // Different item names MUST NEVER merge into the same row
+    if (!rName || !targetName || rName !== targetName) return false;
+
+    const rId = r.itemId !== undefined && r.itemId !== null ? String(r.itemId) : '';
+    if (rId && targetId && rId !== targetId) return false;
+
+    const rCode = (r.code || '').trim().toLowerCase();
+    if (
+      rCode &&
+      targetCode &&
+      !rCode.startsWith('itm-adhoc-') &&
+      !targetCode.startsWith('itm-adhoc-') &&
+      rCode !== targetCode
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  if (targetSpec !== '') {
+    return rows.findIndex(
+      (r) => isSameItem(r) && (r.spec || '').trim() === targetSpec && !(r.actualDisc || 0) && !(r.actualTax || 0)
+    );
+  }
+
+  const exactEmptySpecIdx = rows.findIndex(
+    (r) => isSameItem(r) && (r.spec || '').trim() === '' && !(r.actualDisc || 0) && !(r.actualTax || 0)
+  );
+  if (exactEmptySpecIdx > -1) return exactEmptySpecIdx;
+
+  return rows.findIndex((r) => isSameItem(r) && !(r.actualDisc || 0) && !(r.actualTax || 0));
+}
+
 export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = ({
   isOpen,
   onClose,
@@ -788,7 +836,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     const matchedCatalog =
       cardItem ||
       localItemsDatabase.find((i) => i.name.trim().toLowerCase() === resolvedName.toLowerCase()) || {
-        code: `ITM-${String(localItemsDatabase.length + 1).padStart(3, '0')}`,
+        code: `ITM-ADHOC-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         name: resolvedName,
         typeName: 'قطعة',
         stock: 0,
@@ -805,38 +853,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     }
 
     setCurrentInvoiceItems((prev) => {
-      let targetIndex = -1;
       const hasLineMods = dVal > 0 || tVal > 0;
-
-      if (!hasLineMods) {
-        if (s !== '') {
-          targetIndex = prev.findIndex((r) => {
-            const isSame =
-              (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
-              (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
-              (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
-            return isSame && (r.spec || '').trim() === s && !(r.actualDisc || 0) && !(r.actualTax || 0);
-          });
-        } else {
-          targetIndex = prev.findIndex((r) => {
-            const isSame =
-              (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
-              (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
-              (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
-            return isSame && (r.spec || '').trim() === '' && !(r.actualDisc || 0) && !(r.actualTax || 0);
-          });
-
-          if (targetIndex === -1) {
-            targetIndex = prev.findIndex((r) => {
-              const isSame =
-                (r.code && matchedCatalog.code && r.code.trim().toLowerCase() === matchedCatalog.code.trim().toLowerCase()) ||
-                (r.itemId && matchedCatalog.itemId && String(r.itemId) === String(matchedCatalog.itemId)) ||
-                (r.name && resolvedName && r.name.trim().toLowerCase() === resolvedName.toLowerCase());
-              return isSame && !(r.actualDisc || 0) && !(r.actualTax || 0);
-            });
-          }
-        }
-      }
+      const targetIndex = findMatchingInvoiceRowIndex(prev, resolvedName, matchedCatalog, s, hasLineMods);
 
       if (targetIndex > -1) {
         return prev.map((row, idx) => {
@@ -1615,16 +1633,15 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           flex: 1 1 200px;
           min-height: 160px;
           overflow-y: auto;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
+          overflow-x: hidden;
           border: 1px solid #cbd5e1;
-          border-radius: 8px;
+          border-radius: 10px;
           background: #ffffff;
           box-sizing: border-box;
         }
-        .table-responsive table {
+        .table-responsive table.invoice-items-grid-table {
           width: 100%;
-          min-width: 620px;
+          table-layout: fixed;
           border-collapse: collapse;
           text-align: center;
           box-sizing: border-box;
@@ -1634,7 +1651,6 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           border-bottom: 1px solid #e2e8f0;
           border-left: 1px solid #e2e8f0;
           vertical-align: middle;
-          white-space: nowrap;
           box-sizing: border-box;
         }
         .table-responsive th:last-child, .table-responsive td:last-child {
@@ -1642,33 +1658,45 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
         .table-responsive th {
           background: #f1f5f9;
-          color: #334155;
-          font-weight: 600;
+          color: #1e293b;
+          font-weight: 700;
           height: 36px;
-          font-size: 12px;
-          padding: 6px 8px;
+          font-size: 11px;
+          padding: 6px 3px;
           position: sticky;
           top: 0;
           z-index: 2;
           text-align: center;
+          white-space: nowrap;
           border-bottom: 1px solid #cbd5e1;
+        }
+        @media (min-width: 768px) {
+          .table-responsive th {
+            font-size: 12px;
+            padding: 6px 8px;
+          }
         }
         .table-responsive tbody tr:hover {
           background: #f8fafc;
         }
         .table-responsive tbody tr td {
-          padding: 6px 8px;
-          height: 40px;
+          padding: 6px 3px;
           line-height: 1.35;
-          font-size: 12.5px;
+          font-size: 11.5px;
           color: #0f172a;
         }
+        @media (min-width: 768px) {
+          .table-responsive tbody tr td {
+            padding: 7px 8px;
+            font-size: 12.5px;
+          }
+        }
         .col-seq { width: 42px; text-align: center; color: #64748b; }
-        .col-item { min-width: 150px; text-align: right; font-weight: 600; white-space: normal !important; }
-        .col-desc { min-width: 100px; max-width: 160px; text-align: right; color: #64748b; overflow: hidden; text-overflow: ellipsis; }
-        .col-qty { width: 78px; text-align: center; }
-        .col-price { width: 92px; text-align: center; }
-        .col-total { width: 104px; font-weight: 600; text-align: center; }
+        .col-item { text-align: right; font-weight: 600; word-break: normal; overflow-wrap: break-word; }
+        .col-desc { text-align: center; color: #475569; word-break: normal; overflow-wrap: break-word; }
+        .col-qty { text-align: center; }
+        .col-price { text-align: center; }
+        .col-total { font-weight: 700; text-align: center; }
         .col-action { width: 74px; text-align: center; }
 
         .invoice-item-actions {
@@ -2502,168 +2530,99 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             )}
           </div>
 
-          {/* 5. Items List — Mobile Cards (< md) with 9e11f2f6.png empty header */}
-          <div className="block md:hidden">
-            {currentInvoiceItems.length === 0 ? (
-              <div className="bg-white border border-slate-300 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-7 bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 text-center py-2 px-1">
-                  <span>م</span>
-                  <span>الصنف</span>
-                  <span>البيان</span>
-                  <span>الكمية</span>
-                  <span>السعر</span>
-                  <span>الإجمالي</span>
-                  <span>إجراء</span>
-                </div>
-                <div className="py-10 px-4 text-center text-xs text-slate-400">
-                  لم يتم إدراج أصناف بعد (اضغط على &quot;إضافة صنف&quot; أو &quot;دليل الأصناف&quot;)
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {currentInvoiceItems.map((item, index) => (
-                  <div
-                    key={item.rowId}
-                    className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-2xs"
-                  >
-                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-mono font-bold text-slate-500">#{index + 1}</span>
-                          <span className="font-semibold text-sm text-slate-900 break-words">{item.name}</span>
-                        </div>
-                        {item.spec && <div className="text-[11px] text-slate-500 mt-0.5">{item.spec}</div>}
-                        {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
-                          <div className="text-[10px] text-blue-700 font-medium mt-0.5 tabular-nums">
-                            {(item.actualDisc || 0) > 0 ? `خصم: ${Number(item.actualDisc).toFixed(2)} ` : ''}
-                            {(item.actualTax || 0) > 0 ? `· ضريبة: ${Number(item.actualTax).toFixed(2)}` : ''}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => openModifyInvoiceItem(index)}
-                          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
-                          title="تعديل"
-                        >
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 cursor-pointer"
-                          title="حذف"
-                        >
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-1">الكمية</label>
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="any"
-                          value={item.qty}
-                          onChange={(e) => updateTableRowQty(index, e.target.value)}
-                          className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 mb-1">السعر</label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={item.price}
-                          onChange={(e) => updateTableRowPrice(index, e.target.value)}
-                          className="w-full h-9 text-center text-sm font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-emerald-700 font-semibold mb-1">الإجمالي</label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={item.total}
-                          onChange={(e) => updateTableRowTotal(index, e.target.value)}
-                          className="w-full h-9 text-center text-sm font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 5. Desktop Items Table (>= md) */}
-          <div className="hidden md:block table-responsive">
-            <table>
+          {/* 5. Unified Columnar Items Table (Mobile & Desktop — Zero Horizontal Scroll) */}
+          <div className="table-responsive">
+            <table className="invoice-items-grid-table">
               <thead>
                 <tr>
-                  <th className="col-seq">م</th>
-                  <th className="col-item">الصنف</th>
-                  <th className="col-desc">البيان</th>
-                  <th className="col-qty">الكمية</th>
-                  <th className="col-price">السعر</th>
-                  <th className="col-total">الإجمالي</th>
-                  <th className="col-action">إجراء</th>
+                  <th className="hidden md:table-cell col-seq w-[5%]">م</th>
+                  <th className="w-[27%] md:w-[29%] text-right pr-2">اسم الصنف</th>
+                  <th className="w-[19%] md:w-[20%]">البيان</th>
+                  <th className="w-[16%] md:w-[11%]">الكمية</th>
+                  <th className="w-[18%] md:w-[13%]">السعر</th>
+                  <th className="w-[20%] md:w-[14%]">الإجمالي</th>
+                  <th className="hidden md:table-cell col-action w-[8%]">إجراء</th>
                 </tr>
               </thead>
               <tbody id="invoiceItemsTable">
                 {currentInvoiceItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-slate-400 py-10 text-xs sm:text-sm">
+                    <td colSpan={7} className="text-slate-400 py-10 px-3 text-xs sm:text-sm text-center">
                       لم يتم إدراج أصناف بعد (اضغط على &quot;إضافة صنف&quot; أو &quot;دليل الأصناف&quot;)
                     </td>
                   </tr>
                 ) : (
                   currentInvoiceItems.map((item, index) => (
                     <tr key={item.rowId}>
-                      <td className="col-seq tabular-nums">{index + 1}</td>
-                      <td className="col-item">
-                        <span className="font-semibold text-slate-900">{item.name}</span>
+                      <td className="hidden md:table-cell col-seq tabular-nums">{index + 1}</td>
+                      <td className="col-item px-1.5 md:px-2.5">
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0 flex-1">
+                            <span className="md:hidden text-[10px] font-mono text-slate-400 ml-1">
+                              #{index + 1}
+                            </span>
+                            <span className="font-semibold text-slate-900 break-words">{item.name}</span>
+                          </div>
+                        </div>
                         {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
-                          <div className="text-[10px] text-blue-700 font-normal tabular-nums">
+                          <div className="text-[10px] text-blue-700 font-normal tabular-nums mt-0.5">
                             {(item.actualDisc || 0) > 0 ? `خصم: ${Number(item.actualDisc).toFixed(2)} ` : ''}
                             {(item.actualTax || 0) > 0 ? `· ضريبة: ${Number(item.actualTax).toFixed(2)}` : ''}
                           </div>
                         )}
+                        {/* Mobile compact actions inside item cell to keep 5 clean aligned columns */}
+                        <div className="flex md:hidden items-center gap-1.5 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => openModifyInvoiceItem(index)}
+                            className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold cursor-pointer"
+                            title="تعديل"
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10px] font-semibold cursor-pointer"
+                            title="حذف"
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </div>
                       </td>
-                      <td className="col-desc">{item.spec || '-'}</td>
-                      <td className="col-qty">
+                      <td className="col-desc px-1 md:px-2 text-[11px] md:text-xs">
+                        {item.spec && item.spec.trim() !== '' ? item.spec : '—'}
+                      </td>
+                      <td className="col-qty px-0.5 md:px-1.5">
                         <input
                           type="number"
                           min="0.01"
                           step="any"
                           value={item.qty}
                           onChange={(e) => updateTableRowQty(index, e.target.value)}
-                          className="w-16 h-8 text-center text-sm md:text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                          className="compact-table-input w-full max-w-[68px] h-8 text-center text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
                         />
                       </td>
-                      <td className="col-price">
+                      <td className="col-price px-0.5 md:px-1.5">
                         <input
                           type="number"
                           step="any"
                           value={item.price}
                           onChange={(e) => updateTableRowPrice(index, e.target.value)}
-                          className="w-20 h-8 text-center text-sm md:text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                          className="compact-table-input w-full max-w-[82px] h-8 text-center text-xs font-semibold border border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
                         />
                       </td>
-                      <td className="col-total">
+                      <td className="col-total px-0.5 md:px-1.5">
                         <input
                           type="number"
                           step="any"
                           value={item.total}
                           onChange={(e) => updateTableRowTotal(index, e.target.value)}
                           title="تعديل الإجمالي يقسم تلقائياً على العدد ليضبط سعر الوحدة"
-                          className="w-24 h-8 text-center text-sm md:text-xs font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
+                          className="compact-table-input w-full max-w-[92px] h-8 text-center text-xs font-semibold border border-emerald-400 bg-emerald-50 text-emerald-900 rounded-md tabular-nums focus:border-emerald-600 focus:outline-none"
                         />
                       </td>
-                      <td className="col-action">
+                      <td className="hidden md:table-cell col-action">
                         <span className="invoice-item-actions">
                           <i
                             className="fa-solid fa-pen-to-square text-blue-600 hover:bg-blue-50"
