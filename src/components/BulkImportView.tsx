@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppData,
   BulkImportActionChoice,
@@ -16,6 +16,12 @@ import {
   PdfExtractionProgress,
   rollbackBulkImportBatch,
 } from '../utils/bulkImportEngine';
+import {
+  buildSq101197BulkRows,
+  downloadSq101197Excel,
+  getSq101197IdempotencyKey,
+  SQ101197_METADATA,
+} from '../data/sq101197AlAndalusPreset';
 import { getMainBranchId } from '../utils/branchIsolation';
 import { openUnifiedPrintWindow } from '../utils/printUnified';
 import { Modal } from './Modal';
@@ -53,6 +59,10 @@ type StatusFilter = 'all' | 'new' | 'match_existing' | 'issues' | 'ready';
 
 function round2(n: number): number {
   return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function round4(n: number): number {
+  return Math.round((Number(n || 0) + Number.EPSILON) * 10000) / 10000;
 }
 
 function generateIdempotencyKey(companyId: string, warehouseId: string): string {
@@ -130,6 +140,114 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
       branches[0],
     [accessibleBranches, branches, selectedWarehouseId]
   );
+
+  const sq101197Key = getSq101197IdempotencyKey(companyId, selectedWarehouseId);
+  const isSq101197AlreadyCommitted = Boolean(
+    appData.processedImportKeys?.[sq101197Key] ||
+      (appData.bulkImportBatches || []).some(
+        (b) => b.idempotencyKey === sq101197Key && b.status === 'committed'
+      )
+  );
+
+  const handleLoadSq101197Preset = () => {
+    const presetRows = buildSq101197BulkRows(selectedWarehouseId);
+    const analyzed = analyzeBulkImportRows(presetRows, appData, selectedWarehouseId, false);
+    setRows(analyzed);
+    setSourceType('pdf');
+    setFileName(`عرض سعر شركة الأندلس ${SQ101197_METADATA.docCode} (154 صنف)`);
+    setImportDate(SQ101197_METADATA.date);
+    setSupplierHint(SQ101197_METADATA.supplierName);
+    setIdempotencyKey(getSq101197IdempotencyKey(companyId, selectedWarehouseId));
+    setExtractionWarnings([]);
+    setDetectedColumns([]);
+    setStatusFilter('all');
+    setCurrentPage(1);
+    setActiveTab('import');
+    showToast(
+      `تم تحميل جميع أصناف عرض الأسعار ${SQ101197_METADATA.docCode} (${analyzed.length} صنف) للمراجعة والتدقيق قبل الاعتماد.`,
+      'success'
+    );
+  };
+
+  const handleDirectCommitSq101197Preset = () => {
+    if (isCommitting || isSq101197AlreadyCommitted) return;
+    setIsCommitting(true);
+    try {
+      const presetRows = buildSq101197BulkRows(selectedWarehouseId);
+      const analyzed = analyzeBulkImportRows(presetRows, appData, selectedWarehouseId, false);
+      const conflictOrMatch = analyzed.filter(
+        (r) => r.status === 'code_conflict' || r.status === 'missing_data' || r.status === 'match_existing'
+      );
+
+      if (conflictOrMatch.length > 0) {
+        setRows(analyzed);
+        setSourceType('pdf');
+        setFileName(`عرض سعر شركة الأندلس ${SQ101197_METADATA.docCode} (154 صنف)`);
+        setImportDate(SQ101197_METADATA.date);
+        setSupplierHint(SQ101197_METADATA.supplierName);
+        setIdempotencyKey(getSq101197IdempotencyKey(companyId, selectedWarehouseId));
+        setStatusFilter(analyzed.some((r) => r.status === 'code_conflict') ? 'issues' : 'match_existing');
+        showToast(
+          `يوجد (${conflictOrMatch.length}) صنف متطابق أو متعارض في هذا المخزن. تم عرض الجدول لتحديد الإجراء بأمان قبل الاعتماد.`,
+          'warning'
+        );
+        return;
+      }
+
+      const result = executeBulkImportBatch({
+        appData,
+        rows: analyzed,
+        warehouseId: selectedWarehouseId,
+        sourceType: 'pdf',
+        fileName: `SQ101197 عرض سعر شركة الأندلس (154 صنف)`,
+        importDate: SQ101197_METADATA.date,
+        supplierName: SQ101197_METADATA.supplierName,
+        defaultSaleMarkupPercent: Math.max(0, parseFloat(defaultMarkupPercent) || 0),
+        idempotencyKey: getSq101197IdempotencyKey(companyId, selectedWarehouseId),
+      });
+
+      if (!result.success) {
+        showToast(result.error || 'تعذر اعتماد الأصناف.', 'error');
+        return;
+      }
+
+      if (result.updatedData && result.batch) {
+        onUpdateData(result.updatedData, {
+          action: 'bulk_import',
+          module: 'الاستيراد الجماعي للأصناف',
+          details: `دمج كامل أصناف عرض سعر شركة الأندلس (${SQ101197_METADATA.docCode}) — ${result.batch.createdCount} صنف كأرصدة افتتاحية بقيمة ${result.batch.totalOpeningValue} في ${result.batch.warehouseName}`,
+        });
+        setLastCommittedBatch(result.batch);
+        setRows([]);
+        setFileName('');
+        showToast(
+          `تم دمج جميع الـ ${result.batch.createdCount} صنف من عرض أسعار الأندلس (SQ101197) كأرصدة ابتدائية في [${result.batch.warehouseName}] بنجاح!`,
+          'success'
+        );
+      }
+    } finally {
+      setIsCommitting(false);
+    }
+  };
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('rakeeza_preload_sq101197') === '1') {
+        sessionStorage.removeItem('rakeeza_preload_sq101197');
+        const presetRows = buildSq101197BulkRows(selectedWarehouseId);
+        const analyzed = analyzeBulkImportRows(presetRows, appData, selectedWarehouseId, false);
+        setRows(analyzed);
+        setSourceType('pdf');
+        setFileName(`عرض سعر شركة الأندلس ${SQ101197_METADATA.docCode} (154 صنف)`);
+        setImportDate(SQ101197_METADATA.date);
+        setSupplierHint(SQ101197_METADATA.supplierName);
+        setIdempotencyKey(getSq101197IdempotencyKey(companyId, selectedWarehouseId));
+        setActiveTab('import');
+      }
+    } catch {
+      // ignore storage access issues
+    }
+  }, []);
 
   // Re-analyze automatically if warehouse changes while rows are loaded
   const handleWarehouseChange = (newWarehouseId: string) => {
@@ -275,7 +393,7 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
           (copy as any)[field] = field === 'salePrice' && num === 0 ? undefined : num;
 
           if (field === 'priceBeforeDiscount' || field === 'discountValue') {
-            const net = round2(Math.max(0, copy.priceBeforeDiscount - copy.discountValue));
+            const net = round4(Math.max(0, copy.priceBeforeDiscount - copy.discountValue));
             copy.netPriceAfterDiscount = net;
             copy.unitCost = net;
             copy.totalValue = round2(copy.openingQty * net);
@@ -285,14 +403,14 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
           } else if (field === 'unitCost') {
             copy.netPriceAfterDiscount = num;
             if (copy.priceBeforeDiscount === 0) {
-              copy.priceBeforeDiscount = round2(num + copy.discountValue);
+              copy.priceBeforeDiscount = round4(num + copy.discountValue);
             }
             copy.totalValue = round2(copy.openingQty * num);
           } else if (field === 'openingQty') {
             const effUnit = copy.unitCost > 0 ? copy.unitCost : copy.netPriceAfterDiscount;
             copy.totalValue = round2(num * effUnit);
           } else if (field === 'totalValue' && copy.openingQty > 0) {
-            const derived = round2(num / copy.openingQty);
+            const derived = round4(num / copy.openingQty);
             copy.unitCost = derived;
             copy.netPriceAfterDiscount = derived;
           }
@@ -367,14 +485,16 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
         toCreate += 1;
         totalQty = round2(totalQty + r.openingQty);
         const effCost = r.unitCost > 0 ? r.unitCost : r.netPriceAfterDiscount;
-        totalValue = round2(totalValue + r.openingQty * effCost);
+        const rowVal = r.totalValue > 0 ? round2(r.totalValue) : round2(r.openingQty * effCost);
+        totalValue = round2(totalValue + rowVal);
       } else if (r.action === 'update_data') {
         toUpdate += 1;
       } else if (r.action === 'add_qty') {
         toUpdate += 1;
         totalQty = round2(totalQty + r.openingQty);
         const effCost = r.unitCost > 0 ? r.unitCost : r.netPriceAfterDiscount;
-        totalValue = round2(totalValue + r.openingQty * effCost);
+        const rowVal = r.totalValue > 0 ? round2(r.totalValue) : round2(r.openingQty * effCost);
+        totalValue = round2(totalValue + rowVal);
       }
     }
 
@@ -761,6 +881,72 @@ export const BulkImportView: React.FC<BulkImportViewProps> = ({
               </div>
             </div>
           )}
+
+          {/* Pre-Verified SQ101197 Al-Andalus 154 Items Preset Card */}
+          <div className="bg-gradient-to-l from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-mono text-[11px] font-black">
+                    {SQ101197_METADATA.docCode}
+                  </span>
+                  <h2 className="text-sm sm:text-base font-black text-slate-950">
+                    كشف أصناف شركة الأندلس للأدوات الكهربائية (154 صنف جاهز ومُراجع بالكامل)
+                  </h2>
+                  {isSq101197AlreadyCommitted && (
+                    <span className="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300 text-[11px] font-black">
+                      ✓ تم الدمج والاعتماد في [{selectedWarehouse?.name}]
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  يضم كافة الـ <strong>154 صنفاً</strong> من الصفحات 1 إلى 6 بأكوادها وأسمائها ووحداتها وكمياتها وأسعارها قبل الخصم وبعد الخصم:
+                  إجمالي <strong className="font-mono">614,916.60</strong> | خصم{' '}
+                  <strong className="font-mono">102,878.92</strong> | صافي القيمة الافتتاحية{' '}
+                  <strong className="font-mono text-emerald-900">512,037.68 {currency}</strong> (بدون فواتير شراء أو خصم خزينة).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleLoadSq101197Preset}
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-white hover:bg-amber-100 border-2 border-amber-400 text-amber-950 text-xs font-black transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>عرض وتدقيق الـ 154 صنف بالجدول</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isCommitting || isSq101197AlreadyCommitted}
+                  onClick={handleDirectCommitSq101197Preset}
+                  className="min-h-[40px] px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-400 text-white text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  {isCommitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  <span>
+                    {isSq101197AlreadyCommitted
+                      ? 'تم الاعتماد في هذا المخزن ✓'
+                      : 'دمج واعتماد الـ 154 صنف الآن كأرصدة ابتدائية'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadSq101197Excel}
+                  className="min-h-[40px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                  title="تنزيل الأصناف الـ 154 في ملف Excel"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Excel</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* Target Warehouse & Source Upload Panel */}
           <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 space-y-4">

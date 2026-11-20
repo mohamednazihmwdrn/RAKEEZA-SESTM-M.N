@@ -12,6 +12,13 @@ import {
 } from '../utils/branchIsolation';
 import { hasPermission } from '../utils/permissions';
 import { BarcodeCameraModal } from './BarcodeCameraModal';
+import { analyzeBulkImportRows, executeBulkImportBatch } from '../utils/bulkImportEngine';
+import {
+  buildSq101197BulkRows,
+  getSq101197IdempotencyKey,
+  isElectricalCompanyName,
+  SQ101197_METADATA,
+} from '../data/sq101197AlAndalusPreset';
 
 interface ItemsViewProps {
   appData: AppData;
@@ -162,6 +169,72 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
   const branchItems = useMemo(() => {
     return getBranchItems(appData.items, activeBranchId, mainBranchId);
   }, [appData.items, activeBranchId, mainBranchId]);
+
+  const sq101197Key = getSq101197IdempotencyKey(appData.companyId || 'COMP-000001', activeBranchId);
+  const isSq101197Committed = Boolean(
+    appData.processedImportKeys?.[sq101197Key] ||
+      (appData.bulkImportBatches || []).some(
+        (b) => b.idempotencyKey === sq101197Key && b.status === 'committed'
+      )
+  );
+  const showSq101197QuickMerge =
+    subPage === 'items' &&
+    !isSq101197Committed &&
+    isElectricalCompanyName(appData.settings?.companyName) &&
+    (hasPermission(currentUserObj, 'bulk_import') || hasPermission(currentUserObj, 'items_create'));
+
+  const handleQuickMergeSq101197 = () => {
+    const presetRows = buildSq101197BulkRows(activeBranchId);
+    const analyzed = analyzeBulkImportRows(presetRows, appData, activeBranchId, false);
+    const hasConflictOrMatch = analyzed.some(
+      (r) => r.status === 'code_conflict' || r.status === 'missing_data' || r.status === 'match_existing'
+    );
+
+    if (hasConflictOrMatch) {
+      try {
+        sessionStorage.setItem('rakeeza_preload_sq101197', '1');
+      } catch {
+        // ignore storage errors
+      }
+      if (onNavigate) {
+        onNavigate('bulk_import');
+      }
+      showToast(
+        'تم العثور على أصناف متطابقة في هذا المخزن — تم فتح شاشة التدقيق لاختيار الإجراء قبل الاعتماد.',
+        'warning'
+      );
+      return;
+    }
+
+    const result = executeBulkImportBatch({
+      appData,
+      rows: analyzed,
+      warehouseId: activeBranchId,
+      sourceType: 'pdf',
+      fileName: `SQ101197 عرض سعر شركة الأندلس (154 صنف)`,
+      importDate: SQ101197_METADATA.date,
+      supplierName: SQ101197_METADATA.supplierName,
+      defaultSaleMarkupPercent: 0,
+      idempotencyKey: sq101197Key,
+    });
+
+    if (!result.success) {
+      showToast(result.error || 'تعذر دمج الأصناف الافتتاحية.', 'error');
+      return;
+    }
+
+    if (result.updatedData && result.batch) {
+      onUpdateData(result.updatedData, {
+        action: 'bulk_import',
+        module: 'الاستيراد الجماعي للأصناف',
+        details: `دمج كامل أصناف عرض سعر الأندلس (${SQ101197_METADATA.docCode}) — ${result.batch.createdCount} صنف كأرصدة ابتدائية في [${currentBranch?.name || 'المخزن الرئيسي'}] بقيمة ${result.batch.totalOpeningValue}`,
+      });
+      showToast(
+        `تم دمج الـ ${result.batch.createdCount} صنف من عرض أسعار الأندلس (SQ101197) كأرصدة ابتدائية بقيمة ${result.batch.totalOpeningValue.toLocaleString('en-US')} ج.م بنجاح!`,
+        'success'
+      );
+    }
+  };
 
   // Pagination & Display Controls for 1000+ items
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -604,6 +677,50 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
           </button>
         )}
       </div>
+
+      {/* ⚡ شريط الدمج السريع لأصناف عرض سعر الأندلس SQ101197 (154 صنف) */}
+      {showSq101197QuickMerge && (
+        <div className="bg-gradient-to-l from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-mono text-[11px] font-black">
+                {SQ101197_METADATA.docCode}
+              </span>
+              <h2 className="text-xs sm:text-sm font-black text-slate-950">
+                كشف أصناف شركة الأندلس (154 صنف كهرباء) جاهز للدمج كأرصدة ابتدائية في [{currentBranch?.name || 'المخزن الرئيسي'}]
+              </h2>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-700">
+              بكامل الأكواد والأسماء والكميات والوحدات والأسعار الصافية بعد الخصم (صافي القيمة الدفترية: <strong className="font-mono text-emerald-900">512,037.68 ج.م</strong> — قيد رصيد افتتاحي فقط بدون فواتير شراء أو خصم خزينة).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem('rakeeza_preload_sq101197', '1');
+                  } catch {
+                    // ignore
+                  }
+                  onNavigate('bulk_import');
+                }}
+                className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100 border-2 border-amber-400 text-amber-950 text-xs font-black transition cursor-pointer"
+              >
+                📋 مراجعة وتدقيق الـ 154 صنف
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleQuickMergeSq101197}
+              className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black transition cursor-pointer shadow-xs"
+            >
+              ⚡ دمج الـ 154 صنف الآن بالمخزن كأرصدة ابتدائية
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 📊 ملخص وإحصائيات سجل الأصناف */}
       {subPage === 'items' && (

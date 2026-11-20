@@ -20,6 +20,10 @@ function round2(n: number): number {
   return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function round4(n: number): number {
+  return Math.round((Number(n || 0) + Number.EPSILON) * 10000) / 10000;
+}
+
 export function normalizeArabicDigits(str: string): string {
   return String(str || '')
     .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
@@ -60,7 +64,7 @@ const UNIT_SYNONYMS: Record<string, string> = {
   'قطعة': 'قطعة',
   'حبة': 'قطعة',
   'حبه': 'قطعة',
-  'عدد': 'قطعة',
+  'عدد': 'عدد',
   'pcs': 'قطعة',
   'pc': 'قطعة',
   'piece': 'قطعة',
@@ -337,26 +341,26 @@ export function reconcileImportNumbers(raw: {
   netPriceAfterDiscount: number;
 }) {
   const openingQty = Math.max(0, round2(raw.openingQty));
-  let priceBeforeDiscount = Math.max(0, round2(raw.priceBeforeDiscount));
-  let discountValue = Math.max(0, round2(raw.discountValue));
-  let netPriceAfterDiscount = Math.max(0, round2(raw.netPriceAfterDiscount));
-  let unitCost = Math.max(0, round2(raw.unitCost));
+  let priceBeforeDiscount = Math.max(0, round4(raw.priceBeforeDiscount));
+  let discountValue = Math.max(0, round4(raw.discountValue));
+  let netPriceAfterDiscount = Math.max(0, round4(raw.netPriceAfterDiscount));
+  let unitCost = Math.max(0, round4(raw.unitCost));
   let totalValue = Math.max(0, round2(raw.totalValue));
 
   if (netPriceAfterDiscount === 0 && priceBeforeDiscount > 0) {
-    netPriceAfterDiscount = round2(Math.max(0, priceBeforeDiscount - discountValue));
+    netPriceAfterDiscount = round4(Math.max(0, priceBeforeDiscount - discountValue));
   }
   if (unitCost === 0 && netPriceAfterDiscount > 0) {
     unitCost = netPriceAfterDiscount;
   }
   if (unitCost === 0 && totalValue > 0 && openingQty > 0) {
-    unitCost = round2(totalValue / openingQty);
+    unitCost = round4(totalValue / openingQty);
   }
   if (netPriceAfterDiscount === 0 && unitCost > 0) {
     netPriceAfterDiscount = unitCost;
   }
   if (priceBeforeDiscount === 0 && unitCost > 0) {
-    priceBeforeDiscount = round2(unitCost + discountValue);
+    priceBeforeDiscount = round4(unitCost + discountValue);
   }
   if (totalValue === 0 && openingQty > 0) {
     totalValue = round2(openingQty * (netPriceAfterDiscount || unitCost));
@@ -969,9 +973,15 @@ export function executeBulkImportBatch(params: CommitBulkImportParams): CommitBu
     const qty = Math.max(0, round2(row.openingQty));
     const unitCost = Math.max(
       0,
-      round2(row.unitCost > 0 ? row.unitCost : row.netPriceAfterDiscount)
+      round4(row.unitCost > 0 ? row.unitCost : row.netPriceAfterDiscount)
     );
-    const addedValue = round2(qty * unitCost);
+    const computedLine = round2(qty * unitCost);
+    const addedValue =
+      row.totalValue > 0 &&
+      qty > 0 &&
+      Math.abs(row.totalValue - qty * unitCost) <= Math.max(0.5, qty * 0.01)
+        ? round2(row.totalValue)
+        : computedLine;
     const computedSalePrice =
       row.salePrice && row.salePrice > 0
         ? round2(row.salePrice)
