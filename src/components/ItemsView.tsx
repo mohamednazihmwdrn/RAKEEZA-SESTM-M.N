@@ -687,6 +687,17 @@ export const ItemsView: React.FC<ItemsViewProps> = ({
                   <span>🌳</span>
                   <span>+ شجرة صنف (مجموعة &gt; تصنيف &gt; نوع &gt; صنف)</span>
                 </button>
+                {onNavigate && (hasPermission(currentUserObj, 'bulk_import') || hasPermission(currentUserObj, 'items_create')) && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('bulk_import')}
+                    className="min-h-[42px] bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs flex-1 sm:flex-initial"
+                    title="استيراد مئات أو آلاف الأصناف والأرصدة الافتتاحية من Excel أو CSV أو PDF بالذكاء الاصطناعي"
+                  >
+                    <span>📥</span>
+                    <span>استيراد جماعي (Excel / PDF)</span>
+                  </button>
+                )}
                 <TableActionButtons
                   onPrint={handlePrintItems}
                   onExportExcel={handleExportItemsExcel}

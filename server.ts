@@ -39,6 +39,7 @@ import {
   restoreDeviceSession,
   getOwnerSystemHealth,
 } from './server/cloudDb';
+import { getPdfMetadata, extractPdfPagesWithGemini } from './server/bulkImportAi';
 
 async function startServer() {
   const app = express();
@@ -1192,6 +1193,42 @@ async function startServer() {
     const { planId, companyId } = req.body;
     const license = generateLicenseCloud(planId, companyId);
     res.json({ success: true, license });
+  });
+
+  // ----------------------------------------------------
+  // 7. Bulk Import PDF AI + OCR Extraction APIs (Server-Side Gemini)
+  // ----------------------------------------------------
+  app.post('/api/bulk-import/pdf-meta', requireAuth, async (req, res) => {
+    try {
+      const { pdfBase64 } = req.body || {};
+      if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+        return res.status(400).json({ success: false, error: 'يرجى إرفاق ملف PDF صالح.' });
+      }
+      const meta = await getPdfMetadata(pdfBase64);
+      res.json({ success: true, ...meta });
+    } catch (err: any) {
+      console.error('PDF metadata error:', err);
+      res.status(400).json({ success: false, error: err?.message || 'تعذر قراءة بيانات ملف الـ PDF.' });
+    }
+  });
+
+  app.post('/api/bulk-import/extract-pdf', requireAuth, async (req, res) => {
+    try {
+      const { pdfBase64, startPage, endPage, supplierHint } = req.body || {};
+      if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+        return res.status(400).json({ success: false, error: 'يرجى إرفاق ملف PDF صالح.' });
+      }
+      const result = await extractPdfPagesWithGemini({
+        pdfBase64,
+        startPage: typeof startPage === 'number' ? startPage : undefined,
+        endPage: typeof endPage === 'number' ? endPage : undefined,
+        supplierHint: typeof supplierHint === 'string' ? supplierHint : undefined,
+      });
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('PDF extraction error:', err);
+      res.status(500).json({ success: false, error: err?.message || 'فشل تحليل واستخراج الأصناف من ملف PDF.' });
+    }
   });
 
   // ----------------------------------------------------

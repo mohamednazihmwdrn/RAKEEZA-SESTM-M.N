@@ -24,18 +24,21 @@ export function getMainBranchId(branches?: Branch[]): string {
 export function getUniqueMasterItems(items?: Item[]): Item[] {
   if (!items || items.length === 0) return [];
   const seenCodes = new Set<string>();
-  const seenNames = new Set<string>();
+  const seenNameUnits = new Set<string>();
   const uniqueList: Item[] = [];
 
   for (const item of items) {
     const code = (item.code || '').trim().toLowerCase();
     const name = (item.name || '').trim().toLowerCase();
+    const unit = (item.unit || 'قطعة').trim().toLowerCase();
+    const nameUnitKey = name ? `${name}::${unit}` : '';
+    const codeUnitKey = code ? `${code}::${unit}` : '';
 
-    if (code && seenCodes.has(code)) continue;
-    if (name && seenNames.has(name)) continue;
+    if (codeUnitKey && seenCodes.has(codeUnitKey)) continue;
+    if (!codeUnitKey && nameUnitKey && seenNameUnits.has(nameUnitKey)) continue;
 
-    if (code) seenCodes.add(code);
-    if (name) seenNames.add(name);
+    if (codeUnitKey) seenCodes.add(codeUnitKey);
+    if (nameUnitKey) seenNameUnits.add(nameUnitKey);
 
     uniqueList.push(item);
   }
@@ -53,9 +56,10 @@ export function createCleanItemsForBranch(
   companyId?: string
 ): Item[] {
   const now = new Date().toISOString();
-  return masterItems.map((master) => {
-    const safeCode = (master.code || '').trim();
-    const cleanId = `i_${branchId}_${safeCode || Math.random().toString(36).substring(2, 8)}`;
+  return masterItems.map((master, idx) => {
+    const safeCode = (master.code || '').trim().replace(/\s+/g, '_');
+    const safeUnit = (master.unit || 'قطعة').trim().replace(/\s+/g, '_');
+    const cleanId = `i_${branchId}_${safeCode || idx}_${safeUnit}_${Math.random().toString(36).substring(2, 6)}`;
 
     return {
       id: cleanId,
@@ -338,15 +342,23 @@ export function syncMissingBranchItems(appData: AppData): { items: Item[]; creat
   for (const br of branches) {
     if (br.id === mainId) continue; // main branch already has the master items
 
-    const existingBranchItemCodes = new Set(
+    const existingBranchKeys = new Set(
       allItems
         .filter((i) => i.branchId === br.id)
-        .map((i) => (i.code || i.name || '').trim().toLowerCase())
+        .map((i) => {
+          const u = (i.unit || 'قطعة').trim().toLowerCase();
+          const c = (i.code || '').trim().toLowerCase();
+          const n = (i.name || '').trim().toLowerCase();
+          return c ? `c:${c}::${u}` : `n:${n}::${u}`;
+        })
     );
 
     const missingMasters = uniqueMasters.filter((m) => {
-      const codeOrName = (m.code || m.name || '').trim().toLowerCase();
-      return !existingBranchItemCodes.has(codeOrName);
+      const u = (m.unit || 'قطعة').trim().toLowerCase();
+      const c = (m.code || '').trim().toLowerCase();
+      const n = (m.name || '').trim().toLowerCase();
+      const key = c ? `c:${c}::${u}` : `n:${n}::${u}`;
+      return !existingBranchKeys.has(key);
     });
 
     if (missingMasters.length > 0) {

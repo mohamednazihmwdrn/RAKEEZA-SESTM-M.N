@@ -2119,6 +2119,8 @@ export function cleanEntireSystemCloud(
       tenantData.productionOrders = [];
       tenantData.bankStatements = [];
       tenantData.approvalRequests = [];
+      tenantData.bulkImportBatches = [];
+      tenantData.processedImportKeys = {};
 
       // Reset numeric counters to 1
       tenantData.nextInvoiceNumber = 1;
@@ -2133,6 +2135,7 @@ export function cleanEntireSystemCloud(
       tenantData.nextPayrollId = 1;
       tenantData.nextChequeId = 1;
       tenantData.nextProductionId = 1;
+      tenantData.nextBulkImportId = 1;
 
       // Reset cash boxes & bank balances to 0
       tenantData.cashBox = { drawer: 0, vodafone: 0, instapay: 0, bank: 0 };

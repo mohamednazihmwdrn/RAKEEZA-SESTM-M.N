@@ -51,7 +51,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           skipWaiting: true,
           clientsClaim: true,
@@ -61,6 +61,16 @@ export default defineConfig(() => {
         },
       }),
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            xlsx: ['xlsx'],
+            firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -422,7 +422,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* المخزون والأصناف (Collapsible) */}
-        {(canAccessPage(currentUser, 'items') || canAccessPage(currentUser, 'inventory')) && (
+        {(canAccessPage(currentUser, 'items') || canAccessPage(currentUser, 'inventory') || canAccessPage(currentUser, 'bulk_import')) && (
           <div>
             <div
               onClick={() => toggleItem('items')}
@@ -446,6 +446,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('items')}`}
                   >
                     <span>دليل الأصناف والباركود</span>
+                  </div>
+                )}
+                {canAccessPage(currentUser, 'bulk_import') && (
+                  <div
+                    onClick={() => handleNav('bulk_import')}
+                    className={`min-h-[40px] pr-9 pl-4 py-2 cursor-pointer border-b border-slate-100 transition flex items-center ${navItemClass('bulk_import')}`}
+                  >
+                    <span>الاستيراد الجماعي (Excel / PDF)</span>
                   </div>
                 )}
                 {canAccessPage(currentUser, 'items') && (

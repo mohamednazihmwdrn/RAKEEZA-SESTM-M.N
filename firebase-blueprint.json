@@ -88,6 +88,8 @@
         "users": { "type": "array", "description": "Sanitized tenant user directory (passwords stripped)" },
         "branches": { "type": "array", "description": "Company branches" },
         "auditLogs": { "type": "array", "description": "Bounded recent audit log entries" },
+        "bulkImportBatches": { "type": "array", "description": "Bulk opening balance import batch history and rollback snapshots" },
+        "processedImportKeys": { "type": "object", "description": "Idempotency keys of committed bulk import batches" },
         "settings": { "type": "object", "description": "Tenant configuration and branding" },
         "updatedAt": { "type": "string", "description": "ISO timestamp of last update", "maxLength": 64 },
         "lastModifiedBy": { "type": "string", "description": "Actor display name", "maxLength": 200 },

@@ -109,6 +109,19 @@ export function sanitizeForFirestore(data: Partial<AppData>): Record<string, any
     });
   }
 
+  // 6. Keep bulkImportBatches compact in Firestore to respect 1MB document limit
+  if (Array.isArray(clean.bulkImportBatches)) {
+    clean.bulkImportBatches = clean.bulkImportBatches.slice(0, 50).map((b: any) => ({
+      ...b,
+      itemSnapshots: Array.isArray(b.itemSnapshots)
+        ? b.itemSnapshots.map((s: any) => ({
+            ...s,
+            beforeItem: s.beforeItem ? { ...s.beforeItem, movements: [] } : s.beforeItem,
+          }))
+        : [],
+    }));
+  }
+
   return clean;
 }
 
@@ -287,6 +300,9 @@ export class RealtimeSyncService {
           if (Array.isArray(rawData.inventoryAdjustments)) remoteData.inventoryAdjustments = rawData.inventoryAdjustments;
           if (Array.isArray(rawData.goodsIssueVouchers)) remoteData.goodsIssueVouchers = rawData.goodsIssueVouchers;
           if (Array.isArray(rawData.fiscalClosings)) remoteData.fiscalClosings = rawData.fiscalClosings;
+          if (Array.isArray(rawData.bulkImportBatches)) remoteData.bulkImportBatches = rawData.bulkImportBatches;
+          if (rawData.processedImportKeys) remoteData.processedImportKeys = rawData.processedImportKeys;
+          if (typeof rawData.nextBulkImportId === 'number') remoteData.nextBulkImportId = rawData.nextBulkImportId;
           if (rawData.currentActiveFiscalYear) remoteData.currentActiveFiscalYear = rawData.currentActiveFiscalYear;
           if (rawData.catalogConfig) remoteData.catalogConfig = rawData.catalogConfig;
           if (rawData.advancedSettings) remoteData.advancedSettings = rawData.advancedSettings;

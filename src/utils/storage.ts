@@ -33,6 +33,7 @@ export const defaultAccountsTree: AccountNode[] = [
   { code: '3101', name: 'رأس المال المستثمر (Capital)', type: 'equity', parentCode: '3', isParent: false, debit: 0, credit: 0, balance: 0 },
   { code: '3102', name: 'الأرباح والخسائر المرحلة (Retained Earnings)', type: 'equity', parentCode: '3', isParent: false, debit: 0, credit: 0, balance: 0 },
   { code: '3103', name: 'جاري صاحب المنشأة / الشركاء', type: 'equity', parentCode: '3', isParent: false, debit: 0, credit: 0, balance: 0 },
+  { code: '3104', name: 'أرصدة افتتاحية للمخزون (Opening Balances Equity)', type: 'equity', parentCode: '3', isParent: false, debit: 0, credit: 0, balance: 0 },
 
   // 4 - الإيرادات
   { code: '4', name: 'الإيرادات والمبيعات (Revenues)', type: 'revenue', isParent: true, debit: 0, credit: 0, balance: 0 },
@@ -179,6 +180,9 @@ export function getCleanCompanyData(
     companies: [],
     companyCatalogConfigs: {},
     deletedRecords: {},
+    bulkImportBatches: [],
+    nextBulkImportId: 1,
+    processedImportKeys: {},
   };
 }
 
@@ -293,6 +297,9 @@ export function loadAppData(companyId?: string): AppData {
         backups: parsed.backups || defaults.backups || [],
         productPrices: parsed.productPrices || defaults.productPrices || [],
         priceHistories: parsed.priceHistories || defaults.priceHistories || [],
+        bulkImportBatches: parsed.bulkImportBatches || defaults.bulkImportBatches || [],
+        nextBulkImportId: parsed.nextBulkImportId || defaults.nextBulkImportId || 1,
+        processedImportKeys: parsed.processedImportKeys || defaults.processedImportKeys || {},
 
         // Multi-Tenant Isolation
         companies: parsed.companies && parsed.companies.length > 0 ? parsed.companies : defaults.companies,
@@ -302,6 +309,14 @@ export function loadAppData(companyId?: string): AppData {
           ...(parsed.companyCatalogConfigs || {}),
         },
       };
+
+      // Ensure 3104 Opening Balances Equity exists for existing tenants
+      if (Array.isArray(loaded.accounts) && !loaded.accounts.some((a) => a.code === '3104')) {
+        loaded.accounts = [
+          ...loaded.accounts,
+          { code: '3104', name: 'أرصدة افتتاحية للمخزون (Opening Balances Equity)', type: 'equity', parentCode: '3', isParent: false, debit: 0, credit: 0, balance: 0 },
+        ];
+      }
 
       // Seamlessly migrate legacy company 1 names to RAKEEZA
       if (loaded.companies) {
@@ -428,6 +443,13 @@ function createLocalStorageSafePayload(data: AppData, targetCompId: string): App
       }
       return it;
     }),
+    bulkImportBatches: (data.bulkImportBatches || []).slice(0, 20).map((b) => ({
+      ...b,
+      itemSnapshots: (b.itemSnapshots || []).map((s) => ({
+        ...s,
+        beforeItem: s.beforeItem ? { ...s.beforeItem, movements: [] } : s.beforeItem,
+      })),
+    })),
   };
 }
 
@@ -614,14 +636,16 @@ function getItemDeduplicationKey(item: any, collectionKey?: string): string | nu
     const cleanName = String(item.name || '').trim().toLowerCase();
     if (cleanPhone && cleanName) return `supp_${cleanName}_${cleanPhone}`;
   } else if (collectionKey === 'items') {
+    const br = String(item.branchId || 'main').trim().toLowerCase();
+    const unit = String(item.unit || 'قطعة').trim().toLowerCase();
     if (item.barcode && String(item.barcode).trim()) {
-      return `item_barcode_${String(item.barcode).trim()}`;
+      return `item_barcode_${br}_${unit}_${String(item.barcode).trim()}`;
     }
     if (item.code && String(item.code).trim()) {
-      return `item_code_${String(item.code).trim().toLowerCase()}`;
+      return `item_code_${br}_${unit}_${String(item.code).trim().toLowerCase()}`;
     }
     if (item.name && String(item.name).trim()) {
-      return `item_name_${String(item.name).trim().toLowerCase()}`;
+      return `item_name_${br}_${unit}_${String(item.name).trim().toLowerCase()}`;
     }
   } else if (collectionKey === 'cashTransactions') {
     if (item.voucherNo && String(item.voucherNo).trim()) {
@@ -854,6 +878,11 @@ export function mergeAppDataMonotonically(
     approvalRequests: mergeCollectionRecords(prev.approvalRequests, incoming.approvalRequests, isCollectionDelete('approvalRequests'), 'approvalRequests', mergedDeletedRecords),
     commissions: mergeCollectionRecords(prev.commissions, incoming.commissions, isCollectionDelete('commissions'), 'commissions', mergedDeletedRecords),
     fiscalClosings: mergeCollectionRecords(prev.fiscalClosings, incoming.fiscalClosings, isCollectionDelete('fiscalClosings'), 'fiscalClosings', mergedDeletedRecords),
+    bulkImportBatches: mergeCollectionRecords(prev.bulkImportBatches, incoming.bulkImportBatches, isCollectionDelete('bulkImportBatches'), 'bulkImportBatches', mergedDeletedRecords),
+    processedImportKeys: { ...(prev.processedImportKeys || {}), ...(incoming.processedImportKeys || {}) },
+    nextBulkImportId: typeof incoming.nextBulkImportId === 'number'
+      ? Math.max(incoming.nextBulkImportId, prev.nextBulkImportId || 1)
+      : prev.nextBulkImportId,
     viewingClosedYear: prev.viewingClosedYear !== undefined ? prev.viewingClosedYear : incoming.viewingClosedYear,
     cashBox: incoming.cashBox ? { ...prev.cashBox, ...incoming.cashBox } : prev.cashBox,
     catalogConfig: incoming.catalogConfig || prev.catalogConfig,

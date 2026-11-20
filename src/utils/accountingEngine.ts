@@ -3152,7 +3152,14 @@ export function computeFinancialStatementsFromLedger(appData: AppData): LedgerFi
   const capital = hasGlJournals ? round2(accountTotals['3101']?.balance || 0) : 0;
   const retainedEarnings = hasGlJournals ? round2(accountTotals['3102']?.balance || 0) : 0;
   const partnerCurrent = hasGlJournals ? round2(accountTotals['3103']?.balance || 0) : 0;
-  const totalEquity = round2(capital + retainedEarnings + partnerCurrent + netIncome);
+  const otherEquityAccounts = hasGlJournals
+    ? round2(
+        Object.entries(accountTotals)
+          .filter(([code]) => code.startsWith('3') && code !== '3' && code !== '3101' && code !== '3102' && code !== '3103')
+          .reduce((sum, [, val]) => sum + (val?.balance || 0), 0)
+      )
+    : 0;
+  const totalEquity = round2(capital + retainedEarnings + partnerCurrent + otherEquityAccounts + netIncome);
 
   const isBalanceSheetBalanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) <= 0.05;
 

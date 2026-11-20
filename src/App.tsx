@@ -20,6 +20,7 @@ import { UsersView } from './components/UsersView';
 import { BackupView } from './components/BackupView';
 import { InventoryStocktakingView } from './components/InventoryStocktakingView';
 import { YearEndClosingView } from './components/YearEndClosingView';
+import { BulkImportView } from './components/BulkImportView';
 
 // Enterprise Pillar Views
 import { PosView } from './components/PosView';
@@ -1203,6 +1204,7 @@ export default function App() {
       suppliers: '🏢 إدارة وحسابات الموردين (Suppliers Management)',
       accounts_tree: '🌳 دليل الحسابات الشجري ومراكز التكلفة',
       items: '📦 إدارة الأصناف والمخزون',
+      bulk_import: '📥 الاستيراد الجماعي للأصناف والأرصدة الافتتاحية',
       item_movement: '📦 سجل حركة الأصناف',
       inventory: '📦 تقييم المخزون الإجمالي',
       physical_inventory: '📦 الجرد الفعلي للمخازن',
@@ -1400,6 +1402,15 @@ export default function App() {
             showToast={showToast}
             onShareCatalog={() => setIsShareCatalogOpen(true)}
             onOpenCatalog={() => handleNavigate('catalog')}
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'bulk_import':
+        return (
+          <BulkImportView
+            appData={appData}
+            onUpdateData={updateData}
+            showToast={showToast}
             onNavigate={handleNavigate}
           />
         );

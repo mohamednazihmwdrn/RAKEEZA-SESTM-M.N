@@ -60,6 +60,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
   { id: 'inventory_view', name: 'استعراض أرصدة المخزون وحركته', category: 'المخزون', description: 'متابعة أرصدة المخازن وحركة الصادر والوارد وتكلفة المخزون', actionType: 'view' },
   { id: 'inventory_transfers', name: 'التحويلات المخزنية بين الفروع', category: 'المخزون', description: 'مناقلة بضاعة بين المخازن والفروع', actionType: 'create' },
   { id: 'inventory_stocktaking', name: 'الجرد الفعلي واعتماد التسويات', category: 'المخزون', description: 'مطابقة الرصيد الدفتري والفعلي وتسوية العجز والزيادة', actionType: 'approve' },
+  { id: 'bulk_import', name: 'الاستيراد الجماعي للأصناف والأرصدة الافتتاحية', category: 'المخزون', description: 'استيراد مئات الأصناف من Excel وCSV وPDF ومراجعة الدفعات والتراجع الآمن عنها', actionType: 'create' },
   { id: 'inventory_export', name: 'تصدير تقارير حركة المخزون', category: 'المخزون', description: 'تصدير كشوف جرد المخازن إلى Excel و PDF', actionType: 'export' },
 
   // 8. المستودعات والفروع (Warehouses & Branches)
@@ -225,6 +226,7 @@ export function hasPermission(user: User | undefined, permissionId: string): boo
       'items_view',
       'items_create',
       'items_edit',
+      'bulk_import',
       'inventory_stocktaking',
       'inventory_transfers',
       'purchases_view',
@@ -294,6 +296,7 @@ export const PAGE_PERMISSION_MAP: Record<string, string[]> = {
   bi_analytics: ['bi_analytics', 'reports_view', 'dashboard'],
   audit_trail: ['audit_trail', 'company_settings'],
   items: ['items_view', 'inventory_view'],
+  bulk_import: ['bulk_import', 'items_create', 'inventory_stocktaking'],
   item_movement: ['items_view', 'inventory_view'],
   inventory: ['inventory_view'],
   physical_inventory: ['inventory_stocktaking'],
@@ -435,6 +438,12 @@ export function verifyDataOperationPermission(
   }
 
   // 4. Items & Inventory
+  if (action === 'bulk_import' || action === 'rollback_bulk_import') {
+    if (!hasPermission(user, 'bulk_import') && !hasPermission(user, 'items_create')) {
+      return { allowed: false, reason: 'عفواً، حسابك لا يمتلك صلاحية الاستيراد الجماعي للأصناف أو التراجع عن دفعات الاستيراد!' };
+    }
+  }
+
   if (action === 'delete_item' || ((moduleName.includes('صنف') || moduleName.includes('مخزن')) && (action.includes('حذف') || action === 'delete'))) {
     if (!hasPermission(user, 'items_delete')) {
       return { allowed: false, reason: 'عفواً، حسابك لا يمتلك صلاحية حذف الأصناف من المخزن!' };

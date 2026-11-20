@@ -255,6 +255,8 @@ export interface Item {
   lastPriceUpdate?: string;
   lastPriceUpdatedBy?: string;
   lastPurchaseDate?: string; // تاريخ آخر شراء للصنف
+  supplierName?: string; // اسم المورد المرتبط بالصنف أو الدفعة الافتتاحية
+  openingBalanceBatchId?: string; // معرف دفعة الاستيراد الجماعي إن وجد
 
   // Online Catalog & Multi-Company Specifics
   material?: string; // نوع الخامة أو القماش أو المادة أو المواصفة المحددة (قطن، صوف، خشب، حديد...)
@@ -1180,6 +1182,11 @@ export interface AppData {
   version?: number;
   lastOperationId?: string;
   devices?: DeviceSessionInfo[];
+
+  // 21. Bulk Import of Items & Opening Balances (الاستيراد الجماعي للأصناف والأرصدة الافتتاحية)
+  bulkImportBatches?: BulkImportBatch[];
+  nextBulkImportId?: number;
+  processedImportKeys?: Record<string, string>;
 }
 
 export type DashboardWidgetId =
@@ -1471,5 +1478,96 @@ export interface CrmLead {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+}
+
+// 22. Bulk Import of Items & Opening Balances (الاستيراد الجماعي للأصناف والأرصدة الافتتاحية)
+export type BulkImportActionChoice = 'create_new' | 'update_data' | 'add_qty' | 'skip';
+
+export type BulkImportRowStatus =
+  | 'new'
+  | 'match_existing'
+  | 'duplicate_in_file'
+  | 'code_conflict'
+  | 'missing_data';
+
+export interface BulkImportRow {
+  id: string;
+  rowNumber: number;
+  pageNumber?: number;
+  code: string;
+  name: string;
+  category: string;
+  unit: string;
+  openingQty: number;
+  unitCost: number;
+  priceBeforeDiscount: number;
+  discountValue: number;
+  totalValue: number;
+  netPriceAfterDiscount: number;
+  salePrice?: number;
+  supplierName?: string;
+  warehouseId: string;
+  status: BulkImportRowStatus;
+  action: BulkImportActionChoice;
+  matchedItemId?: string;
+  matchedItemName?: string;
+  matchedItemQty?: number;
+  matchedItemCost?: number;
+  matchedItemUnit?: string;
+  warnings: string[];
+  uncertainFields?: string[];
+}
+
+export interface BulkImportItemSnapshot {
+  action: 'created' | 'updated_data' | 'added_qty';
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  branchId: string;
+  qtyAdded: number;
+  valueAdded: number;
+  beforeItem?: Item | null;
+}
+
+export interface BulkImportBatch {
+  id: string;
+  batchNumber: string;
+  idempotencyKey: string;
+  companyId: string;
+  warehouseId: string;
+  warehouseName: string;
+  sourceType: 'excel' | 'csv' | 'pdf';
+  fileName: string;
+  supplierName?: string;
+  importDate: string;
+  createdAt: string;
+  createdBy: string;
+  status: 'committed' | 'rolled_back';
+  rolledBackAt?: string;
+  rolledBackBy?: string;
+  totalRows: number;
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  totalOpeningQty: number;
+  totalOpeningValue: number;
+  journalEntryId?: number;
+  itemSnapshots: BulkImportItemSnapshot[];
+}
+
+export interface BulkImportRollbackBlocker {
+  itemId: string;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  reason: string;
+  documentRef: string;
+}
+
+export interface BulkImportRollbackBlockReport {
+  allowed: boolean;
+  blockers: BulkImportRollbackBlocker[];
+  message: string;
 }
 
