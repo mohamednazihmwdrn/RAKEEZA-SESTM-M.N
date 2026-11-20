@@ -23,6 +23,33 @@ export function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+function normalizeEngineText(value?: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function generateNextUniqueItemCode(existingItems: Item[], rawCode?: string): string {
+  const cleanRaw = (rawCode || '').trim();
+  if (cleanRaw && !cleanRaw.toUpperCase().startsWith('ITM-ADHOC-')) {
+    return cleanRaw;
+  }
+  const usedCodes = new Set(existingItems.map((i) => (i.code || '').trim().toLowerCase()).filter(Boolean));
+  let seq = existingItems.length + 1;
+  while (usedCodes.has(`itm-${String(seq).padStart(3, '0')}`)) {
+    seq++;
+  }
+  return `ITM-${String(seq).padStart(3, '0')}`;
+}
+
 export function getEffectivePeriodLockDate(appData: AppData): string | undefined {
   const a = (appData.fiscalLockDate || '').trim().slice(0, 10);
   const b = (appData.settings?.periodLockDate || '').trim().slice(0, 10);
@@ -693,11 +720,11 @@ export function processPurchaseInvoice(
         (item.itemId && i.id === item.itemId) ||
         (item.code && i.code && i.code.trim().toLowerCase() === item.code.trim().toLowerCase() &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId))) ||
-        (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+        (normalizeEngineText(i.name) === normalizeEngineText(item.name) &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
     );
     if (!stockItem) {
-      const fallbackCode = item.code?.trim() || `ITM-${String(data.items.length + 1).padStart(3, '0')}`;
+      const fallbackCode = generateNextUniqueItemCode(data.items, item.code);
       stockItem = {
         id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         companyId: invoice.companyId || data.companyId || 'COMP-000001',
@@ -757,7 +784,7 @@ export function processPurchaseInvoice(
             const itemMatches =
               (sLine.itemId && sLine.itemId === stockItem!.id) ||
               (sLine.code && stockItem!.code && sLine.code.trim().toLowerCase() === stockItem!.code.trim().toLowerCase()) ||
-              sLine.name.trim().toLowerCase() === stockItem!.name.trim().toLowerCase();
+              normalizeEngineText(sLine.name) === normalizeEngineText(stockItem!.name);
             if (!itemMatches) return;
 
             const sLineFactor = Math.max(0.0001, Number(sLine.unitFactor || 1));
@@ -1203,7 +1230,7 @@ export function processSaleInvoice(
             (itm.itemId && i.id === itm.itemId) ||
             (itm.code && i.code && i.code.trim().toLowerCase() === itm.code.trim().toLowerCase() &&
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId))) ||
-            (i.name.trim().toLowerCase() === itm.name.trim().toLowerCase() &&
+            (normalizeEngineText(i.name) === normalizeEngineText(itm.name) &&
               (i.branchId === oldBr || (!i.branchId && oldBr === mainBranchId)))
         );
         if (stockItm) {
@@ -1305,19 +1332,19 @@ export function processSaleInvoice(
         (item.itemId && i.id === item.itemId) ||
         (item.code && i.code && i.code.trim().toLowerCase() === item.code.trim().toLowerCase() &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId))) ||
-        (i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+        (normalizeEngineText(i.name) === normalizeEngineText(item.name) &&
           (i.branchId === invBranchId || (!i.branchId && invBranchId === mainBranchId)))
     );
     if (!stockItem) {
       const explicitCost = round2(Number(item.costPrice || 0) / factor);
       const cleanSalePrice = round2(Number(item.price || 0) / factor);
-      const fallbackCode = item.code?.trim() || `ITM-${String(data.items.length + 1).padStart(3, '0')}`;
+      const fallbackCode = generateNextUniqueItemCode(data.items, item.code);
       stockItem = {
         id: item.itemId || `i_${invBranchId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         companyId: invoice.companyId || data.companyId || 'COMP-000001',
         branchId: invBranchId,
         code: fallbackCode,
-        name: item.name,
+        name: item.name.trim(),
         category: item.category || 'عام',
         unit: factor === 1 ? (item.unit || 'قطعة') : 'قطعة',
         quantity: 0,
@@ -1353,16 +1380,38 @@ export function processSaleInvoice(
       stockItem.lastPriceUpdatedBy = invoice.updatedBy || invoice.createdBy || 'مدير النظام';
       stockItem.updatedAt = now.toISOString();
 
-      if (data.productPrices) {
-        const pIdx = data.productPrices.findIndex((p) => p.productId === stockItem!.id);
-        if (pIdx >= 0) {
-          data.productPrices[pIdx] = {
-            ...data.productPrices[pIdx],
-            normalSellingPrice: soldUnitPriceBase,
-            updatedAt: dateStr,
-            updatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
-          };
-        }
+      if (!data.productPrices) data.productPrices = [];
+      const pIdx = data.productPrices.findIndex((p) => p.productId === stockItem!.id);
+      if (pIdx >= 0) {
+        const pCost = Number(stockItem.purchasePrice || data.productPrices[pIdx].purchaseCost || 0);
+        const marginPct = pCost > 0 ? round2(((soldUnitPriceBase - pCost) / pCost) * 100) : 100;
+        data.productPrices[pIdx] = {
+          ...data.productPrices[pIdx],
+          normalSellingPrice: soldUnitPriceBase,
+          profitMarginNormalPercent: marginPct,
+          updatedAt: dateStr,
+          updatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
+        };
+      } else {
+        const pCost = Number(stockItem.purchasePrice || 0);
+        const wholesaleP = Number(stockItem.wholesaleSellingPrice || stockItem.wholesalePrice || soldUnitPriceBase);
+        const marginPct = pCost > 0 ? round2(((soldUnitPriceBase - pCost) / pCost) * 100) : 100;
+        const wMarginPct = pCost > 0 ? round2(((wholesaleP - pCost) / pCost) * 100) : 100;
+        data.productPrices.push({
+          id: `prc-${stockItem.id}`,
+          productId: stockItem.id,
+          productCode: stockItem.code || '',
+          productBarcode: stockItem.barcode || '',
+          productName: stockItem.name,
+          category: stockItem.category || 'عام',
+          purchaseCost: pCost,
+          normalSellingPrice: soldUnitPriceBase,
+          wholesaleSellingPrice: wholesaleP,
+          profitMarginNormalPercent: marginPct,
+          profitMarginWholesalePercent: wMarginPct,
+          updatedAt: dateStr,
+          updatedBy: invoice.updatedBy || invoice.createdBy || 'مدير النظام',
+        });
       }
     }
 

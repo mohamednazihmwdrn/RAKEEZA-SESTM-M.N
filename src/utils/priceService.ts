@@ -60,7 +60,9 @@ export function ensureProductPricesSynced(data: AppData): AppData {
         updatedBy: item.lastPriceUpdatedBy || 'مدير النظام',
       };
     } else {
-      // Ensure sync
+      const resolvedNormal = normalPrice > 0 ? normalPrice : (priceRecord.normalSellingPrice || 0);
+      const resolvedWholesale = wholesalePrice > 0 ? wholesalePrice : (priceRecord.wholesaleSellingPrice || 0);
+      // Ensure sync without reverting sticky sale price saved on the item
       priceRecord = {
         ...priceRecord,
         productCode: itemCode,
@@ -68,10 +70,10 @@ export function ensureProductPricesSynced(data: AppData): AppData {
         productName: item.name,
         category: item.category || priceRecord.category,
         purchaseCost: cost,
-        normalSellingPrice: priceRecord.normalSellingPrice || normalPrice,
-        wholesaleSellingPrice: priceRecord.wholesaleSellingPrice || wholesalePrice,
-        profitMarginNormalPercent: calculateProfitMargin(priceRecord.normalSellingPrice || normalPrice, cost).marginPercent,
-        profitMarginWholesalePercent: calculateProfitMargin(priceRecord.wholesaleSellingPrice || wholesalePrice, cost).marginPercent,
+        normalSellingPrice: resolvedNormal,
+        wholesaleSellingPrice: resolvedWholesale,
+        profitMarginNormalPercent: calculateProfitMargin(resolvedNormal, cost).marginPercent,
+        profitMarginWholesalePercent: calculateProfitMargin(resolvedWholesale, cost).marginPercent,
       };
     }
 
