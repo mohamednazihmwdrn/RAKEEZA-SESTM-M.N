@@ -95,8 +95,30 @@ textarea,
     width: 100%;
   }
 
-  div, section, article, header, nav, footer, main {
+  div:not(.rp-scale-inner):not(.rp-root):not(.rp-frame):not(.rp-head):not(.rp-meta):not(.rp-meta-col):not(.rp-totals):not(.rp-totals-area):not(.rp-data-cards),
+  section,
+  article:not(.rp-page),
+  header:not(.rp-head),
+  nav,
+  footer:not(.rp-foot),
+  main {
     max-width: 100%;
+  }
+
+  .rakeeza-print-modal-root .rp-scale-inner,
+  .rakeeza-print-modal-root .rp-root,
+  .rakeeza-print-modal-root .rp-page {
+    max-width: none !important;
+  }
+
+  .report-container {
+    padding: 12px !important;
+  }
+
+  .report-container .header,
+  .report-container .bottom-section {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   pre, code {
@@ -205,8 +227,33 @@ textarea,
   font-family: var(--font-sans);
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 8px;
   box-sizing: border-box;
+  overflow-wrap: break-word;
+}
+
+.report-container.a4,
+.report-container[data-paper-size="a4"] {
+  max-width: 210mm;
+  min-height: 281mm;
+  padding: 8mm;
+}
+
+.report-container.a5,
+.report-container[data-paper-size="a5"] {
+  max-width: 148mm;
+  min-height: 194mm;
+  padding: 5mm 6mm;
+  font-size: 0.78rem;
+}
+
+.report-container.thermal,
+.report-container[data-paper-size="thermal"] {
+  max-width: 80mm;
+  min-height: auto;
+  padding: 3mm;
+  font-size: 0.72rem;
 }
 
 .report-container .header {
@@ -218,6 +265,9 @@ textarea,
   margin-bottom: 4px;
   width: 100%;
   gap: 12px;
+  flex-shrink: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container .header-right h2 {
@@ -263,6 +313,9 @@ textarea,
   line-height: 1.45;
   width: 100%;
   background-color: #f8fafc;
+  flex-shrink: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container .info-item p {
@@ -274,6 +327,9 @@ textarea,
   grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
   gap: 8px;
   margin-bottom: 4px;
+  flex-shrink: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container .kpi-card {
@@ -282,6 +338,8 @@ textarea,
   padding: 6px 8px;
   text-align: center;
   background-color: #f8fafc;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container .kpi-card .kpi-title {
@@ -301,13 +359,31 @@ textarea,
 
 .report-container .table-wrapper {
   width: 100%;
-  flex-grow: 1;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .report-container table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   margin-bottom: 4px;
+}
+
+.report-container thead {
+  display: table-header-group;
+}
+
+.report-container tfoot {
+  display: table-footer-group;
+}
+
+.report-container tr,
+.report-container tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container th,
@@ -316,6 +392,10 @@ textarea,
   padding: 5px 6px;
   text-align: center;
   font-size: 0.76rem;
+  overflow-wrap: break-word;
+  word-break: normal;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container th {
@@ -362,12 +442,15 @@ textarea,
   justify-content: space-between;
   align-items: flex-end;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: auto;
   margin-bottom: 4px;
   width: 100%;
   font-size: 0.78rem;
   font-weight: 500;
   color: #334155;
+  flex-shrink: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .report-container .report-footer-note {
@@ -382,6 +465,9 @@ textarea,
   font-weight: 400;
   color: #475569;
   width: 100%;
+  flex-shrink: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .copyright-outside {
@@ -403,13 +489,18 @@ textarea,
     scrollbar-width: none;
   }
 
-  /* Clean Multi-Page Print Rules */
+  /* Clean Single-Sheet & Multi-Page Print Rules with Exact 8mm Margins */
   @media print {
+    @page {
+      size: auto;
+      margin: 8mm;
+    }
+
     .no-print,
     .no-print-toolbar,
     .no-print-bar,
     .no-print-backdrop,
-    header,
+    header:not(.rp-head),
     nav,
     aside,
     footer.no-print,
@@ -439,17 +530,59 @@ textarea,
       box-shadow: none !important;
     }
 
-    table {
+    .report-container,
+    .report-container.a4,
+    .report-container.a5 {
       width: 100% !important;
-      border-collapse: collapse !important;
-      font-size: 9.5pt !important;
+      max-width: 100% !important;
+      height: auto !important;
+      min-height: auto !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
 
-    thead {
+    .report-container .table-wrapper {
+      display: block !important;
+      overflow: visible !important;
+      flex: 1 1 auto !important;
+    }
+
+    .report-container .header,
+    .report-container .info-box,
+    .report-container .kpi-grid,
+    .report-container .kpi-card,
+    .report-container .bottom-section,
+    .report-container .report-footer-note {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+
+    .report-container th,
+    .report-container td {
+      padding: 3.5px 5px !important;
+      font-size: 8.5pt !important;
+    }
+
+    table:not(.rp-table) {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 9pt !important;
+    }
+
+    table:not(.rp-table) thead {
       display: table-header-group !important;
     }
 
-    tfoot {
+    table:not(.rp-table) tfoot {
       display: table-footer-group !important;
     }
 
@@ -458,12 +591,13 @@ textarea,
       page-break-inside: avoid !important;
     }
 
-    th, td {
+    table:not(.rp-table) th,
+    table:not(.rp-table) td {
       border: 1px solid #cbd5e1 !important;
       padding: 4px 6px !important;
     }
 
-    th {
+    table:not(.rp-table) th {
       background-color: #f1f5f9 !important;
       color: #0f172a !important;
       font-weight: 600 !important;

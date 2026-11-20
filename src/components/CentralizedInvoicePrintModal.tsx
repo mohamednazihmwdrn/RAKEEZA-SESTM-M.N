@@ -89,7 +89,109 @@ function chunkRows<T>(items: T[], perPage: number): T[][] {
   return chunks;
 }
 
+function getTableWidthClass(colCount: number): string {
+  if (colCount >= 8) return 'rp-table rp-ultra-wide';
+  if (colCount >= 6) return 'rp-table rp-wide-table';
+  return 'rp-table';
+}
+
+function getReportCellMeta(
+  colHeader: string,
+  cellValue: unknown,
+  colIndex: number,
+  totalCols: number
+): { className: string; dir?: 'ltr' | 'rtl' } {
+  const h = (colHeader || '').trim().toLowerCase();
+  const str = cellValue !== null && cellValue !== undefined ? String(cellValue).trim() : '';
+
+  if (h === '#' || h === 'م' || h === 'الرقم' || h === 'مسلسل') {
+    return { className: 'rp-idx-cell', dir: 'ltr' };
+  }
+
+  const isTextColumn =
+    h.includes('اسم') ||
+    h.includes('بيان') ||
+    h.includes('تفاصيل') ||
+    h.includes('ملاحظ') ||
+    h.includes('قسم') ||
+    h.includes('وحدة') ||
+    h.includes('بند') ||
+    h.includes('عميل') ||
+    h.includes('مورد') ||
+    h.includes('موظف') ||
+    h.includes('مسؤول') ||
+    h.includes('غرض') ||
+    h.includes('حساب') ||
+    h.includes('موقع') ||
+    h.includes('مستخدم') ||
+    h.includes('جهة') ||
+    h.includes('بنك') ||
+    h.includes('طرف');
+
+  const isNumericHeader =
+    h.includes('مدين') ||
+    h.includes('دائن') ||
+    h.includes('رصيد') ||
+    h.includes('مبلغ') ||
+    h.includes('قيمة') ||
+    h.includes('سعر') ||
+    h.includes('إجمالي') ||
+    h.includes('صافي') ||
+    h.includes('مدفوع') ||
+    h.includes('متبقي') ||
+    h.includes('كمية') ||
+    h.includes('عدد') ||
+    h.includes('ضريب') ||
+    h.includes('خصم') ||
+    h.includes('تكلفة') ||
+    h.includes('إهلاك') ||
+    h.includes('أساسي') ||
+    h.includes('استقطاع') ||
+    h.includes('فارق') ||
+    h.includes('وارد') ||
+    h.includes('منصرف') ||
+    h.includes('تدفق') ||
+    h.includes('دفترية') ||
+    h.includes('فعلي') ||
+    h.includes('ربح');
+
+  const isDateOrPhoneOrCode =
+    h.includes('تاريخ') ||
+    h.includes('وقت') ||
+    h.includes('توقيت') ||
+    h.includes('استحقاق') ||
+    h.includes('هاتف') ||
+    h.includes('جوال') ||
+    h.includes('كود') ||
+    h === 'الأب' ||
+    h.includes('مرجع') ||
+    h.includes('رقم ');
+
+  if (isTextColumn && !isNumericHeader) {
+    return { className: 'rp-text-cell' };
+  }
+
+  if (isNumericHeader || isDateOrPhoneOrCode) {
+    const isShortAtomic = str.length <= 18 && !/\s{2,}|\|/.test(str);
+    return {
+      className: isShortAtomic ? 'rp-num-cell' : 'rp-badge-cell',
+      dir: isShortAtomic && /^[0-9.,+\-/:%\sEGPج.مSAR$]+$/i.test(str) ? 'ltr' : undefined,
+    };
+  }
+
+  if (colIndex === 0 || (totalCols >= 4 && colIndex === 1)) {
+    return { className: 'rp-text-cell' };
+  }
+
+  return { className: 'rp-badge-cell' };
+}
+
 const SCOPED_PRINT_CSS = `
+.rakeeza-print-modal-root .rp-scale-inner,
+.rakeeza-print-modal-root .rp-root,
+.rakeeza-print-modal-root .rp-page {
+  max-width: none !important;
+}
 .rp-root {
   --rp-navy: #172536;
   --rp-gold: #c7a15a;
@@ -114,30 +216,37 @@ const SCOPED_PRINT_CSS = `
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .rp-root.rp-a5 .rp-page {
   width: 148mm;
-  min-height: 210mm;
-  padding: 6mm;
+  min-height: 204mm;
+  padding: 7.5mm 8mm;
 }
 .rp-root.rp-a4 .rp-page {
   width: 210mm;
-  min-height: 297mm;
+  min-height: 291mm;
   padding: 8mm;
 }
 .rp-root.rp-thermal .rp-page {
   width: 80mm;
   min-height: auto;
-  padding: 3mm;
+  padding: 2.5mm;
   box-shadow: 0 2px 10px rgba(21, 37, 54, 0.1);
 }
 .rp-frame {
   border: 1.1px solid #273747;
   flex: 1 1 auto;
-  padding: 4.5mm;
+  padding: 3.5mm;
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
+}
+.rp-root.rp-a5 .rp-frame {
+  padding: 3mm;
 }
 .rp-head {
   direction: ltr;
@@ -259,40 +368,214 @@ const SCOPED_PRINT_CSS = `
   font-weight: 700;
   color: #0f172a;
 }
+.rp-head,
+.rp-title-row,
+.rp-meta,
+.rp-data-cards,
+.rp-card,
+.rp-table tr,
+.rp-totals-area,
+.rp-notes,
+.rp-signatures,
+.rp-foot,
+.rp-copyright {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.rp-meta-col b {
+  overflow-wrap: anywhere;
+}
 .rp-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  font-size: 8.6pt;
-  margin-bottom: 3mm;
+  font-size: 8.3pt;
+  margin-bottom: 2.5mm;
 }
 .rp-table th,
 .rp-table td {
   border: 1px solid #aeb9c3;
-  padding: 2mm 1.5mm;
+  padding: 1.45mm 1.2mm;
   text-align: center;
   vertical-align: middle;
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
 }
 .rp-table th {
   background: #e9eef3;
   color: #152536;
   font-weight: 700;
   border-bottom: 2px solid #647384;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-height: 1.28;
 }
-.rp-table td.rp-item-cell {
+.rp-table td.rp-item-cell,
+.rp-table td.rp-text-cell {
   text-align: right;
   font-weight: 600;
-  overflow-wrap: break-word;
+  white-space: normal;
   word-break: normal;
+  overflow-wrap: anywhere;
+}
+.rp-table td.rp-badge-cell {
+  text-align: center;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+.rp-table td.rp-idx-cell {
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  width: 1%;
 }
 .rp-table td.rp-num-cell {
   white-space: nowrap;
+  word-break: keep-all;
   font-variant-numeric: tabular-nums;
 }
 .rp-table tbody tr:nth-child(even) {
   background: #fafbfc;
+}
+.rp-root.rp-a4 .rp-table.rp-wide-table {
+  font-size: 7.7pt;
+}
+.rp-root.rp-a4 .rp-table.rp-ultra-wide {
+  font-size: 7.1pt;
+}
+.rp-root.rp-a4 .rp-table.rp-wide-table th,
+.rp-root.rp-a4 .rp-table.rp-wide-table td,
+.rp-root.rp-a4 .rp-table.rp-ultra-wide th,
+.rp-root.rp-a4 .rp-table.rp-ultra-wide td {
+  padding: 1.15mm 0.85mm;
+}
+.rp-root.rp-a5 .rp-head {
+  padding-bottom: 2.2mm;
+  margin-bottom: 2.2mm;
+}
+.rp-root.rp-a5 .rp-company {
+  font-size: 11.2pt;
+}
+.rp-root.rp-a5 .rp-title-row {
+  margin-bottom: 2mm;
+}
+.rp-root.rp-a5 .rp-title-row h1 {
+  font-size: 11.8pt;
+}
+.rp-root.rp-a5 .rp-meta {
+  margin-bottom: 2.2mm;
+}
+.rp-root.rp-a5 .rp-meta-col {
+  padding: 1.5mm 2mm;
+  font-size: 7.7pt;
+  line-height: 1.5;
+}
+.rp-root.rp-a5 .rp-meta-center {
+  font-size: 9.2pt;
+}
+.rp-root.rp-a5 .rp-table {
+  font-size: 7.6pt;
+  margin-bottom: 2mm;
+}
+.rp-root.rp-a5 .rp-table th,
+.rp-root.rp-a5 .rp-table td {
+  padding: 1.1mm 0.85mm;
+}
+.rp-root.rp-a5 .rp-table.rp-wide-table {
+  font-size: 6.8pt;
+}
+.rp-root.rp-a5 .rp-table.rp-wide-table th,
+.rp-root.rp-a5 .rp-table.rp-wide-table td {
+  padding: 0.9mm 0.65mm;
+}
+.rp-root.rp-a5 .rp-table.rp-ultra-wide {
+  font-size: 6.1pt;
+}
+.rp-root.rp-a5 .rp-table.rp-ultra-wide th,
+.rp-root.rp-a5 .rp-table.rp-ultra-wide td {
+  padding: 0.8mm 0.48mm;
+}
+.rp-root.rp-a5 .rp-table.rp-ultra-wide td.rp-num-cell {
+  font-size: 5.9pt;
+}
+.rp-root.rp-a5 .rp-data-cards {
+  gap: 1.6mm;
+  margin: 1.6mm 0;
+}
+.rp-root.rp-a5 .rp-card {
+  padding: 1.6mm 1.2mm;
+}
+.rp-root.rp-a5 .rp-card .rp-k {
+  font-size: 7.1pt;
+  margin-bottom: 0.7mm;
+}
+.rp-root.rp-a5 .rp-card .rp-v {
+  font-size: 9.2pt;
+  overflow-wrap: break-word;
+}
+.rp-data-cards.rp-cards-4 .rp-card .rp-v {
+  font-size: 8.6pt;
+  line-height: 1.32;
+  overflow-wrap: break-word;
+}
+.rp-root.rp-a5 .rp-data-cards.rp-cards-4 .rp-card .rp-v {
+  font-size: 7.4pt;
+  line-height: 1.28;
+}
+.rp-root.rp-a5 .rp-totals {
+  font-size: 8.4pt;
+}
+.rp-root.rp-a5 .rp-total-line {
+  padding: 1.35mm 0.8mm;
+}
+.rp-root.rp-a5 .rp-total-line.rp-main {
+  font-size: 10pt;
+}
+.rp-page.rp-compact .rp-head {
+  padding-bottom: 1.8mm;
+  margin-bottom: 1.8mm;
+}
+.rp-page.rp-compact .rp-logo {
+  min-height: 15mm;
+}
+.rp-page.rp-compact .rp-logo-placeholder {
+  width: 19mm;
+  height: 15mm;
+  font-size: 7.5pt;
+}
+.rp-page.rp-compact .rp-title-row {
+  margin-bottom: 1.6mm;
+}
+.rp-page.rp-compact .rp-meta {
+  margin-bottom: 1.8mm;
+}
+.rp-page.rp-compact .rp-meta-col {
+  padding: 1.2mm 1.8mm;
+  line-height: 1.45;
+}
+.rp-page.rp-compact .rp-section {
+  padding: 1.3mm 2mm;
+  margin: 1.5mm 0 1.3mm;
+  font-size: 8.5pt;
+}
+.rp-page.rp-compact .rp-table {
+  font-size: 7.4pt;
+  margin-bottom: 1.5mm;
+}
+.rp-page.rp-compact .rp-table th,
+.rp-page.rp-compact .rp-table td {
+  padding: 0.95mm 0.85mm;
+}
+.rp-page.rp-compact .rp-totals-area {
+  margin: 1.2mm 0 1.5mm;
+}
+.rp-page.rp-compact .rp-total-line {
+  padding: 1.1mm 0.8mm;
+}
+.rp-page.rp-compact .rp-signatures {
+  margin: 4.5mm 0 1.5mm;
 }
 .rp-totals-area {
   direction: ltr;
@@ -790,31 +1073,37 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
     const existingStyle = document.getElementById('rakeeza-print-page-style');
     if (existingStyle) existingStyle.remove();
 
-    let pageCss = '@page { size: A5 portrait; margin: 0; }';
+    let pageCss = '@page { size: A5 portrait; margin: 8mm; }';
     let docSizeCss = `
       .rp-root.rp-a5 .rp-page {
-        width: 148mm !important;
-        min-height: 210mm !important;
-        padding: 5mm !important;
+        width: 100% !important;
+        max-width: 132mm !important;
+        min-height: 188mm !important;
+        height: auto !important;
+        padding: 0 !important;
       }
     `;
 
     if (selectedSize === 'a4-portrait') {
-      pageCss = '@page { size: A4 portrait; margin: 0; }';
+      pageCss = '@page { size: A4 portrait; margin: 8mm; }';
       docSizeCss = `
         .rp-root.rp-a4 .rp-page {
-          width: 210mm !important;
-          min-height: 297mm !important;
-          padding: 7mm !important;
+          width: 100% !important;
+          max-width: 194mm !important;
+          min-height: 274mm !important;
+          height: auto !important;
+          padding: 0 !important;
         }
       `;
     } else if (selectedSize === 'thermal-80') {
-      pageCss = '@page { size: 80mm auto; margin: 0; }';
+      pageCss = '@page { size: 80mm auto; margin: 2mm; }';
       docSizeCss = `
         .rp-root.rp-thermal .rp-page {
-          width: 80mm !important;
+          width: 100% !important;
+          max-width: 76mm !important;
           min-height: 0 !important;
-          padding: 2mm !important;
+          height: auto !important;
+          padding: 0 !important;
         }
         .rp-root.rp-thermal .rp-frame {
           min-height: 0 !important;
@@ -859,17 +1148,20 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
         }
         .rp-scale-outer,
         .rp-scale-inner {
-          width: 100% !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
           height: auto !important;
           transform: none !important;
           overflow: visible !important;
-          margin: 0 !important;
+          margin: 0 auto !important;
+          display: block !important;
         }
         #rakeeza-universal-print-sheet,
         #rakeeza-batch-print-container {
           position: static !important;
-          width: 100% !important;
-          max-width: 100% !important;
+          width: auto !important;
+          max-width: none !important;
           margin: 0 auto !important;
           padding: 0 !important;
           background: #ffffff !important;
@@ -879,6 +1171,10 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           border-radius: 0 !important;
           margin: 0 auto !important;
           overflow: visible !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+        .rp-page:not(:last-child) {
           page-break-after: always !important;
           break-after: page !important;
         }
@@ -887,18 +1183,26 @@ export const CentralizedInvoicePrintModal: React.FC<CentralizedInvoicePrintModal
           break-after: auto !important;
         }
         .rp-frame {
-          min-height: 100% !important;
+          flex: 1 1 auto !important;
         }
         ${docSizeCss}
         .rp-table thead {
           display: table-header-group !important;
         }
+        .rp-table tfoot {
+          display: table-footer-group !important;
+        }
+        .rp-head,
+        .rp-title-row,
+        .rp-meta,
         .rp-table tr,
         .rp-totals-area,
         .rp-data-cards,
+        .rp-card,
         .rp-signatures,
         .rp-notes,
-        .rp-foot {
+        .rp-foot,
+        .rp-copyright {
           break-inside: avoid !important;
           page-break-inside: avoid !important;
         }
@@ -1388,6 +1692,8 @@ const ScaledPrintViewport: React.FC<{
     };
 
     recalc();
+    const rafId = window.requestAnimationFrame(recalc);
+    const timerId = window.setTimeout(recalc, 80);
 
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
@@ -1397,6 +1703,8 @@ const ScaledPrintViewport: React.FC<{
     }
     window.addEventListener('resize', recalc);
     return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
       if (ro) ro.disconnect();
       window.removeEventListener('resize', recalc);
     };
@@ -1413,6 +1721,7 @@ const ScaledPrintViewport: React.FC<{
       className="rp-scale-outer shrink-0 mx-auto"
       style={{
         width: `${scaledW}px`,
+        maxWidth: '100%',
         height: scaledH ? `${scaledH}px` : 'auto',
         overflow: 'hidden',
         position: 'relative',
@@ -1423,6 +1732,8 @@ const ScaledPrintViewport: React.FC<{
         className="rp-scale-inner"
         style={{
           width: `${naturalWidth}px`,
+          minWidth: `${naturalWidth}px`,
+          maxWidth: 'none',
           transform: effectiveScale < 0.998 ? `scale(${effectiveScale})` : 'none',
           transformOrigin: 'top left',
         }}
@@ -1545,6 +1856,7 @@ const DocumentPageShell: React.FC<{
   totalPages: number;
   isA4: boolean;
   isLastPage: boolean;
+  isCompact?: boolean;
   batchPositionLabel?: string;
   children: React.ReactNode;
 }> = ({
@@ -1560,13 +1872,14 @@ const DocumentPageShell: React.FC<{
   totalPages,
   isA4,
   isLastPage,
+  isCompact,
   batchPositionLabel,
   children,
 }) => {
   const companyName = settings.companyName || 'المنظومة المحاسبية';
 
   return (
-    <article className="rp-page rakeeza-print-doc-page">
+    <article className={`rp-page rakeeza-print-doc-page${isCompact ? ' rp-compact' : ''}`}>
       <div className="rp-frame">
         <DocumentHeader
           settings={settings}
@@ -1737,7 +2050,7 @@ const UnifiedPaginatedDocument: React.FC<{
 
   if (isInvoiceKind) {
     const items = payload.items || [];
-    const perPage = isThermal ? items.length || 1 : isA4 ? 20 : 12;
+    const perPage = isThermal ? items.length || 1 : isA4 ? 22 : 12;
     const chunks = chunkRows(items, perPage);
     const totalQty = items.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
     const netTotal = payload.amount !== undefined ? Number(payload.amount) : 0;
@@ -1764,6 +2077,7 @@ const UnifiedPaginatedDocument: React.FC<{
         {chunks.map((chunk, pageIdx) => {
           const isLastPage = pageIdx === chunks.length - 1;
           const startNum = pageIdx * perPage;
+          const densePage = !isThermal && chunk.length >= (isA4 ? 15 : 8);
           return (
             <DocumentPageShell
               key={pageIdx}
@@ -1779,6 +2093,7 @@ const UnifiedPaginatedDocument: React.FC<{
               totalPages={chunks.length}
               isA4={isA4}
               isLastPage={isLastPage}
+              isCompact={densePage}
               batchPositionLabel={batchPositionLabel}
             >
               {/* 3-Column Metadata Box */}
@@ -2012,7 +2327,7 @@ const UnifiedPaginatedDocument: React.FC<{
   if (kind === 'account_statement') {
     const rows = payload.rows || [];
     const cols = payload.columns || ['التاريخ', 'البيان', 'رقم المستند', 'مدين', 'دائن', 'الرصيد'];
-    const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+    const perPage = isThermal ? rows.length || 1 : isA4 ? 24 : 13;
     const chunks = chunkRows(rows, perPage);
     const opening = payload.openingBalance !== undefined ? Number(payload.openingBalance) : 0;
     const totalDeb = payload.totalDebit !== undefined ? Number(payload.totalDebit) : 0;
@@ -2030,6 +2345,7 @@ const UnifiedPaginatedDocument: React.FC<{
       <>
         {chunks.map((chunk, pageIdx) => {
           const isLastPage = pageIdx === chunks.length - 1;
+          const densePage = !isThermal && chunk.length >= (isA4 ? 15 : 8);
           return (
             <DocumentPageShell
               key={pageIdx}
@@ -2045,6 +2361,7 @@ const UnifiedPaginatedDocument: React.FC<{
               totalPages={chunks.length}
               isA4={isA4}
               isLastPage={isLastPage}
+              isCompact={densePage}
               batchPositionLabel={batchPositionLabel}
             >
               {/* Statement Party & Period Strip */}
@@ -2119,7 +2436,7 @@ const UnifiedPaginatedDocument: React.FC<{
                   emptyText="لا توجد حركات مسجلة خلال هذه الفترة"
                 />
               ) : (
-                <table className="rp-table">
+                <table className={getTableWidthClass(cols.length)}>
                   <thead>
                     <tr>
                       {cols.map((c, idx) => (
@@ -2137,15 +2454,19 @@ const UnifiedPaginatedDocument: React.FC<{
                     ) : (
                       chunk.map((row, rIdx) => (
                         <tr key={rIdx}>
-                          {cols.map((_, cIdx) => (
-                            <td
-                              key={cIdx}
-                              className={cIdx === 1 ? 'rp-item-cell' : cIdx === 0 || cIdx >= 3 ? 'rp-num-cell' : ''}
-                              dir={cIdx >= 3 ? 'ltr' : undefined}
-                            >
-                              {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                            </td>
-                          ))}
+                          {cols.map((colHeader, cIdx) => {
+                            const cellVal = row[cIdx];
+                            const meta = getReportCellMeta(colHeader, cellVal, cIdx, cols.length);
+                            return (
+                              <td
+                                key={cIdx}
+                                className={meta.className}
+                                dir={meta.dir}
+                              >
+                                {cellVal !== null && cellVal !== undefined ? cellVal : '—'}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))
                     )}
@@ -2210,7 +2531,7 @@ const UnifiedPaginatedDocument: React.FC<{
     const variance = Number((m.actual ?? m.expected) - m.expected);
     const rows = payload.rows || [];
     const cols = payload.columns || ['الحركة', 'القيمة', 'ملاحظات'];
-    const perPage = isThermal ? rows.length || 1 : isA4 ? 18 : 11;
+    const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 11;
     const chunks = chunkRows(rows, perPage);
     const sigs = payload.signatures && payload.signatures.length > 0 ? payload.signatures : ['أمين الخزينة / الكاشير', 'المراجع المالي', 'الاعتماد'];
 
@@ -2227,6 +2548,7 @@ const UnifiedPaginatedDocument: React.FC<{
       <>
         {chunks.map((chunk, pageIdx) => {
           const isLastPage = pageIdx === chunks.length - 1;
+          const densePage = !isThermal && chunk.length >= (isA4 ? 14 : 7);
           return (
             <DocumentPageShell
               key={pageIdx}
@@ -2242,6 +2564,7 @@ const UnifiedPaginatedDocument: React.FC<{
               totalPages={chunks.length}
               isA4={isA4}
               isLastPage={isLastPage}
+              isCompact={densePage}
               batchPositionLabel={batchPositionLabel}
             >
               <div className="rp-meta">
@@ -2291,7 +2614,7 @@ const UnifiedPaginatedDocument: React.FC<{
                   emptyText="لا توجد حركات مسجلة خلال هذا اليوم"
                 />
               ) : (
-                <table className="rp-table">
+                <table className={getTableWidthClass(cols.length)}>
                   <thead>
                     <tr>
                       {cols.map((c, idx) => (
@@ -2309,11 +2632,15 @@ const UnifiedPaginatedDocument: React.FC<{
                     ) : (
                       chunk.map((row, rIdx) => (
                         <tr key={rIdx}>
-                          {cols.map((_, cIdx) => (
-                            <td key={cIdx} className={cIdx === 0 || cIdx === 1 ? 'rp-item-cell' : 'rp-num-cell'}>
-                              {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                            </td>
-                          ))}
+                          {cols.map((colHeader, cIdx) => {
+                            const cellVal = row[cIdx];
+                            const meta = getReportCellMeta(colHeader, cellVal, cIdx, cols.length);
+                            return (
+                              <td key={cIdx} className={meta.className} dir={meta.dir}>
+                                {cellVal !== null && cellVal !== undefined ? cellVal : '—'}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))
                     )}
@@ -2361,7 +2688,7 @@ const UnifiedPaginatedDocument: React.FC<{
   // 5. ALL SYSTEM REPORTS, DIRECTORIES, INVENTORY, STOCKTAKE, SETTLEMENTS, CLOSING, JOURNALS, FINANCIAL STATEMENTS
   const rows = payload.rows || [];
   const cols = payload.columns || ['البند', 'التفاصيل', 'القيمة'];
-  const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+  const perPage = isThermal ? rows.length || 1 : isA4 ? 24 : 12;
   const chunks = chunkRows(rows, perPage);
   const visibleSummaries = (payload.summaries || []).filter((s) => {
     const lbl = s.label || '';
@@ -2375,6 +2702,7 @@ const UnifiedPaginatedDocument: React.FC<{
     <>
       {chunks.map((chunk, pageIdx) => {
         const isLastPage = pageIdx === chunks.length - 1;
+        const densePage = !isThermal && (chunk.length >= (isA4 ? 15 : 7) || cols.length >= 6);
         return (
           <DocumentPageShell
             key={pageIdx}
@@ -2390,6 +2718,7 @@ const UnifiedPaginatedDocument: React.FC<{
             totalPages={chunks.length}
             isA4={isA4}
             isLastPage={isLastPage}
+            isCompact={densePage}
             batchPositionLabel={batchPositionLabel}
           >
             {/* Scope / Report Metadata Box */}
@@ -2448,7 +2777,21 @@ const UnifiedPaginatedDocument: React.FC<{
             </div>
 
             {pageIdx === 0 && payload.kpis && payload.kpis.length > 0 && (
-              <div className="rp-data-cards">
+              <div
+                className={`rp-data-cards${payload.kpis.length >= 4 ? ' rp-cards-4' : ''}`}
+                style={
+                  !isThermal
+                    ? {
+                        gridTemplateColumns:
+                          payload.kpis.length === 4
+                            ? 'repeat(4, 1fr)'
+                            : payload.kpis.length === 2
+                            ? 'repeat(2, 1fr)'
+                            : 'repeat(3, 1fr)',
+                      }
+                    : undefined
+                }
+              >
                 {payload.kpis.map((k, i) => (
                   <div key={i} className="rp-card">
                     <div className="rp-k">{k.title}</div>
@@ -2471,7 +2814,7 @@ const UnifiedPaginatedDocument: React.FC<{
                 emptyText="لا توجد بيانات متاحة لهذا التقرير"
               />
             ) : (
-              <table className="rp-table">
+              <table className={getTableWidthClass(cols.length)}>
                 <thead>
                   <tr>
                     {cols.map((c, idx) => (
@@ -2489,12 +2832,14 @@ const UnifiedPaginatedDocument: React.FC<{
                   ) : (
                     chunk.map((row, rIdx) => (
                       <tr key={rIdx}>
-                        {cols.map((_, cIdx) => {
+                        {cols.map((colHeader, cIdx) => {
                           const cell = row[cIdx];
+                          const meta = getReportCellMeta(colHeader, cell, cIdx, cols.length);
                           return (
                             <td
                               key={cIdx}
-                              className={cIdx === 0 || (cols.length >= 4 && cIdx === 1) ? 'rp-item-cell' : 'rp-num-cell'}
+                              className={meta.className}
+                              dir={meta.dir}
                             >
                               {cell !== null && cell !== undefined ? cell : '—'}
                             </td>
@@ -2555,7 +2900,7 @@ const BatchSummaryPages: React.FC<{
 }> = ({ summary, settings, isThermal, isA4 }) => {
   const rows = summary.rows || [];
   const cols = summary.columns || ['#', 'التاريخ', 'التصنيف', 'الطرف', 'الحالة', 'الإجمالي', 'المدفوع'];
-  const perPage = isThermal ? rows.length || 1 : isA4 ? 22 : 13;
+  const perPage = isThermal ? rows.length || 1 : isA4 ? 24 : 12;
   const chunks = chunkRows(rows, perPage);
   const nowStr = new Date().toISOString().split('T')[0];
 
@@ -2563,6 +2908,7 @@ const BatchSummaryPages: React.FC<{
     <>
       {chunks.map((chunk, pageIdx) => {
         const isLastPage = pageIdx === chunks.length - 1;
+        const densePage = !isThermal && (chunk.length >= (isA4 ? 15 : 8) || cols.length >= 6);
         return (
           <DocumentPageShell
             key={pageIdx}
@@ -2576,9 +2922,24 @@ const BatchSummaryPages: React.FC<{
             totalPages={chunks.length}
             isA4={isA4}
             isLastPage={isLastPage}
+            isCompact={densePage}
           >
             {pageIdx === 0 && summary.kpis.length > 0 && (
-              <div className="rp-data-cards">
+              <div
+                className={`rp-data-cards${summary.kpis.length >= 4 ? ' rp-cards-4' : ''}`}
+                style={
+                  !isThermal
+                    ? {
+                        gridTemplateColumns:
+                          summary.kpis.length === 4
+                            ? 'repeat(4, 1fr)'
+                            : summary.kpis.length === 2
+                            ? 'repeat(2, 1fr)'
+                            : 'repeat(3, 1fr)',
+                      }
+                    : undefined
+                }
+              >
                 {summary.kpis.map((k, idx) => (
                   <div key={idx} className="rp-card">
                     <div className="rp-k">{k.title}</div>
@@ -2597,7 +2958,7 @@ const BatchSummaryPages: React.FC<{
                 emptyText="لا توجد مستندات"
               />
             ) : (
-              <table className="rp-table">
+              <table className={getTableWidthClass(cols.length)}>
                 <thead>
                   <tr>
                     {cols.map((c, idx) => (
@@ -2608,11 +2969,15 @@ const BatchSummaryPages: React.FC<{
                 <tbody>
                   {chunk.map((row, rIdx) => (
                     <tr key={rIdx}>
-                      {cols.map((_, cIdx) => (
-                        <td key={cIdx} className={cIdx === 3 ? 'rp-item-cell' : 'rp-num-cell'}>
-                          {row[cIdx] !== null && row[cIdx] !== undefined ? row[cIdx] : '—'}
-                        </td>
-                      ))}
+                      {cols.map((colHeader, cIdx) => {
+                        const cellVal = row[cIdx];
+                        const meta = getReportCellMeta(colHeader, cellVal, cIdx, cols.length);
+                        return (
+                          <td key={cIdx} className={meta.className} dir={meta.dir}>
+                            {cellVal !== null && cellVal !== undefined ? cellVal : '—'}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>

@@ -96,27 +96,58 @@ export const AuditTrailView: React.FC<AuditTrailViewProps> = ({
           </div>
           <TableActionButtons
             onPrint={() => {
+              const actionArMap: Record<string, string> = {
+                create: 'إضافة',
+                update: 'تعديل',
+                delete: 'حذف',
+                print: 'طباعة',
+                approval: 'اعتماد',
+                transfer: 'تحويل',
+                login: 'دخول',
+              };
+              const createUpdateCount = filteredLogs.filter(
+                (l) => l.action === 'create' || l.action === 'update'
+              ).length;
+              const deleteApproveCount = filteredLogs.filter(
+                (l) => l.action === 'delete' || l.action === 'approval'
+              ).length;
+
               openUnifiedPrintWindow(
                 {
-                  title: 'تقرير سجل التدقيق الرقابي وحركات النظام (Audit Trail)',
-                  partyLabel: 'إجمالي الحركات',
+                  reportTitle: 'تقرير سجل التدقيق الرقابي وحركات النظام (Audit Trail)',
+                  subTitle: 'رصد العمليات والتعديلات والحركات المالية والأمنية بالنظام',
+                  serial: `${filteredLogs.length}`,
+                  partyLabel: 'نطاق السجل',
                   partyName: `${filteredLogs.length} سجل حركة`,
-                  items: filteredLogs.map((l) => ({
-                    name: l.details,
-                    code: l.id,
-                    unit: l.module,
-                    qty: 1,
-                    price: 0,
-                    total: 0,
-                    notes: `المستخدم: ${l.userName} | الإجراء: ${l.action} | التاريخ: ${l.timestamp}`,
-                  })),
-                  totals: [
+                  kpis: [
+                    { title: 'إجمالي السجلات', value: `${filteredLogs.length} حركة` },
+                    { title: 'إضافة / تعديل', value: `${createUpdateCount} حركة` },
+                    { title: 'حذف / اعتماد', value: `${deleteApproveCount} حركة` },
+                  ],
+                  columns: ['م', 'القسم', 'الإجراء', 'تفاصيل العملية', 'المستخدم', 'التوقيت'],
+                  rows: filteredLogs.map((l, idx) => {
+                    const code = getUserCode(l);
+                    const userLabel = code !== undefined ? `كود ${code} - ${l.userName}` : l.userName;
+                    const detailsText = l.changesSummary
+                      ? `${l.details} (${l.changesSummary})`
+                      : l.details;
+                    return [
+                      idx + 1,
+                      l.module || 'النظام',
+                      actionArMap[l.action] || l.action,
+                      detailsText,
+                      userLabel,
+                      l.timestamp || '-',
+                    ];
+                  }),
+                  summary: [
                     {
-                      label: 'عدد الحركات المطبوعة:',
-                      value: filteredLogs.length,
-                      isBold: true,
+                      label: 'عدد الحركات المطبوعة',
+                      value: `${filteredLogs.length} حركة`,
+                      isTotal: true,
                     },
                   ],
+                  preferredPaperSize: 'A4',
                 },
                 appData.settings,
                 showToast
