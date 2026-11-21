@@ -1783,30 +1783,37 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .header-title {
           background: #1e293b;
           color: #ffffff;
-          padding: 10px 14px;
-          font-size: 14px;
+          padding: 7px 10px;
+          font-size: 13px;
           font-weight: 600;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
           flex-shrink: 0;
           box-sizing: border-box;
           border-top-left-radius: inherit;
           border-top-right-radius: inherit;
         }
+        @media (min-width: 640px) {
+          .header-title {
+            padding: 10px 14px;
+            font-size: 14px;
+            gap: 8px;
+          }
+        }
         #liveTime {
-          font-size: 12px;
+          font-size: 11px;
           font-family: inherit;
           font-weight: 600;
           font-variant-numeric: tabular-nums;
           opacity: 0.92;
         }
         .main-content {
-          padding: 10px;
+          padding: 6px;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 5px;
           flex: 1;
           overflow-x: hidden;
           overflow-y: auto;
@@ -1817,23 +1824,24 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         @media (min-width: 640px) {
           .main-content {
             padding: 12px 14px;
-            gap: 10px;
+            gap: 9px;
           }
         }
         .invoice-card {
           background: #ffffff;
           border: 1px solid #cbd5e1;
-          border-radius: 10px;
-          padding: 8px 10px;
+          border-radius: 8px;
+          padding: 6px 8px;
           display: flex;
           flex-direction: column;
-          gap: 7px;
+          gap: 5px;
           flex-shrink: 0;
           box-sizing: border-box;
           width: 100%;
         }
         @media (min-width: 640px) {
           .invoice-card {
+            border-radius: 10px;
             gap: 9px;
             padding: 11px 12px;
           }
@@ -1841,39 +1849,45 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .field-inline {
           display: flex;
           flex-direction: column;
-          gap: 3px;
+          gap: 2px;
           min-width: 0;
           position: relative;
           box-sizing: border-box;
         }
         .field-inline label {
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 600;
           color: #475569;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        @media (min-width: 640px) {
+          .field-inline label {
+            font-size: 11px;
+          }
+        }
         .field-inline input, .field-inline select {
-          padding: 5px 8px;
+          padding: 3px 6px;
           border: 1px solid #cbd5e1;
-          border-radius: 7px;
-          font-size: 13px;
+          border-radius: 6px;
+          font-size: 11.5px;
           font-weight: 600;
           color: #0f172a;
           outline: none;
           background: #f8fafc;
           width: 100%;
-          min-height: 36px;
+          min-height: 30px;
           box-sizing: border-box;
           font-family: inherit;
           transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
         }
-        @media (min-width: 768px) {
+        @media (min-width: 640px) {
           .field-inline input, .field-inline select {
             font-size: 13px;
-            min-height: 36px;
+            min-height: 35px;
             padding: 5px 10px;
+            border-radius: 7px;
           }
         }
         .field-inline input:focus, .field-inline select:focus {
@@ -1888,29 +1902,36 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         .account-status-bar {
           background: #fef9c3;
           border: 1px solid #fde047;
-          border-radius: 8px;
-          padding: 7px 10px;
+          border-radius: 7px;
+          padding: 4px 8px;
           display: flex;
           flex-wrap: wrap;
           justify-content: space-between;
           align-items: center;
-          gap: 6px 10px;
-          font-size: 12px;
+          gap: 4px 8px;
+          font-size: 11px;
           font-weight: 600;
           flex-shrink: 0;
           width: 100%;
           box-sizing: border-box;
         }
+        @media (min-width: 640px) {
+          .account-status-bar {
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+          }
+        }
 
         .btn-action-top {
           width: 100%;
-          min-height: 40px;
-          padding: 8px 10px;
+          min-height: 34px;
+          padding: 6px 8px;
           background: #2563eb;
           color: #ffffff;
           border: none;
-          border-radius: 8px;
-          font-size: 12.5px;
+          border-radius: 7px;
+          font-size: 11.5px;
           font-weight: 600;
           cursor: pointer;
           display: flex;
@@ -1932,14 +1953,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         }
         .table-responsive {
           width: 100%;
-          flex: 1 1 200px;
-          min-height: 160px;
+          flex: 1 1 120px;
+          min-height: 110px;
           overflow-y: auto;
           overflow-x: hidden;
           border: 1px solid #cbd5e1;
-          border-radius: 10px;
+          border-radius: 8px;
           background: #ffffff;
           box-sizing: border-box;
+        }
+        @media (min-width: 640px) {
+          .table-responsive {
+            border-radius: 10px;
+            min-height: 150px;
+          }
         }
         .table-responsive table.invoice-items-grid-table {
           width: 100%;
@@ -1962,9 +1989,9 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           background: #f1f5f9;
           color: #1e293b;
           font-weight: 700;
-          height: 36px;
-          font-size: 11px;
-          padding: 6px 3px;
+          height: 28px;
+          font-size: 10.5px;
+          padding: 3px 2px;
           position: sticky;
           top: 0;
           z-index: 2;
@@ -1972,65 +1999,82 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           white-space: nowrap;
           border-bottom: 1px solid #cbd5e1;
         }
-        @media (min-width: 768px) {
+        @media (min-width: 640px) {
           .table-responsive th {
+            height: 34px;
             font-size: 12px;
-            padding: 6px 8px;
+            padding: 6px 6px;
           }
         }
         .table-responsive tbody tr:hover {
           background: #f8fafc;
         }
         .table-responsive tbody tr td {
-          padding: 6px 3px;
-          line-height: 1.35;
-          font-size: 11.5px;
+          padding: 4px 2px;
+          line-height: 1.25;
+          font-size: 11px;
           color: #0f172a;
         }
-        @media (min-width: 768px) {
+        @media (min-width: 640px) {
           .table-responsive tbody tr td {
-            padding: 7px 8px;
+            padding: 6px 6px;
+            line-height: 1.35;
             font-size: 12.5px;
           }
         }
-        .col-seq { width: 42px; text-align: center; color: #64748b; }
+        .compact-table-input {
+          appearance: textfield;
+          -moz-appearance: textfield;
+        }
+        .compact-table-input::-webkit-outer-spin-button,
+        .compact-table-input::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .col-seq { width: 32px; text-align: center; color: #64748b; }
         .col-item { text-align: right; font-weight: 600; word-break: normal; overflow-wrap: break-word; }
         .col-desc { text-align: center; color: #475569; word-break: normal; overflow-wrap: break-word; }
         .col-qty { text-align: center; }
         .col-price { text-align: center; }
         .col-total { font-weight: 700; text-align: center; }
-        .col-action { width: 74px; text-align: center; }
+        .col-action { width: 54px; text-align: center; }
 
         .invoice-item-actions {
           display: inline-flex;
-          gap: 10px;
+          gap: 6px;
           justify-content: center;
           align-items: center;
         }
         .invoice-item-actions i {
           cursor: pointer;
-          font-size: 14px;
-          padding: 4px;
+          font-size: 13px;
+          padding: 3px;
           border-radius: 4px;
         }
         .bottom-fixed-area {
           flex-shrink: 0;
           display: flex;
           flex-direction: column;
-          gap: 7px;
+          gap: 5px;
           background: #ffffff;
-          padding: 8px 10px;
+          padding: 5px 7px;
           border-top: 1px solid #cbd5e1;
           box-sizing: border-box;
           width: 100%;
         }
+        @media (min-width: 640px) {
+          .bottom-fixed-area {
+            gap: 7px;
+            padding: 8px 12px;
+          }
+        }
         .btn-action {
-          min-height: 42px;
-          padding: 8px 6px;
+          min-height: 34px;
+          padding: 6px 4px;
           border: none;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 12px;
+          border-radius: 7px;
+          font-weight: 700;
+          font-size: 10.5px;
           color: #ffffff;
           cursor: pointer;
           text-align: center;
@@ -2038,14 +2082,17 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 5px;
+          gap: 4px;
           white-space: nowrap;
           transition: filter 0.15s ease;
         }
         @media (min-width: 640px) {
           .btn-action {
+            min-height: 40px;
             font-size: 13px;
-            padding: 10px 12px;
+            padding: 9px 12px;
+            border-radius: 8px;
+            gap: 6px;
           }
         }
         .btn-action:hover {
@@ -2270,26 +2317,26 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
         {/* 📑 Main Content Area */}
         <div className="main-content">
-          {/* 0. Active Branch + Creator + Editor Metadata Strip (27f5081e.png) */}
-          <div className="flex flex-wrap items-center justify-between gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold">
-            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-md px-2 py-0.5 truncate max-w-full">
-                <i className="fa-solid fa-building text-[10px]"></i>
+          {/* 0. Active Branch + Creator + Editor Metadata Strip */}
+          <div className="flex flex-wrap items-center justify-between gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] sm:text-[11px] font-semibold">
+            <div className="flex flex-wrap items-center gap-1 min-w-0">
+              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 rounded px-1.5 py-0.5 truncate max-w-full">
+                <i className="fa-solid fa-building text-[9px]"></i>
                 <span className="truncate">
                   {appData.branches?.find((b) => b.id === activeBranchId)?.name || 'الفرع الرئيسي'}
                 </span>
               </span>
-              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md px-2 py-0.5 truncate">
+              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded px-1.5 py-0.5 truncate">
                 <span>المنشئ:</span>
                 <span>{creatorName}</span>
               </span>
             </div>
-            <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 rounded-md px-2 py-0.5">
+            <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 rounded px-1.5 py-0.5">
               <span className="shrink-0">المحرر:</span>
               <select
                 value={activeEditorName}
                 onChange={(e) => setActiveEditorName(e.target.value)}
-                className="bg-transparent text-amber-950 font-bold text-[11px] focus:outline-none cursor-pointer max-w-[140px]"
+                className="bg-transparent text-amber-950 font-bold text-[10px] sm:text-[11px] focus:outline-none cursor-pointer max-w-[130px]"
               >
                 {!(appData.users || []).some((u) => u.name === activeEditorName) && (
                   <option value={activeEditorName}>{activeEditorName}</option>
@@ -2491,12 +2538,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 💳 3. لوحة السداد والخزينة والتسعير الداكنة (9e11f2f6.png & 27f5081e.png) */}
-          <div className="bg-[#0f172a] text-white rounded-xl p-2.5 sm:p-3 space-y-2.5 border border-slate-800 shadow-xs shrink-0">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                <i className="fa-solid fa-wallet text-sm"></i>
-                <span>
+          {/* 💳 3. لوحة السداد والخزينة والتسعير الداكنة */}
+          <div className="bg-[#0f172a] text-white rounded-lg sm:rounded-xl p-2 sm:p-2.5 space-y-1.5 sm:space-y-2 border border-slate-800 shadow-xs shrink-0">
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-emerald-400 truncate min-w-0">
+                <i className="fa-solid fa-wallet text-xs sm:text-sm shrink-0"></i>
+                <span className="truncate">
                   {paymentStatusMode === 'credit'
                     ? isReturn
                       ? 'مرتجع آجل / ذمم'
@@ -2507,49 +2554,49 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => handleSelectPaymentStatusMode('paid')}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                  className={`min-h-[27px] sm:min-h-[32px] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10.5px] sm:text-xs font-semibold border cursor-pointer transition flex items-center gap-1 whitespace-nowrap ${
                     paymentStatusMode === 'paid'
                       ? 'bg-emerald-600 border-emerald-500 text-white'
                       : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
                   }`}
                 >
-                  <i className="fa-regular fa-circle-check"></i>
+                  <i className="fa-regular fa-circle-check text-[10px] sm:text-xs"></i>
                   <span>مسدد</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectPaymentStatusMode('credit')}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                  className={`min-h-[27px] sm:min-h-[32px] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10.5px] sm:text-xs font-semibold border cursor-pointer transition flex items-center gap-1 whitespace-nowrap ${
                     paymentStatusMode === 'credit'
                       ? 'bg-amber-600 border-amber-500 text-white'
                       : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
                   }`}
                 >
-                  <i className="fa-solid fa-file-invoice"></i>
+                  <i className="fa-solid fa-file-invoice text-[10px] sm:text-xs"></i>
                   <span>آجل</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectPaymentStatusMode('partial')}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition flex items-center gap-1 ${
+                  className={`min-h-[27px] sm:min-h-[32px] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10.5px] sm:text-xs font-semibold border cursor-pointer transition flex items-center gap-1 whitespace-nowrap ${
                     paymentStatusMode === 'partial'
                       ? 'bg-blue-600 border-blue-500 text-white'
                       : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
                   }`}
                 >
-                  <i className="fa-regular fa-credit-card"></i>
+                  <i className="fa-regular fa-credit-card text-[10px] sm:text-xs"></i>
                   <span>جزئي</span>
                 </button>
               </div>
             </div>
 
             {paymentStatusMode === 'partial' && (
-              <div className="flex items-center gap-2 bg-[#162238] border border-blue-500/40 rounded-lg px-2.5 py-1.5">
-                <span className="text-[11px] font-semibold text-blue-300 shrink-0">المدفوع الآن (ج.م):</span>
+              <div className="flex items-center gap-2 bg-[#162238] border border-blue-500/40 rounded-md px-2 py-1">
+                <span className="text-[10.5px] sm:text-[11px] font-semibold text-blue-300 shrink-0">المدفوع الآن (ج.م):</span>
                 <input
                   type="number"
                   min="0"
@@ -2562,14 +2609,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     setPaymentRows([{ id: 'partial_1', method: selectedTreasuryMethod, amount: amt }]);
                   }}
                   placeholder="أدخل المبلغ المسدد..."
-                  className="flex-1 min-w-0 bg-[#0f172a] border border-slate-700 rounded-md px-2.5 py-1 text-xs font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
+                  className="flex-1 min-w-0 bg-[#0f172a] border border-slate-700 rounded px-2 py-0.5 text-xs font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
                 />
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <div className="text-[11px] font-semibold text-emerald-400">الخزينة:</div>
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="space-y-1">
+              <div className="text-[10px] sm:text-[11px] font-semibold text-emerald-400 leading-none">الخزينة:</div>
+              <div className="flex flex-nowrap sm:flex-wrap items-center justify-between sm:justify-start gap-[3px] sm:gap-1.5 overflow-x-auto no-scrollbar">
                 {[
                   { key: 'نقدي', label: 'نقدي' },
                   { key: 'فودافون كاش', label: 'فودافون كاش' },
@@ -2581,7 +2628,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     key={ch.key}
                     type="button"
                     onClick={() => handleSelectTreasuryChip(ch.key)}
-                    className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition ${
+                    className={`min-h-[26px] sm:min-h-[30px] px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg text-[9.5px] sm:text-[11px] font-semibold border cursor-pointer transition whitespace-nowrap shrink-0 ${
                       selectedTreasuryMethod === ch.key
                         ? 'bg-emerald-600 border-emerald-500 text-white'
                         : 'bg-[#1e293b] border-slate-700 text-slate-200 hover:bg-slate-700'
@@ -2593,7 +2640,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 <button
                   type="button"
                   onClick={() => setIsOptionsModalOpen(true)}
-                  className="min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-700 bg-[#1e293b] text-slate-200 hover:bg-slate-700 cursor-pointer transition"
+                  className="min-h-[26px] sm:min-h-[30px] px-1.5 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg text-[9.5px] sm:text-[11px] font-semibold border border-slate-700 bg-[#1e293b] text-slate-200 hover:bg-slate-700 cursor-pointer transition whitespace-nowrap shrink-0"
                 >
                   + مقسم
                 </button>
@@ -2687,19 +2734,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             <button
               type="button"
               onClick={openBlankQuickAddCard}
-              className="min-h-[40px] px-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+              className="min-h-[32px] sm:min-h-[37px] px-1.5 sm:px-2.5 py-1 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
               title="فتح كارت إضافة صنف سريع"
             >
-              <i className="fa-solid fa-plus text-xs"></i>
+              <i className="fa-solid fa-plus text-[10px] sm:text-xs"></i>
               <span>إضافة صنف</span>
             </button>
             <button
               type="button"
               onClick={() => setIsOptionsModalOpen(true)}
-              className="min-h-[40px] px-2 py-2 bg-[#1e293b] hover:bg-slate-800 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+              className="min-h-[32px] sm:min-h-[37px] px-1.5 sm:px-2.5 py-1 sm:py-1.5 bg-[#1e293b] hover:bg-slate-800 text-white rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
               title="الخصم، الضريبة وإدارة المدفوعات"
             >
-              <i className="fa-solid fa-sliders text-xs"></i>
+              <i className="fa-solid fa-sliders text-[10px] sm:text-xs"></i>
               <span>الخصم والسداد</span>
             </button>
             <button
@@ -2709,19 +2756,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 setGlobalLookupSearch('');
                 setIsLookupModalOpen(true);
               }}
-              className="min-h-[40px] px-2 py-2 bg-[#1e293b] hover:bg-slate-800 text-white rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
+              className="min-h-[32px] sm:min-h-[37px] px-1.5 sm:px-2.5 py-1 sm:py-1.5 bg-[#1e293b] hover:bg-slate-800 text-white rounded-md sm:rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition whitespace-nowrap"
               title="دليل الأصناف والتنقل الهرمي لاختيار صنف"
             >
-              <i className="fa-solid fa-cubes text-xs"></i>
+              <i className="fa-solid fa-cubes text-[10px] sm:text-xs"></i>
               <span>دليل الأصناف</span>
             </button>
           </div>
 
           {/* 🔍 Quick Search Bar on-screen for direct mobile/desktop item addition */}
           <div className="relative w-full shrink-0">
-            <div className="flex items-center gap-1.5">
-              <div className="relative flex-1 min-w-0 flex items-center bg-white rounded-lg border border-blue-400 shadow-2xs">
-                <i className="fa-solid fa-magnifying-glass text-blue-600 text-sm pr-3 pl-2 shrink-0"></i>
+            <div className="flex items-center gap-1">
+              <div className="relative flex-1 min-w-0 flex items-center bg-white rounded-md sm:rounded-lg border border-blue-400 shadow-2xs">
+                <i className="fa-solid fa-magnifying-glass text-blue-600 text-xs sm:text-sm pr-2.5 pl-1.5 shrink-0"></i>
                 <input
                   type="text"
                   value={workspaceItemSearch}
@@ -2749,8 +2796,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onFocus={() => {
                     if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
                   }}
-                  placeholder={`بحث ديناميكي لإضافة صنف فوراً بالاسم أو الباركود (${localItemsDatabase.length} صنف)...`}
-                  className="w-full text-xs sm:text-sm min-h-[38px] py-1.5 pl-8 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                  placeholder={`بحث ديناميكي لإضافة صنف بالاسم أو الكود (${localItemsDatabase.length})...`}
+                  className="w-full text-[11px] sm:text-sm min-h-[32px] sm:min-h-[36px] py-1 pl-7 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
                 />
                 {workspaceItemSearch && (
                   <button
@@ -2759,7 +2806,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       setWorkspaceItemSearch('');
                       setShowWorkspaceItemDropdown(false);
                     }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-base px-1.5 cursor-pointer"
+                    className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-sm px-1 cursor-pointer"
                   >
                     ×
                   </button>
@@ -2768,10 +2815,10 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               <button
                 type="button"
                 onClick={() => setIsCameraScannerOpen(true)}
-                className="min-h-[38px] px-2.5 sm:px-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0 transition"
+                className="w-[32px] h-[32px] sm:w-auto sm:h-[36px] sm:px-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-800 rounded-md sm:rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer shrink-0 transition"
                 title="مسح الباركود بكاميرا الهاتف"
               >
-                <Camera className="w-4 h-4 shrink-0" />
+                <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                 <span className="hidden sm:inline">كاميرا</span>
               </button>
             </div>
@@ -2879,40 +2926,42 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             )}
           </div>
 
-          {/* 5. Unified Columnar Items Table (Mobile & Desktop — Zero Horizontal Scroll matching reference) */}
+          {/* 5. Unified Columnar Items Table (Flat sleek cells, crisp mobile proportions, zero clipping) */}
           <div className="table-responsive">
             <table className="invoice-items-grid-table">
               <thead>
                 <tr>
-                  <th className="w-[7%] md:w-[5%]">م</th>
-                  <th className="w-[27%] md:w-[29%] text-right pr-1.5 sm:pr-2">الصنف</th>
-                  <th className="w-[14%] md:w-[19%]">البيان</th>
-                  <th className="w-[12%] md:w-[11%]">الكمية</th>
+                  <th className="w-[6%] md:w-[5%]">م</th>
+                  <th className="w-[30%] md:w-[30%] text-right pr-1.5 sm:pr-2">الصنف</th>
+                  <th className="w-[11%] md:w-[17%]">البيان</th>
+                  <th className="w-[11%] md:w-[11%]">الكمية</th>
                   <th className="w-[14%] md:w-[13%]">السعر</th>
                   <th className="w-[15%] md:w-[14%]">الإجمالي</th>
-                  <th className="w-[11%] md:w-[9%]">إجراء</th>
+                  <th className="w-[13%] md:w-[10%]">إجراء</th>
                 </tr>
               </thead>
               <tbody id="invoiceItemsTable">
                 {currentInvoiceItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-slate-400 py-10 px-3 text-xs sm:text-sm text-center">
+                    <td colSpan={7} className="text-slate-400 py-8 px-3 text-xs sm:text-sm text-center">
                       لم يتم إدراج أصناف بعد (اضغط على &quot;إضافة صنف&quot; أو &quot;دليل الأصناف&quot;)
                     </td>
                   </tr>
                 ) : (
                   currentInvoiceItems.map((item, index) => (
                     <tr key={item.rowId}>
-                      <td className="text-center text-slate-500 font-semibold tabular-nums text-[11px] sm:text-xs">{index + 1}</td>
+                      <td className="text-center text-slate-500 font-semibold tabular-nums text-[10.5px] sm:text-xs">{index + 1}</td>
                       <td className="col-item px-1 sm:px-2">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-slate-900 break-words text-[11px] sm:text-xs">{item.name}</span>
-                          {item.unit && (item.unit !== 'قطعة' || (item.unitFactor || 1) > 1) && (
-                            <span className="mr-1 inline-block text-[9px] sm:text-[10px] px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
-                              {item.unit}
-                              {(item.unitFactor || 1) > 1 ? ` ×${item.unitFactor}` : ''}
-                            </span>
-                          )}
+                        <div className="min-w-0 leading-tight">
+                          <span className="font-semibold text-slate-900 break-words text-[10.5px] sm:text-xs">{item.name}</span>
+                          {item.unit &&
+                            (((item.unitFactor || 1) > 1) ||
+                              (item.unit !== 'قطعة' && item.unit !== 'عدد')) && (
+                              <span className="mr-1 inline-block text-[9px] sm:text-[10px] px-1 rounded bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
+                                {item.unit}
+                                {(item.unitFactor || 1) > 1 ? ` ×${item.unitFactor}` : ''}
+                              </span>
+                            )}
                         </div>
                         {((item.actualDisc || 0) > 0 || (item.actualTax || 0) > 0) && (
                           <div className="text-[9px] sm:text-[10px] text-blue-700 font-normal tabular-nums mt-0.5">
@@ -2924,33 +2973,33 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       <td className="col-desc px-1 sm:px-2 text-[10px] sm:text-xs">
                         {item.spec && item.spec.trim() !== '' ? item.spec : '—'}
                       </td>
-                      <td className="col-qty px-0.5 sm:px-1.5">
+                      <td className="col-qty px-0.5 sm:px-1">
                         <input
                           type="number"
                           min="0.01"
                           step="any"
                           value={item.qty}
                           onChange={(e) => updateTableRowQty(index, e.target.value)}
-                          className="compact-table-input w-full max-w-[68px] h-7 sm:h-8 text-center text-[11px] sm:text-xs font-semibold border border-slate-200 sm:border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                          className="compact-table-input w-full h-6 sm:h-7 text-center text-[11px] sm:text-xs font-semibold text-slate-900 border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded bg-transparent tabular-nums focus:outline-none px-0.5"
                         />
                       </td>
-                      <td className="col-price px-0.5 sm:px-1.5">
+                      <td className="col-price px-0.5 sm:px-1">
                         <input
                           type="number"
                           step="any"
                           value={item.price}
                           onChange={(e) => updateTableRowPrice(index, e.target.value)}
-                          className="compact-table-input w-full max-w-[82px] h-7 sm:h-8 text-center text-[11px] sm:text-xs font-semibold border border-slate-200 sm:border-slate-300 rounded-md bg-white tabular-nums focus:border-blue-600 focus:outline-none"
+                          className="compact-table-input w-full h-6 sm:h-7 text-center text-[11px] sm:text-xs font-semibold text-slate-800 border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded bg-transparent tabular-nums focus:outline-none px-0.5"
                         />
                       </td>
-                      <td className="col-total px-0.5 sm:px-1.5">
+                      <td className="col-total px-0.5 sm:px-1">
                         <input
                           type="number"
                           step="any"
                           value={item.total}
                           onChange={(e) => updateTableRowTotal(index, e.target.value)}
                           title="تعديل الإجمالي يقسم تلقائياً على العدد ليضبط سعر الوحدة"
-                          className="compact-table-input w-full max-w-[92px] h-7 sm:h-8 text-center text-[11px] sm:text-xs font-bold border border-blue-200 bg-blue-50/40 text-blue-700 rounded-md tabular-nums focus:border-blue-600 focus:outline-none"
+                          className="compact-table-input w-full h-6 sm:h-7 text-center text-[11px] sm:text-xs font-bold text-blue-700 border border-transparent hover:border-blue-300 focus:border-blue-500 focus:bg-white rounded bg-transparent tabular-nums focus:outline-none px-0.5"
                         />
                       </td>
                       <td className="px-0.5 text-center">
@@ -2958,7 +3007,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           <button
                             type="button"
                             onClick={() => openModifyInvoiceItem(index)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer text-xs sm:text-sm"
+                            className="p-0.5 sm:p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer text-[11px] sm:text-xs leading-none"
                             title="تعديل"
                           >
                             <i className="fa-solid fa-pen-to-square"></i>
@@ -2966,7 +3015,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer text-xs sm:text-sm"
+                            className="p-0.5 sm:p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer text-[11px] sm:text-xs leading-none"
                             title="حذف"
                           >
                             <i className="fa-solid fa-trash"></i>
@@ -2981,52 +3030,52 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           </div>
         </div>
 
-        {/* 6. Bottom Fixed Summary & Action Bar (9e11f2f6.png & 27f5081e.png) */}
+        {/* 6. Bottom Fixed Summary & Action Bar */}
         <div className="bottom-fixed-area">
-          <div className="bg-[#0f172a] text-white rounded-xl p-2 space-y-1.5 border border-slate-800">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-[11px] font-semibold tabular-nums">
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+          <div className="bg-[#0f172a] text-white rounded-lg sm:rounded-xl p-1.5 sm:p-2 space-y-1 sm:space-y-1.5 border border-slate-800">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold tabular-nums">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">الكميات:</span>
                 <span id="lblItemsTotal" className="text-emerald-400">{totals.qtySum.toFixed(2)}</span>
               </div>
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">الخصم:</span>
                 <span id="lblDiscTotal" className="text-emerald-400">{totals.discount.toFixed(2)}</span>
               </div>
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">الضريبة:</span>
                 <span id="lblTaxTotal" className="text-emerald-400">{totals.tax.toFixed(2)}</span>
               </div>
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">إضافي:</span>
                 <span id="lblExtraTotal" className="text-emerald-400">{totals.extra.toFixed(2)}</span>
               </div>
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">المدفوع:</span>
                 <span id="lblPaidTotal" className="text-sky-400">{totals.paid.toFixed(2)}</span>
               </div>
-              <div className="bg-[#1e293b] border border-slate-700/70 rounded-md px-2 py-1 flex items-center justify-between gap-1">
+              <div className="bg-[#1e293b] border border-slate-700/70 rounded px-1.5 sm:px-2 py-0.5 sm:py-1 flex items-center justify-between gap-1">
                 <span className="text-slate-300">المتبقي:</span>
                 <span id="lblRemainTotal" className="text-rose-400">{totals.remain.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="bg-[#14532d] border border-emerald-700 rounded-lg px-3 py-1.5 flex items-center justify-between">
+            <div className="bg-[#14532d] border border-emerald-700 rounded-md sm:rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between">
               <span className="text-xs sm:text-sm font-bold text-white">الصافي النهائي:</span>
-              <span id="lblNetTotal" className="text-base sm:text-lg font-extrabold text-lime-300 tabular-nums">
+              <span id="lblNetTotal" className="text-sm sm:text-lg font-extrabold text-lime-300 tabular-nums">
                 {totals.net.toFixed(2)} ج.م
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full">
+          <div className="grid grid-cols-[1.32fr_0.86fr_1.02fr] sm:grid-cols-3 gap-1 sm:gap-2 w-full">
             <button
               type="button"
               className="btn-action bg-emerald-600 hover:bg-emerald-700"
               onClick={() => saveInvoice()}
             >
               <i className="fa-solid fa-floppy-disk"></i>
-              <span className="truncate">حفظ وترحيل الحسابات</span>
+              <span>حفظ وترحيل الحسابات</span>
             </button>
             <button
               type="button"
