@@ -571,6 +571,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const allowBelowCost = currentUserObj ? hasPermission(currentUserObj, 'allow_below_cost_sale') : true;
 
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const [pendingUnknownBarcode, setPendingUnknownBarcode] = useState<string | null>(null);
   const [pinGuardState, setPinGuardState] = useState<null | {
     mode: 'below_cost' | 'credit_limit';
     title: string;
@@ -626,6 +627,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const [isNewItemModalOpen, setIsNewItemModalOpen] = useState(false);
   const [newInputItemName, setNewInputItemName] = useState('');
   const [newInputItemCode, setNewInputItemCode] = useState('');
+  const [newInputItemBarcode, setNewInputItemBarcode] = useState('');
   const [editBuyPrice, setEditBuyPrice] = useState('');
   const [editItemCategory, setEditItemCategory] = useState('');
   const [editCashPriceManual, setEditCashPriceManual] = useState('');
@@ -977,9 +979,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       }
     }
 
-    setWorkspaceItemSearch(scannedCode.trim());
-    setShowWorkspaceItemDropdown(true);
-    showToast(`لم يتم العثور على صنف مطابق للباركود: ${scannedCode}`, 'warning');
+    setShowWorkspaceItemDropdown(false);
+    setPendingUnknownBarcode(scannedCode.trim());
   };
 
   // Confirm Adding Item from Dark Quick-Add Card
@@ -1264,16 +1265,23 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   }, [currentInvoiceItems, globalInvDisc, invDiscType, globalInvTax, invTaxType, extraIncomeVal, paymentRows, selectedInvoiceType]);
 
   // Open New Item Modal
-  const openEditModalForNewItem = () => {
+  const openEditModalForNewItem = (prefillBarcode?: string) => {
     setNewInputItemName('');
-    const newCode = 'UA' + String(localItemsDatabase.length + 101);
-    setNewInputItemCode(newCode);
+    const usedCodes = new Set(
+      localItemsDatabase.map((i) => (i.code || '').trim().toLowerCase()).filter(Boolean)
+    );
+    let seq = localItemsDatabase.length + 1;
+    while (usedCodes.has(`itm-${String(seq).padStart(3, '0')}`)) {
+      seq++;
+    }
+    setNewInputItemCode(`ITM-${String(seq).padStart(3, '0')}`);
+    setNewInputItemBarcode(prefillBarcode ? prefillBarcode.trim() : '');
     setEditBuyPrice('');
     setEditCashPriceManual('');
     setEditWholesalePriceManual('');
     setEditQty('');
-    const groups = [...new Set(localItemsDatabase.map((i) => i.group))];
-    setEditItemCategory(groups[0] || 'بويات');
+    const groups = [...new Set(localItemsDatabase.map((i) => i.group).filter(Boolean))];
+    setEditItemCategory(groups[0] || 'عام');
     setIsNewItemModalOpen(true);
   };
 
@@ -1381,6 +1389,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
   const saveNewItemData = () => {
     const name = newInputItemName.trim();
     const code = newInputItemCode.trim();
+    const barcodeVal = newInputItemBarcode.trim();
     if (!name) {
       showToast('يرجى إدخال اسم الصنف', 'warning');
       return;
@@ -1393,7 +1402,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
     const newItem = {
       code,
-      barcode: '',
+      barcode: barcodeVal,
       altUnits: [],
       name,
       group: editItemCategory || 'عام',
@@ -1411,12 +1420,19 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
     const newAppItem: Item = {
       id: newItem.itemId,
+      companyId: appData.companyId,
+      branchId: activeBranchId,
       code,
+      barcode: barcodeVal || undefined,
       name,
       category: newItem.group,
       quantity: qtyP,
+      branchStock: { [activeBranchId]: qtyP },
       purchasePrice: buyP,
+      costPrice: buyP,
+      avgCost: buyP,
       salePrice: cashP,
+      normalSellingPrice: cashP,
       wholesalePrice: wholesaleP,
     };
 
@@ -1428,11 +1444,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
       {
         action: 'create_item',
         module: 'المخزون',
-        details: `إضافة صنف جديد: ${name} بكود ${code}`,
+        details: `إضافة صنف جديد: ${name} بكود ${code}${barcodeVal ? ` (باركود: ${barcodeVal})` : ''}`,
       }
     );
 
     setIsNewItemModalOpen(false);
+    setWorkspaceItemSearch('');
+    setShowWorkspaceItemDropdown(false);
+    showToast(`تم تسجيل الصنف "${name}" وحفظه في المخزون`, 'success');
     openItemDetailCard(newItem);
   };
 
@@ -1868,16 +1887,16 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           }
         }
         .field-inline input, .field-inline select {
-          padding: 3px 6px;
+          padding: 3px 7px;
           border: 1px solid #cbd5e1;
           border-radius: 6px;
-          font-size: 11.5px;
+          font-size: 12px;
           font-weight: 600;
           color: #0f172a;
           outline: none;
           background: #f8fafc;
           width: 100%;
-          min-height: 30px;
+          min-height: 31px;
           box-sizing: border-box;
           font-family: inherit;
           transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -2778,7 +2797,8 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && workspaceItemSearch.trim()) {
-                      const q = workspaceItemSearch.trim().toLowerCase();
+                      const trimmed = workspaceItemSearch.trim();
+                      const q = trimmed.toLowerCase();
                       const exact = localItemsDatabase.find(
                         (it) =>
                           (it.barcode && it.barcode.trim().toLowerCase() === q) ||
@@ -2787,17 +2807,20 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       );
                       if (exact) {
                         e.preventDefault();
-                        handleBarcodeDetected(workspaceItemSearch.trim());
+                        handleBarcodeDetected(trimmed);
                         setWorkspaceItemSearch('');
                         setShowWorkspaceItemDropdown(false);
+                      } else if (!/[\u0600-\u06FF\s]/.test(trimmed) && trimmed.length >= 3) {
+                        e.preventDefault();
+                        handleBarcodeDetected(trimmed);
                       }
                     }
                   }}
                   onFocus={() => {
                     if (workspaceItemSearch.trim()) setShowWorkspaceItemDropdown(true);
                   }}
-                  placeholder={`بحث ديناميكي لإضافة صنف بالاسم أو الكود (${localItemsDatabase.length})...`}
-                  className="w-full text-[11px] sm:text-sm min-h-[32px] sm:min-h-[36px] py-1 pl-7 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
+                  placeholder={`بحث ديناميكي لإضافة صنف بالاسم أو الباركود (${localItemsDatabase.length})...`}
+                  className="w-full text-xs sm:text-[13px] min-h-[32px] sm:min-h-[36px] py-1 pl-7 bg-transparent focus:outline-none text-slate-900 placeholder:text-slate-400"
                 />
                 {workspaceItemSearch && (
                   <button
@@ -3697,7 +3720,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               <button
                 type="button"
                 className="hier-btn success"
-                onClick={openEditModalForNewItem}
+                onClick={() => openEditModalForNewItem()}
               >
                 <i className="fa-solid fa-plus"></i>
                 <span>صنف جديد</span>
@@ -3916,13 +3939,23 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     onChange={(e) => setNewInputItemName(e.target.value)}
                   />
                 </div>
-                <div className="field-inline span-2">
+                <div className="field-inline">
                   <label>الكود الفريد</label>
                   <input
                     type="text"
                     readOnly
                     value={newInputItemCode}
                     className="!bg-slate-100 !font-semibold tabular-nums"
+                  />
+                </div>
+                <div className="field-inline">
+                  <label>الباركود (اختياري)</label>
+                  <input
+                    type="text"
+                    value={newInputItemBarcode}
+                    onChange={(e) => setNewInputItemBarcode(e.target.value)}
+                    placeholder="باركود الصنف..."
+                    className="font-mono tabular-nums"
                   />
                 </div>
                 <div className="field-inline">
@@ -3942,7 +3975,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     value={editItemCategory}
                     onChange={(e) => setEditItemCategory(e.target.value)}
                   >
-                    {[...new Set(localItemsDatabase.map((i) => i.group))].map((g) => (
+                    {[...new Set(['عام', ...localItemsDatabase.map((i) => i.group).filter(Boolean)])].map((g) => (
                       <option key={g} value={g}>
                         {g}
                       </option>
@@ -4239,6 +4272,59 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
         onClose={() => setIsCameraScannerOpen(false)}
         onDetected={handleBarcodeDetected}
       />
+
+      {pendingUnknownBarcode !== null && (
+        <div className="fixed inset-0 z-[10010] bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4" dir="rtl">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-blue-200 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#1e293b] text-white">
+              <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                <i className="fa-solid fa-barcode text-sky-400 text-base"></i>
+                <span>باركود غير مسجل بالمخزون</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingUnknownBarcode(null)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-white/15 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3.5 text-center">
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+                الباركود التالي غير موجود حالياً في قاعدة البيانات:
+              </p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 font-mono text-sm font-bold text-blue-700 tracking-wider select-all">
+                {pendingUnknownBarcode}
+              </div>
+              <p className="text-xs text-slate-600">
+                هل تريد إضافة هذا الباركود كصنف جديد مباشرة وإدراجه في الفاتورة؟
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPendingUnknownBarcode(null)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-semibold text-xs sm:text-sm hover:bg-slate-50 cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const scannedBarcode = pendingUnknownBarcode;
+                    setPendingUnknownBarcode(null);
+                    setWorkspaceItemSearch('');
+                    openEditModalForNewItem(scannedBarcode);
+                  }}
+                  className="w-full sm:flex-1 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus text-xs"></i>
+                  <span>تأكيد وإضافة كصنف جديد</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SupervisorPinModal
         isOpen={pinGuardState !== null}
