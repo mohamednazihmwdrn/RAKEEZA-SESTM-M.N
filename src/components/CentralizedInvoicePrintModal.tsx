@@ -689,8 +689,12 @@ const SCOPED_PRINT_CSS = `
   justify-content: space-between;
   align-items: center;
   gap: 3mm;
-  font-size: 8pt;
-  color: #65717e;
+  font-size: 7.8pt;
+  font-weight: 500;
+  color: #334155;
+}
+.rp-root.rp-a5 .rp-foot {
+  font-size: 7.3pt;
 }
 .rp-terms {
   text-align: center;
@@ -1903,14 +1907,14 @@ const DocumentPageShell: React.FC<{
           </div>
         )}
 
-        {isLastPage && footerTermsNote && (
-          <div className="rp-terms">{footerTermsNote}</div>
-        )}
-
         <footer className="rp-foot">
-          <span>{companyName}</span>
-          <span>{docSerial && docSerial !== '-' && !isRawInternalId(docSerial) ? `رقم ${docSerial}` : ''}</span>
-          <span className="page-num">
+          <span style={{ flex: '1 1 auto', textAlign: 'right' }}>
+            {isLastPage && footerTermsNote ? footerTermsNote : companyName}
+          </span>
+          <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {docSerial && docSerial !== '-' && !isRawInternalId(docSerial) ? `رقم ${docSerial}` : ''}
+          </span>
+          <span className="page-num" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
             {pageIndex + 1} / {totalPages}
           </span>
         </footer>
@@ -2216,7 +2220,7 @@ const UnifiedPaginatedDocument: React.FC<{
                         const descText =
                           it.notes && it.notes.trim() !== '' && it.notes.trim() !== '-'
                             ? it.notes.trim()
-                            : it.unit || 'قطعة';
+                            : '';
                         return (
                           <tr key={idx}>
                             <td className="rp-num-cell">{startNum + idx + 1}</td>

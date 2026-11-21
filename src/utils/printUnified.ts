@@ -724,7 +724,7 @@ export function openUnifiedPrintWindow(
       columns = ['اسم الصنف / البند', 'البيان', 'العدد', 'السعر', 'الإجمالي'];
       rows = (d.items || []).map((it) => [
         it.name,
-        it.notes || it.unit || '-',
+        it.notes && it.notes.trim() !== '-' ? it.notes.trim() : '',
         it.qty,
         it.price,
         it.total,

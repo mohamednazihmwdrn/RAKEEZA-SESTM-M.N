@@ -65,7 +65,7 @@ export function generateInvoicePrintHtml(
   const rows = items.map((item, idx) => [
     idx + 1,
     item.name || '-',
-    item.spec || item.notes || (item as any).desc || '-',
+    item.spec || item.notes || (item as any).desc || '',
     Number((item as any).quantity ?? item.qty ?? 0),
     (item as any).unit || 'قطعة',
     Number(item.price || 0).toFixed(2),

@@ -342,7 +342,7 @@ export const InvoiceCardTemplate: React.FC<InvoiceCardTemplateProps> = ({
                     const price = Number(item.price || 0);
                     const total = Number(item.total !== undefined ? item.total : qty * price);
                     const spec = (item as any).spec || (item as any).notes || (item as any).desc || '';
-                    const specOrUnit = spec && spec !== '-' ? spec : (item as any).unit || 'قطعة';
+                    const specOrUnit = spec && spec !== '-' ? spec : '';
                     return (
                       <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}>
                         <td className="border-l border-slate-200 px-1.5 py-1.5 text-center sm:text-right font-medium break-words">

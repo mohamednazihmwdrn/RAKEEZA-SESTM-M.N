@@ -676,36 +676,80 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
   // Keyboard Enter Navigation
   const handleKeyDownEnterNav = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
-        if (isDetailCardOpen && target.id === 'input-card-qty') {
-          e.preventDefault();
-          confirmAddDetailedItem();
-          return;
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT') return;
+
+    // 📇 Sequential Enter Navigation inside Quick Add Item Card (#itemDetailCardModal)
+    if (isDetailCardOpen && target.closest('#itemDetailCardModal')) {
+      e.preventDefault();
+
+      if (target.id === 'input-card-total') {
+        confirmAddDetailedItem();
+        return;
+      }
+
+      if (target.id === 'input-card-search') {
+        if (!cardItem && cardExactMatch) {
+          setCardItem(cardExactMatch);
+          setCardItemSearch(cardExactMatch.name);
+          setCardUnit(cardExactMatch.typeName || 'قطعة');
+          setCardUnitFactor(1);
+          const tierPrice = getItemPriceForTier(cardExactMatch, activePricingTier);
+          const pStr = tierPrice > 0 ? tierPrice.toString() : '';
+          setCardPrice(pStr);
+          setCardLastEdited('price');
+          syncCardTotalForward(cardQty, pStr, cardDiscVal, cardDiscType, cardTaxVal, cardTaxType);
         }
+        setShowCardDropdown(false);
+      }
 
-        const modalContainer =
-          target.closest('.modal-box') ||
-          target.closest('.lookup-modal-box') ||
-          target.closest('.app-container');
-
-        if (modalContainer) {
-          const focusable = Array.from(
-            modalContainer.querySelectorAll<HTMLElement>(
-              'input:not([readonly]):not([disabled]):not([type="hidden"]), select:not([disabled]), button:not([disabled])'
-            )
-          ).filter((el) => el.offsetParent !== null);
-
-          const index = focusable.indexOf(target);
-          if (index > -1 && index + 1 < focusable.length) {
-            e.preventDefault();
-            const nextEl = focusable[index + 1];
+      const cardOrder = [
+        'input-card-search',
+        'input-card-spec',
+        'input-card-unit',
+        'input-card-qty',
+        'input-card-price',
+        'input-card-disc',
+        'input-card-tax',
+        'input-card-total',
+      ];
+      const currentIdx = cardOrder.indexOf(target.id);
+      if (currentIdx > -1) {
+        for (let i = currentIdx + 1; i < cardOrder.length; i++) {
+          const nextEl = document.getElementById(cardOrder[i]) as HTMLInputElement | HTMLSelectElement | null;
+          if (nextEl && nextEl.offsetParent !== null && !nextEl.disabled) {
             nextEl.focus();
-            if ((nextEl as HTMLInputElement).select) {
+            if (typeof (nextEl as HTMLInputElement).select === 'function') {
               (nextEl as HTMLInputElement).select();
             }
+            return;
           }
+        }
+      }
+      confirmAddDetailedItem();
+      return;
+    }
+
+    const modalContainer =
+      target.closest('.modal-box') ||
+      target.closest('.lookup-modal-box') ||
+      target.closest('.app-container');
+
+    if (modalContainer) {
+      const focusable = Array.from(
+        modalContainer.querySelectorAll<HTMLElement>(
+          'input:not([readonly]):not([disabled]):not([type="hidden"]), select:not([disabled]), button:not([disabled]):not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+
+      const index = focusable.indexOf(target);
+      if (index > -1 && index + 1 < focusable.length) {
+        e.preventDefault();
+        const nextEl = focusable[index + 1];
+        nextEl.focus();
+        if ((nextEl as HTMLInputElement).select) {
+          (nextEl as HTMLInputElement).select();
         }
       }
     }
@@ -1109,9 +1153,28 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
     });
 
     showToast(s ? `تم إدراج البند: ${resolvedItemName}` : `تمت إضافة الصنف: ${resolvedItemName}`, 'info');
-    setIsDetailCardOpen(false);
+    // إبقاء كارت الصنف مفتوحاً وتفريغ خاناته وتجهيزه لإضافة صنف جديد مباشرة
     setCardItem(null);
     setCardItemSearch('');
+    setShowCardDropdown(false);
+    setCardUnit('قطعة');
+    setCardUnitFactor(1);
+    setCardQty('1');
+    setCardPrice('');
+    setCardDiscVal('');
+    setCardDiscType('val');
+    setCardTaxVal('');
+    setCardTaxType('val');
+    setCardTotal('');
+    setCardLastEdited('price');
+    setCardSpec('');
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (cardSearchInputRef.current) {
+          cardSearchInputRef.current.focus();
+        }
+      }, 40);
+    });
   };
 
   // Modify Row
@@ -1784,7 +1847,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
           position: relative;
           overflow: hidden;
           box-sizing: border-box;
-          font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, sans-serif;
+          font-family: var(--font-sans);
         }
         @media (min-width: 640px) {
           .app-container {
@@ -2994,7 +3057,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                         )}
                       </td>
                       <td className="col-desc px-1 sm:px-2 text-[10px] sm:text-xs">
-                        {item.spec && item.spec.trim() !== '' ? item.spec : '—'}
+                        {item.spec && item.spec.trim() !== '' ? item.spec : ''}
                       </td>
                       <td className="col-qty px-0.5 sm:px-1">
                         <input
@@ -3301,6 +3364,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               </div>
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => {
                   setIsDetailCardOpen(false);
                   setShowCardDropdown(false);
@@ -3314,13 +3378,14 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
             <div className="p-4 space-y-3 max-h-[84vh] overflow-y-auto">
               {/* 1. اسم الصنف (بحث بدليل الأصناف أو جديد) */}
               <div className="relative space-y-1.5">
-                <label className="block text-[11px] font-semibold text-slate-300">
+                <label className="block text-[11px] sm:text-xs font-semibold text-slate-300">
                   اسم الصنف (بحث بدليل الأصناف أو جديد) <span className="text-rose-400">*</span>
                 </label>
                 <div className="relative flex items-center bg-[#162238] border border-blue-500 rounded-xl px-3">
                   <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs ml-2 shrink-0"></i>
                   <input
                     ref={cardSearchInputRef}
+                    id="input-card-search"
                     type="text"
                     value={cardItemSearch}
                     onFocus={() => setShowCardDropdown(true)}
@@ -3333,11 +3398,12 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       }
                     }}
                     placeholder="ابحث باسم الصنف أو الكود..."
-                    className="w-full py-2.5 bg-transparent text-sm font-semibold text-white placeholder:text-slate-400 focus:outline-none"
+                    className="w-full py-2.5 bg-transparent text-[13px] sm:text-sm font-semibold text-white placeholder:text-slate-400 focus:outline-none"
                   />
                   {cardItemSearch && (
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => {
                         setCardItemSearch('');
                         setCardItem(null);
@@ -3381,7 +3447,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                           className="px-3 py-2.5 hover:bg-blue-600/25 cursor-pointer flex items-center justify-between gap-2.5"
                         >
                           <div className="min-w-0 flex-1 space-y-1">
-                            <div className="font-bold text-sm text-white truncate">{m.name}</div>
+                            <div className="font-bold text-[13px] text-white truncate">{m.name}</div>
                             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] tabular-nums">
                               <span className="text-slate-400 font-mono">كود: {m.code}</span>
                               <span className={stockVal <= 0 ? 'text-rose-400 font-bold' : 'text-emerald-400 font-semibold'}>
@@ -3397,7 +3463,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                             )}
                           </div>
                           <div className="flex flex-col items-end shrink-0 tabular-nums">
-                            <span className="text-emerald-400 font-bold text-sm">
+                            <span className="text-emerald-400 font-bold text-[13px]">
                               {p > 0 ? `${p.toFixed(2)} ج.م` : '0.00 ج.م'}
                             </span>
                             <span className="text-[10px] text-slate-400">
@@ -3445,7 +3511,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                 )}
 
                 {cardItem && (
-                  <div className="flex flex-wrap items-center justify-between gap-1.5 bg-[#132038] border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[10px]">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 bg-[#132038] border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[10.5px]">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-slate-300 tabular-nums">
                         المتاح:{' '}
@@ -3470,6 +3536,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       {isSale ? (
                         <button
                           type="button"
+                          tabIndex={-1}
                           onClick={() => {
                             const p = getItemPriceForTier(cardItem, 'cash');
                             const pStr = p > 0 ? p.toString() : '';
@@ -3484,6 +3551,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       ) : (
                         <button
                           type="button"
+                          tabIndex={-1}
                           onClick={() => {
                             const p = getItemPriceForTier(cardItem, 'buy');
                             const pStr = p > 0 ? p.toString() : '';
@@ -3503,28 +3571,30 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
 
               {/* 2. بيان الصنف (وصف اختياري) */}
               <div className="space-y-1.5">
-                <label className="block text-[11px] font-semibold text-slate-300">
+                <label className="block text-[11px] sm:text-xs font-semibold text-slate-300">
                   بيان الصنف (وصف اختياري)
                 </label>
                 <input
+                  id="input-card-spec"
                   type="text"
                   value={cardSpec}
                   onChange={(e) => setCardSpec(e.target.value)}
                   placeholder="بيان / مواصفة / وصف الصنف..."
-                  className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-[13px] sm:text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               {/* الوحدة (تعدد الوحدات إن وجد) */}
               {cardItem && (cardItem.altUnits?.length || 0) > 0 && (
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-slate-300">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300">
                     الوحدة المختارة
                   </label>
                   <select
+                    id="input-card-unit"
                     value={cardUnit}
                     onChange={(e) => handleSelectCardUnit(e.target.value)}
-                    className="w-full bg-[#162238] border border-blue-500/60 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-blue-400"
+                    className="w-full bg-[#162238] border border-blue-500/60 rounded-xl px-3 py-2 text-[13px] sm:text-sm font-bold text-white focus:outline-none focus:border-blue-400"
                   >
                     <option value={cardItem.typeName || 'قطعة'}>
                       {cardItem.typeName || 'قطعة'} (الوحدة الأساسية ×1)
@@ -3541,7 +3611,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               {/* 3. الكمية (العدد) و السعر */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-slate-300">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300">
                     الكمية ({cardUnit}) <span className="text-rose-400">*</span>
                   </label>
                   <input
@@ -3552,20 +3622,21 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     step="any"
                     value={cardQty}
                     onChange={(e) => handleCardQtyChange(e.target.value)}
-                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-sm font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-[13px] sm:text-sm font-bold text-white tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-slate-300">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300">
                     السعر (لـ {cardUnit}) <span className="text-rose-400">*</span>
                   </label>
                   <input
+                    id="input-card-price"
                     type="number"
                     step="any"
                     value={cardPrice}
                     onChange={(e) => handleCardPriceChange(e.target.value)}
                     placeholder="السعر..."
-                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#162238] border border-slate-700 rounded-xl px-3 py-2 text-center text-[13px] sm:text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -3574,10 +3645,11 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="bg-[#132038] border border-slate-700/80 rounded-xl p-2.5 space-y-2">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[11px] font-semibold text-slate-300">الخصم</span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-300">الخصم</span>
                     <div className="inline-flex bg-[#0f172a] border border-slate-700 rounded-lg p-0.5 text-[10px] font-bold">
                       <button
                         type="button"
+                        tabIndex={-1}
                         onClick={() => handleCardDiscChange(cardDiscVal, 'val')}
                         className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
                           cardDiscType === 'val' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
@@ -3587,6 +3659,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       </button>
                       <button
                         type="button"
+                        tabIndex={-1}
                         onClick={() => handleCardDiscChange(cardDiscVal, 'percent')}
                         className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
                           cardDiscType === 'percent' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
@@ -3597,22 +3670,24 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     </div>
                   </div>
                   <input
+                    id="input-card-disc"
                     type="number"
                     min="0"
                     step="any"
                     value={cardDiscVal}
                     onChange={(e) => handleCardDiscChange(e.target.value)}
                     placeholder={cardDiscType === 'val' ? 'المبلغ ج.م' : 'النسبة %'}
-                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs sm:text-[13px] font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div className="bg-[#132038] border border-slate-700/80 rounded-xl p-2.5 space-y-2">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[11px] font-semibold text-slate-300">الضريبة</span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-300">الضريبة</span>
                     <div className="inline-flex bg-[#0f172a] border border-slate-700 rounded-lg p-0.5 text-[10px] font-bold">
                       <button
                         type="button"
+                        tabIndex={-1}
                         onClick={() => handleCardTaxChange(cardTaxVal, 'val')}
                         className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
                           cardTaxType === 'val' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
@@ -3622,6 +3697,7 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                       </button>
                       <button
                         type="button"
+                        tabIndex={-1}
                         onClick={() => handleCardTaxChange(cardTaxVal, 'percent')}
                         className={`px-2 py-0.5 rounded-md cursor-pointer transition ${
                           cardTaxType === 'percent' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
@@ -3632,24 +3708,26 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                     </div>
                   </div>
                   <input
+                    id="input-card-tax"
                     type="number"
                     min="0"
                     step="any"
                     value={cardTaxVal}
                     onChange={(e) => handleCardTaxChange(e.target.value)}
                     placeholder={cardTaxType === 'val' ? 'المبلغ ج.م' : 'النسبة %'}
-                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#162238] border border-slate-700 rounded-lg px-2.5 py-1.5 text-center text-xs sm:text-[13px] font-semibold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {/* 5. إجمالي الصنف (يعدل السعر تلقائياً) عكسي */}
               <div className="bg-[#132038] border border-blue-600/60 rounded-xl p-2.5 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-[11px] sm:text-xs">
                   <span className="font-semibold text-blue-300">إجمالي الصنف (يعدل السعر تلقائياً)</span>
                   <span className="text-slate-400 font-medium">عكسي</span>
                 </div>
                 <input
+                  id="input-card-total"
                   type="number"
                   step="any"
                   min="0"
@@ -3657,15 +3735,16 @@ export const RakeezaInvoiceWorkspace: React.FC<RakeezaInvoiceWorkspaceProps> = (
                   onChange={(e) => handleCardTotalChange(e.target.value)}
                   placeholder="إجمالي الصنف..."
                   title="أدخل الإجمالي هنا ليتم ضبط سعر الوحدة تلقائياً"
-                  className="w-full bg-[#162238] border border-blue-500 rounded-lg px-3 py-2 text-center text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-400"
+                  className="w-full bg-[#162238] border border-blue-500 rounded-lg px-3 py-2 text-center text-[13px] sm:text-sm font-bold text-white placeholder:text-slate-400 tabular-nums focus:outline-none focus:border-blue-400"
                 />
               </div>
 
               {/* 6. زر الإضافة */}
               <button
+                id="btn-confirm-quick-add"
                 type="button"
                 onClick={confirmAddDetailedItem}
-                className="w-full min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition shadow-md"
+                className="w-full min-h-[42px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition shadow-md"
               >
                 <i className="fa-solid fa-check"></i>
                 <span>إضافة الصنف للفاتورة (Enter)</span>
